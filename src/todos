@@ -1,0 +1,31 @@
+1. rewrite ConvNode and Conv3DNode to check the stride, padding are valid 
+2. check batch size for ConvNode and Conv3DNode 
+3. change the ReLU, BatchNorm, and Dropout definitions too 
+4. Make the compute graph creation consistent with PyTorch, TF, and ONNX 
+
+5. NN.sequential 
+6. torch.concat 
+
+Look into 
+7. torch.flatten 
+8. torch.reshape 
+11. torch.view 
+12. torch.expand 
+13. torch.expand_as 
+14. torch.repeat 
+15. torch.repeat_interleave 
+16. torch.repeat_interleave 
+
+17.nn.modulelist 
+18.nn.moduledict 
+
+
+
+Specifications 
+1. 
+2.
+3.
+4.
+5.
+
+

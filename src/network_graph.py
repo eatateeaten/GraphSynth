@@ -1,5 +1,5 @@
 import torch.nn as nn
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 class Node:
     def __init__(self, in_dim: Tuple[int, ...], out_dim: Tuple[int, ...]):
@@ -29,14 +29,79 @@ class Node:
         raise NotImplementedError("Must be implemented by subclass.")
 
 class ConvNode(Node):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
-        #TODO this needs editing to handle kernal_size and strides 
-        super().__init__((in_channels,), (out_channels,))
+    def __init__(self, batch_size, in_channels, out_channels, input_size, kernel_size, stride=1, padding=0):
+        """
+        Initializes a ConvNode representing a 2D convolutional layer.
+
+        Parameters:
+        - batch_size (int): Number of samples in a batch.
+        - in_channels (int): Number of input channels.
+        - out_channels (int): Number of output channels.
+        - input_size (Tuple[int, int]): Spatial dimensions of the input (height, width).
+        - kernel_size (Union[int, Tuple[int, int]]): Size of the convolutional kernel. Can be an int or a tuple (height, width).
+        - stride (Union[int, Tuple[int, int]], optional): Stride of the convolution. Can be an int or a tuple (height, width). Default is 1.
+        - padding (Union[int, Tuple[int, int]], optional): Padding added to both sides of the input. Can be an int or a tuple (height, width). Default is 0.
+        """
+        # Ensure batch_size, in_channels, and out_channels are valid
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if not isinstance(in_channels, int) or in_channels <= 0:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels <= 0:
+            raise ValueError("out_channels must be a positive integer")
+
+        # Ensure kernel_size is valid
+        if isinstance(kernel_size, int):
+            if kernel_size <= 0:
+                raise ValueError("kernel_size must be a positive integer")
+            kernel_size = (kernel_size, kernel_size)
+        elif isinstance(kernel_size, tuple):
+            if len(kernel_size) != 2 or any(k <= 0 for k in kernel_size):
+                raise ValueError("kernel_size must be a tuple of two positive integers")
+        else:
+            raise TypeError("kernel_size must be an int or a tuple of two ints")
+
+        # Ensure stride is valid
+        if isinstance(stride, int):
+            if stride <= 0:
+                raise ValueError("stride must be a positive integer")
+            stride = (stride, stride)
+        elif isinstance(stride, tuple):
+            if len(stride) != 2 or any(s <= 0 for s in stride):
+                raise ValueError("stride must be a tuple of two positive integers")
+        else:
+            raise TypeError("stride must be an int or a tuple of two ints")
+
+        # Ensure padding is valid
+        if isinstance(padding, int):
+            if padding < 0:
+                raise ValueError("padding must be a non-negative integer")
+            padding = (padding, padding)
+        elif isinstance(padding, tuple):
+            if len(padding) != 2 or any(p < 0 for p in padding):
+                raise ValueError("padding must be a tuple of two non-negative integers")
+        else:
+            raise TypeError("padding must be an int or a tuple of two ints")
+
+        # Check if the output dimensions are valid
+        output_size = self.calculate_output_size(input_size, kernel_size, stride, padding)
+        if any(o < 1 for o in output_size):
+            raise ValueError("Invalid configuration: resulting output dimensions must be >= 1")
+
+        super().__init__((batch_size, in_channels, *input_size), (batch_size, out_channels, *output_size))
+        self.batch_size = batch_size
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+
+    def calculate_output_size(self, input_size, kernel_size, stride, padding):
+        # Calculate the output size for each dimension
+        return tuple(
+            (input_size[i] + 2 * padding[i] - kernel_size[i]) // stride[i] + 1
+            for i in range(2)
+        )
 
     def forward(self, x):
         pass
@@ -44,7 +109,88 @@ class ConvNode(Node):
     def to_pytorch_code(self) -> str:
         return f"nn.Conv2d({self.in_channels}, {self.out_channels}, {self.kernel_size}, stride={self.stride}, padding={self.padding})"
 
-class BatchNormNode(Node):
+class Conv3DNode(Node):
+    def __init__(self, batch_size, in_channels, out_channels, input_size, kernel_size, stride=1, padding=0):
+        """
+        Initializes a Conv3DNode representing a 3D convolutional layer.
+
+        Parameters:
+        - batch_size (int): Number of samples in a batch.
+        - in_channels (int): Number of input channels.
+        - out_channels (int): Number of output channels.
+        - input_size (Tuple[int, int, int]): Spatial dimensions of the input (depth, height, width).
+        - kernel_size (Union[int, Tuple[int, int, int]]): Size of the convolutional kernel. Can be an int or a tuple (depth, height, width).
+        - stride (Union[int, Tuple[int, int, int]], optional): Stride of the convolution. Can be an int or a tuple (depth, height, width). Default is 1.
+        - padding (Union[int, Tuple[int, int, int]], optional): Padding added to all sides of the input. Can be an int or a tuple (depth, height, width). Default is 0.
+        """
+        # Ensure batch_size, in_channels, and out_channels are valid
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if not isinstance(in_channels, int) or in_channels <= 0:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels <= 0:
+            raise ValueError("out_channels must be a positive integer")
+
+        # Ensure kernel_size is valid
+        if isinstance(kernel_size, int):
+            if kernel_size <= 0:
+                raise ValueError("kernel_size must be a positive integer")
+            kernel_size = (kernel_size, kernel_size, kernel_size)
+        elif isinstance(kernel_size, tuple):
+            if len(kernel_size) != 3 or any(k <= 0 for k in kernel_size):
+                raise ValueError("kernel_size must be a tuple of three positive integers")
+        else:
+            raise TypeError("kernel_size must be an int or a tuple of three ints")
+
+        # Ensure stride is valid
+        if isinstance(stride, int):
+            if stride <= 0:
+                raise ValueError("stride must be a positive integer")
+            stride = (stride, stride, stride)
+        elif isinstance(stride, tuple):
+            if len(stride) != 3 or any(s <= 0 for s in stride):
+                raise ValueError("stride must be a tuple of three positive integers")
+        else:
+            raise TypeError("stride must be an int or a tuple of three ints")
+
+        # Ensure padding is valid
+        if isinstance(padding, int):
+            if padding < 0:
+                raise ValueError("padding must be a non-negative integer")
+            padding = (padding, padding, padding)
+        elif isinstance(padding, tuple):
+            if len(padding) != 3 or any(p < 0 for p in padding):
+                raise ValueError("padding must be a tuple of three non-negative integers")
+        else:
+            raise TypeError("padding must be an int or a tuple of three ints")
+
+        # Check if the output dimensions are valid
+        output_size = self.calculate_output_size(input_size, kernel_size, stride, padding)
+        if any(o < 1 for o in output_size):
+            raise ValueError("Invalid configuration: resulting output dimensions must be >= 1")
+
+        super().__init__((batch_size, in_channels, *input_size), (batch_size, out_channels, *output_size))
+        self.batch_size = batch_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+
+    def calculate_output_size(self, input_size, kernel_size, stride, padding):
+        # Calculate the output size for each dimension
+        return tuple(
+            (input_size[i] + 2 * padding[i] - kernel_size[i]) // stride[i] + 1
+            for i in range(3)
+        )
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        return f"nn.Conv3d({self.in_channels}, {self.out_channels}, {self.kernel_size}, stride={self.stride}, padding={self.padding})"
+
+class BatchNormNode(Node): 
     def __init__(self, num_features):
         super().__init__((num_features,), (num_features,))
         self.num_features = num_features
@@ -134,10 +280,11 @@ class Graph:
         code_lines = []
         for node in self.nodes:
             code_lines.append(node.to_pytorch_code())
+            # sequential = nn.Sequential(*modules)
         return "\n".join(code_lines)
 
 # Example usage
-conv_node = ConvNode(in_channels=3, out_channels=16, kernel_size=3)
+conv_node = ConvNode(batch_size=32, in_channels=3, out_channels=16, input_size=(32, 32), kernel_size=3)
 batch_norm_node = BatchNormNode(num_features=16)
 relu_node = ReLUNode(dim=(16,))
 max_pool_node = MaxPoolNode(kernel_size=2)
