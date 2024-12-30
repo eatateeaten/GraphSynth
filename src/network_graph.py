@@ -42,52 +42,15 @@ class ConvNode(Node):
         - stride (Union[int, Tuple[int, int]], optional): Stride of the convolution. Can be an int or a tuple (height, width). Default is 1.
         - padding (Union[int, Tuple[int, int]], optional): Padding added to both sides of the input. Can be an int or a tuple (height, width). Default is 0.
         """
-        # Ensure batch_size, in_channels, and out_channels are valid
-        if not isinstance(batch_size, int) or batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer")
-        if not isinstance(in_channels, int) or in_channels <= 0:
-            raise ValueError("in_channels must be a positive integer")
-        if not isinstance(out_channels, int) or out_channels <= 0:
-            raise ValueError("out_channels must be a positive integer")
+        # Validate parameters
+        self._validate_parameters(batch_size, in_channels, out_channels, kernel_size, stride, padding)
 
-        # Ensure kernel_size is valid
-        if isinstance(kernel_size, int):
-            if kernel_size <= 0:
-                raise ValueError("kernel_size must be a positive integer")
-            kernel_size = (kernel_size, kernel_size)
-        elif isinstance(kernel_size, tuple):
-            if len(kernel_size) != 2 or any(k <= 0 for k in kernel_size):
-                raise ValueError("kernel_size must be a tuple of two positive integers")
-        else:
-            raise TypeError("kernel_size must be an int or a tuple of two ints")
-
-        # Ensure stride is valid
-        if isinstance(stride, int):
-            if stride <= 0:
-                raise ValueError("stride must be a positive integer")
-            stride = (stride, stride)
-        elif isinstance(stride, tuple):
-            if len(stride) != 2 or any(s <= 0 for s in stride):
-                raise ValueError("stride must be a tuple of two positive integers")
-        else:
-            raise TypeError("stride must be an int or a tuple of two ints")
-
-        # Ensure padding is valid
-        if isinstance(padding, int):
-            if padding < 0:
-                raise ValueError("padding must be a non-negative integer")
-            padding = (padding, padding)
-        elif isinstance(padding, tuple):
-            if len(padding) != 2 or any(p < 0 for p in padding):
-                raise ValueError("padding must be a tuple of two non-negative integers")
-        else:
-            raise TypeError("padding must be an int or a tuple of two ints")
-
-        # Check if the output dimensions are valid
+        # Calculate output size
         output_size = self.calculate_output_size(input_size, kernel_size, stride, padding)
         if any(o < 1 for o in output_size):
             raise ValueError("Invalid configuration: resulting output dimensions must be >= 1")
 
+        # Initialize Node
         super().__init__((batch_size, in_channels, *input_size), (batch_size, out_channels, *output_size))
         self.batch_size = batch_size
         self.in_channels = in_channels
@@ -96,8 +59,31 @@ class ConvNode(Node):
         self.stride = stride
         self.padding = padding
 
+    def _validate_parameters(self, batch_size, in_channels, out_channels, kernel_size, stride, padding):
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if not isinstance(in_channels, int) or in_channels <= 0:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels <= 0:
+            raise ValueError("out_channels must be a positive integer")
+
+        self.kernel_size = self._validate_dimension(kernel_size, 2, "kernel_size")
+        self.stride = self._validate_dimension(stride, 2, "stride", positive=True)
+        self.padding = self._validate_dimension(padding, 2, "padding", non_negative=True)
+
+    def _validate_dimension(self, value, length, name, positive=False, non_negative=False):
+        if isinstance(value, int):
+            if (positive and value <= 0) or (non_negative and value < 0):
+                raise ValueError(f"{name} must be a {'positive' if positive else 'non-negative'} integer")
+            return (value,) * length
+        elif isinstance(value, tuple):
+            if len(value) != length or any((positive and v <= 0) or (non_negative and v < 0) for v in value):
+                raise ValueError(f"{name} must be a tuple of {length} {'positive' if positive else 'non-negative'} integers")
+            return value
+        else:
+            raise TypeError(f"{name} must be an int or a tuple of {length} ints")
+
     def calculate_output_size(self, input_size, kernel_size, stride, padding):
-        # Calculate the output size for each dimension
         return tuple(
             (input_size[i] + 2 * padding[i] - kernel_size[i]) // stride[i] + 1
             for i in range(2)
@@ -123,52 +109,15 @@ class Conv3DNode(Node):
         - stride (Union[int, Tuple[int, int, int]], optional): Stride of the convolution. Can be an int or a tuple (depth, height, width). Default is 1.
         - padding (Union[int, Tuple[int, int, int]], optional): Padding added to all sides of the input. Can be an int or a tuple (depth, height, width). Default is 0.
         """
-        # Ensure batch_size, in_channels, and out_channels are valid
-        if not isinstance(batch_size, int) or batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer")
-        if not isinstance(in_channels, int) or in_channels <= 0:
-            raise ValueError("in_channels must be a positive integer")
-        if not isinstance(out_channels, int) or out_channels <= 0:
-            raise ValueError("out_channels must be a positive integer")
+        # Validate parameters
+        self._validate_parameters(batch_size, in_channels, out_channels, kernel_size, stride, padding)
 
-        # Ensure kernel_size is valid
-        if isinstance(kernel_size, int):
-            if kernel_size <= 0:
-                raise ValueError("kernel_size must be a positive integer")
-            kernel_size = (kernel_size, kernel_size, kernel_size)
-        elif isinstance(kernel_size, tuple):
-            if len(kernel_size) != 3 or any(k <= 0 for k in kernel_size):
-                raise ValueError("kernel_size must be a tuple of three positive integers")
-        else:
-            raise TypeError("kernel_size must be an int or a tuple of three ints")
-
-        # Ensure stride is valid
-        if isinstance(stride, int):
-            if stride <= 0:
-                raise ValueError("stride must be a positive integer")
-            stride = (stride, stride, stride)
-        elif isinstance(stride, tuple):
-            if len(stride) != 3 or any(s <= 0 for s in stride):
-                raise ValueError("stride must be a tuple of three positive integers")
-        else:
-            raise TypeError("stride must be an int or a tuple of three ints")
-
-        # Ensure padding is valid
-        if isinstance(padding, int):
-            if padding < 0:
-                raise ValueError("padding must be a non-negative integer")
-            padding = (padding, padding, padding)
-        elif isinstance(padding, tuple):
-            if len(padding) != 3 or any(p < 0 for p in padding):
-                raise ValueError("padding must be a tuple of three non-negative integers")
-        else:
-            raise TypeError("padding must be an int or a tuple of three ints")
-
-        # Check if the output dimensions are valid
+        # Calculate output size
         output_size = self.calculate_output_size(input_size, kernel_size, stride, padding)
         if any(o < 1 for o in output_size):
             raise ValueError("Invalid configuration: resulting output dimensions must be >= 1")
 
+        # Initialize Node
         super().__init__((batch_size, in_channels, *input_size), (batch_size, out_channels, *output_size))
         self.batch_size = batch_size
         self.in_channels = in_channels
@@ -177,8 +126,31 @@ class Conv3DNode(Node):
         self.stride = stride
         self.padding = padding
 
+    def _validate_parameters(self, batch_size, in_channels, out_channels, kernel_size, stride, padding):
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        if not isinstance(in_channels, int) or in_channels <= 0:
+            raise ValueError("in_channels must be a positive integer")
+        if not isinstance(out_channels, int) or out_channels <= 0:
+            raise ValueError("out_channels must be a positive integer")
+
+        self.kernel_size = self._validate_dimension(kernel_size, 3, "kernel_size")
+        self.stride = self._validate_dimension(stride, 3, "stride", positive=True)
+        self.padding = self._validate_dimension(padding, 3, "padding", non_negative=True)
+
+    def _validate_dimension(self, value, length, name, positive=False, non_negative=False):
+        if isinstance(value, int):
+            if (positive and value <= 0) or (non_negative and value < 0):
+                raise ValueError(f"{name} must be a {'positive' if positive else 'non-negative'} integer")
+            return (value,) * length
+        elif isinstance(value, tuple):
+            if len(value) != length or any((positive and v <= 0) or (non_negative and v < 0) for v in value):
+                raise ValueError(f"{name} must be a tuple of {length} {'positive' if positive else 'non-negative'} integers")
+            return value
+        else:
+            raise TypeError(f"{name} must be an int or a tuple of {length} ints")
+
     def calculate_output_size(self, input_size, kernel_size, stride, padding):
-        # Calculate the output size for each dimension
         return tuple(
             (input_size[i] + 2 * padding[i] - kernel_size[i]) // stride[i] + 1
             for i in range(3)
