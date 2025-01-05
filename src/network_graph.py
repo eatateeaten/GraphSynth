@@ -8,8 +8,8 @@ class Node:
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.name = f"Node_{id(self)}"
-        self.input_nodes: List['Node'] = []
-        self.output_nodes: List['Node'] = []
+        self.input_node: 'Node' = None 
+        self.output_node: 'Node' = None  
 
     def connect_to(self, other: 'Node') -> None:
         """Connect this node to another node."""
@@ -18,11 +18,10 @@ class Node:
                 f"Dimension mismatch: {self.name} output dim ({self.out_dim}) "
                 f"!= {other.name} input dim ({other.in_dim})"
             )
-           
-        if other not in self.output_nodes:
-            self.output_nodes.append(other)
-        if self not in other.input_nodes:
-            other.input_nodes.append(self)
+        if self.output_node is None:
+            self.output_node = other
+        if other.input_node is None:
+            other.input_node = self
 
     def forward(self, x):
         raise NotImplementedError("Must be implemented by subclass.")
@@ -31,6 +30,73 @@ class Node:
         raise NotImplementedError("Must be implemented by subclass.")
 
 
+
+class MergeNode(Node):
+    def __init__(self, in_dims: List[Tuple[int, ...]], out_dim: Tuple[int, ...]):
+        """
+        Initializes a MergeNode that merges multiple input nodes into a single output node.
+
+        Parameters:
+        - in_dims (List[Tuple[int, ...]]): Dimensions of the input nodes.
+        - out_dim (Tuple[int, ...]): Dimension of the output node.
+        """
+        self.in_dims = in_dims
+        self.out_dim = out_dim
+        self.input_nodes: List[Node] = []  # Multiple input nodes
+        self.output_node: Node = None
+
+    def connect_inputs(self, input_nodes: List[Node]) -> None:
+        """Connect multiple input nodes to this merge node."""
+        if len(input_nodes) != len(self.in_dims):
+            raise ValueError("Number of input nodes must match the number of input dimensions specified.")
+        
+        for node, in_dim in zip(input_nodes, self.in_dims):
+            if node.out_dim != in_dim:
+                raise ValueError(f"Dimension mismatch: {node.name} output dim ({node.out_dim}) != expected input dim ({in_dim})")
+            self.input_nodes.append(node)
+
+    def connect_to(self, other: 'Node') -> None:
+        """Connect this merge node to another node."""
+        if self.out_dim != other.in_dim:
+            raise ValueError(
+                f"Dimension mismatch: {self.name} output dim ({self.out_dim}) "
+                f"!= {other.name} input dim ({other.in_dim})"
+            )
+        if self.output_node is None:
+            self.output_node = other
+        if other.input_node is None:
+            other.input_node = self
+
+
+class BranchNode(Node):
+    def __init__(self, in_dim: Tuple[int, ...], out_dims: List[Tuple[int, ...]]):
+        """
+        Initializes a BranchNode that branches a single input node into multiple output nodes.
+
+        Parameters:
+        - in_dim (Tuple[int, ...]): Dimension of the input node.
+        - out_dims (List[Tuple[int, ...]]): Dimensions of the output nodes.
+        """
+        self.in_dim = in_dim
+        self.out_dims = out_dims
+        self.input_node: Node = None
+        self.output_nodes: List[Node] = []  # Multiple output nodes
+
+    def connect_outputs(self, output_nodes: List[Node]) -> None:
+        """Connect this branch node to multiple output nodes."""
+        if len(output_nodes) != len(self.out_dims):
+            raise ValueError("Number of output nodes must match the number of output dimensions specified.")
+        
+        for node, out_dim in zip(output_nodes, self.out_dims):
+            if node.in_dim != out_dim:
+                raise ValueError(f"Dimension mismatch: {node.name} input dim ({node.in_dim}) != expected output dim ({out_dim})")
+            self.output_nodes.append(node)
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        raise NotImplementedError("Must be implemented by subclass.")
 
 class Seq:
     def __init__(self, in_node: Node, out_node: Node):
@@ -68,6 +134,7 @@ class Seq:
             # sequential = nn.Sequential(*modules)
         return "\n".join(code_lines)
 
+
 class LinearNode(Node):
     def __init__(self, batch_size: int, input_features: int, output_features: int):
         """
@@ -93,8 +160,104 @@ class LinearNode(Node):
     def to_pytorch_code(self) -> str:
         return f"nn.Linear({self.input_features}, {self.output_features})"
 
+
+class ElementWiseNonlinearityType(Enum):
+    RELU = "ReLU"
+    SIGMOID = "Sigmoid"
+    TANH = "Tanh"
+    LEAKY_RELU = "LeakyReLU"
+    ELU = "ELU"
+    SELU = "SELU"
+    CELU = "CELU"
+    GELU = "GELU"
+    SOFTPLUS = "Softplus"
+    SOFTSIGN = "Softsign"
+    HARDTANH = "Hardtanh"
+    HARDSHRINK = "Hardshrink"
+    HARDSIGMOID = "Hardsigmoid"
+    HARDSWISH = "Hardswish"
+    SOFTSHRINK = "Softshrink"
+    TANHSHRINK = "Tanhshrink"
+    THRESHOLD = "Threshold"
+    RELU6 = "ReLU6"
+    SILU = "SiLU"
+    MISH = "Mish"
+
+class Nonlinearity1DType(Enum):
+    SOFTMAX = "Softmax"
+    LOG_SOFTMAX = "LogSoftmax"
+    GLU = "GLU"
+
+class ElementWiseNonlinearity(Node):
+    def __init__(self, dim: Tuple[int, ...], nonlinearity: ElementWiseNonlinearityType = ElementWiseNonlinearityType.RELU):
+        """
+        Initializes an ElementWiseNonlinearity node representing an element-wise nonlinearity layer.
+
+        Parameters:
+        - dim (Tuple[int, ...]): The dimensions of the input and output.
+        - nonlinearity (ElementWiseNonlinearityType, optional): The type of nonlinearity to apply. Default is ElementWiseNonlinearityType.RELU.
+        """
+        super().__init__(dim, dim)
+        self.nonlinearity = nonlinearity
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        nonlinearity_map = {
+            ElementWiseNonlinearityType.RELU: "nn.ReLU()",
+            ElementWiseNonlinearityType.SIGMOID: "nn.Sigmoid()",
+            ElementWiseNonlinearityType.TANH: "nn.Tanh()",
+            ElementWiseNonlinearityType.LEAKY_RELU: "nn.LeakyReLU()",
+            ElementWiseNonlinearityType.ELU: "nn.ELU()",
+            ElementWiseNonlinearityType.SELU: "nn.SELU()",
+            ElementWiseNonlinearityType.CELU: "nn.CELU()",
+            ElementWiseNonlinearityType.GELU: "nn.GELU()",
+            ElementWiseNonlinearityType.SOFTPLUS: "nn.Softplus()",
+            ElementWiseNonlinearityType.SOFTSIGN: "nn.Softsign()",
+            ElementWiseNonlinearityType.HARDTANH: "nn.Hardtanh()",
+            ElementWiseNonlinearityType.HARDSHRINK: "nn.Hardshrink()",
+            ElementWiseNonlinearityType.HARDSIGMOID: "nn.Hardsigmoid()",
+            ElementWiseNonlinearityType.HARDSWISH: "nn.Hardswish()",
+            ElementWiseNonlinearityType.SOFTSHRINK: "nn.Softshrink()",
+            ElementWiseNonlinearityType.TANHSHRINK: "nn.Tanhshrink()",
+            ElementWiseNonlinearityType.THRESHOLD: "nn.Threshold(0, 0)",  # Example threshold
+            ElementWiseNonlinearityType.RELU6: "nn.ReLU6()",
+            ElementWiseNonlinearityType.SILU: "nn.SiLU()",
+            ElementWiseNonlinearityType.MISH: "nn.Mish()"
+        }
+
+        return nonlinearity_map[self.nonlinearity]
+
+class Nonlinearity1D(Node):
+    def __init__(self, dim: Tuple[int, ...], nonlinearity: Nonlinearity1DType, dim_index: int = -1):
+        """
+        Initializes a Nonlinearity1D node representing a nonlinearity layer that operates across a single dimension.
+
+        Parameters:
+        - dim (Tuple[int, ...]): The dimensions of the input and output.
+        - nonlinearity (Nonlinearity1DType): The type of nonlinearity to apply.
+        - dim_index (int, optional): The dimension index to apply the nonlinearity. Default is -1 (last dimension).s
+        """
+        super().__init__(dim, dim)
+        self.nonlinearity = nonlinearity
+        self.dim_index = dim_index
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        nonlinearity_map = {
+            Nonlinearity1DType.SOFTMAX: f"nn.Softmax(dim={self.dim_index})",
+            Nonlinearity1DType.LOG_SOFTMAX: f"nn.LogSoftmax(dim={self.dim_index})",
+            Nonlinearity1DType.GLU: f"nn.GLU(dim={self.dim_index})"
+        }
+
+        return nonlinearity_map[self.nonlinearity]
+    
 class Conv1DNode(Node):
     def __init__(self, batch_size, in_channels, out_channels, input_size, kernel_size, stride=1, padding=0):
+        ### batch_size, in_channels, input_size, should be inferred, the rest are given by user 
         """
         Initializes a Conv1DNode representing a 1D convolutional layer.
 
@@ -250,99 +413,6 @@ class Conv3DNode(Node):
         return f"nn.Conv3d({self.in_channels}, {self.out_channels}, {self.kernel_size}, stride={self.stride}, padding={self.padding})"
 
 
-class ElementWiseNonlinearityType(Enum):
-    RELU = "ReLU"
-    SIGMOID = "Sigmoid"
-    TANH = "Tanh"
-    LEAKY_RELU = "LeakyReLU"
-    ELU = "ELU"
-    SELU = "SELU"
-    CELU = "CELU"
-    GELU = "GELU"
-    SOFTPLUS = "Softplus"
-    SOFTSIGN = "Softsign"
-    HARDTANH = "Hardtanh"
-    HARDSHRINK = "Hardshrink"
-    HARDSIGMOID = "Hardsigmoid"
-    HARDSWISH = "Hardswish"
-    SOFTSHRINK = "Softshrink"
-    TANHSHRINK = "Tanhshrink"
-    THRESHOLD = "Threshold"
-    RELU6 = "ReLU6"
-    SILU = "SiLU"
-    MISH = "Mish"
-
-class Nonlinearity1DType(Enum):
-    SOFTMAX = "Softmax"
-    LOG_SOFTMAX = "LogSoftmax"
-    GLU = "GLU"
-
-class ElementWiseNonlinearity(Node):
-    def __init__(self, dim: Tuple[int, ...], nonlinearity: ElementWiseNonlinearityType = ElementWiseNonlinearityType.RELU):
-        """
-        Initializes an ElementWiseNonlinearity node representing an element-wise nonlinearity layer.
-
-        Parameters:
-        - dim (Tuple[int, ...]): The dimensions of the input and output.
-        - nonlinearity (ElementWiseNonlinearityType, optional): The type of nonlinearity to apply. Default is ElementWiseNonlinearityType.RELU.
-        """
-        super().__init__(dim, dim)
-        self.nonlinearity = nonlinearity
-
-    def forward(self, x):
-        pass
-
-    def to_pytorch_code(self) -> str:
-        nonlinearity_map = {
-            ElementWiseNonlinearityType.RELU: "nn.ReLU()",
-            ElementWiseNonlinearityType.SIGMOID: "nn.Sigmoid()",
-            ElementWiseNonlinearityType.TANH: "nn.Tanh()",
-            ElementWiseNonlinearityType.LEAKY_RELU: "nn.LeakyReLU()",
-            ElementWiseNonlinearityType.ELU: "nn.ELU()",
-            ElementWiseNonlinearityType.SELU: "nn.SELU()",
-            ElementWiseNonlinearityType.CELU: "nn.CELU()",
-            ElementWiseNonlinearityType.GELU: "nn.GELU()",
-            ElementWiseNonlinearityType.SOFTPLUS: "nn.Softplus()",
-            ElementWiseNonlinearityType.SOFTSIGN: "nn.Softsign()",
-            ElementWiseNonlinearityType.HARDTANH: "nn.Hardtanh()",
-            ElementWiseNonlinearityType.HARDSHRINK: "nn.Hardshrink()",
-            ElementWiseNonlinearityType.HARDSIGMOID: "nn.Hardsigmoid()",
-            ElementWiseNonlinearityType.HARDSWISH: "nn.Hardswish()",
-            ElementWiseNonlinearityType.SOFTSHRINK: "nn.Softshrink()",
-            ElementWiseNonlinearityType.TANHSHRINK: "nn.Tanhshrink()",
-            ElementWiseNonlinearityType.THRESHOLD: "nn.Threshold(0, 0)",  # Example threshold
-            ElementWiseNonlinearityType.RELU6: "nn.ReLU6()",
-            ElementWiseNonlinearityType.SILU: "nn.SiLU()",
-            ElementWiseNonlinearityType.MISH: "nn.Mish()"
-        }
-
-        return nonlinearity_map[self.nonlinearity]
-
-class Nonlinearity1D(Node):
-    def __init__(self, dim: Tuple[int, ...], nonlinearity: Nonlinearity1DType, dim_index: int = -1):
-        """
-        Initializes a Nonlinearity1D node representing a nonlinearity layer that operates across a single dimension.
-
-        Parameters:
-        - dim (Tuple[int, ...]): The dimensions of the input and output.
-        - nonlinearity (Nonlinearity1DType): The type of nonlinearity to apply.
-        - dim_index (int, optional): The dimension index to apply the nonlinearity. Default is -1 (last dimension).s
-        """
-        super().__init__(dim, dim)
-        self.nonlinearity = nonlinearity
-        self.dim_index = dim_index
-
-    def forward(self, x):
-        pass
-
-    def to_pytorch_code(self) -> str:
-        nonlinearity_map = {
-            Nonlinearity1DType.SOFTMAX: f"nn.Softmax(dim={self.dim_index})",
-            Nonlinearity1DType.LOG_SOFTMAX: f"nn.LogSoftmax(dim={self.dim_index})",
-            Nonlinearity1DType.GLU: f"nn.GLU(dim={self.dim_index})"
-        }
-
-        return nonlinearity_map[self.nonlinearity]
 
 
 # BatchNorm 
@@ -350,6 +420,8 @@ class Nonlinearity1D(Node):
 # Dropout 
 
 
+
+##Pool 
 
 
 class PoolNode1D(Node):
@@ -572,6 +644,12 @@ class LPPool3D(PoolNode3D):
 
     def to_pytorch_code(self) -> str:
         return f"nn.LPPool3d(norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        raise NotImplementedError("Must be implemented by subclass.")
 
 
 # Example usage
