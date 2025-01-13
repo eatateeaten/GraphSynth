@@ -8,20 +8,38 @@ class Node:
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.name = f"Node_{id(self)}"
-        self.input_node: 'Node' = None 
-        self.output_node: 'Node' = None  
+        self.input_node: 'Node' = None
+        self.output_node: 'Node' = None
 
     def connect_to(self, other: 'Node') -> None:
-        """Connect this node to another node."""
+        """Connect this node to another node as its output."""
         if self.out_dim != other.in_dim:
             raise ValueError(
                 f"Dimension mismatch: {self.name} output dim ({self.out_dim}) "
                 f"!= {other.name} input dim ({other.in_dim})"
             )
-        if self.output_node is None:
-            self.output_node = other
-        if other.input_node is None:
-            other.input_node = self
+        if self.output_node is not None:
+            raise ValueError(f"{self.name} already has an output node")
+        if other.input_node is not None:
+            raise ValueError(f"{other.name} already has an input node")
+        
+        self.output_node = other
+        other.input_node = self
+
+    def connect_from(self, other: 'Node') -> None:
+        """Connect this node to another node as its input."""
+        if other.out_dim != self.in_dim:
+            raise ValueError(
+                f"Dimension mismatch: {other.name} output dim ({other.out_dim}) "
+                f"!= {self.name} input dim ({self.in_dim})"
+            )
+        if self.input_node is not None:
+            raise ValueError(f"{self.name} already has an input node")
+        if other.output_node is not None:
+            raise ValueError(f"{other.name} already has an output node")
+        
+        self.input_node = other
+        other.output_node = self
 
     def forward(self, x):
         raise NotImplementedError("Must be implemented by subclass.")
@@ -29,6 +47,42 @@ class Node:
     def to_pytorch_code(self) -> str:
         raise NotImplementedError("Must be implemented by subclass.")
 
+
+class Seq:
+    def __init__(self, in_node: Node, out_node: Node):
+        self.nodes: List[Node] = []
+        self.in_node: Node = in_node 
+        self.out_node: Node = out_node 
+        self.completed: bool = False 
+        self.add_node(in_node) 
+        self.add_node(out_node)
+
+    def add_node(self, node: Node, existing_node: Node = None, to_the_front: bool = False) -> None:
+        if existing_node and existing_node not in self.nodes:
+            raise ValueError("The specified existing node is not part of the sequence")
+        if node not in self.nodes:
+            self.nodes.append(node)
+            if existing_node:
+                if node.in_dim == existing_node.out_dim or node.out_dim == existing_node.in_dim:
+                    if to_the_front:
+                        self.connect_nodes(node, existing_node)
+                    else:
+                        self.connect_nodes(existing_node, node)
+                else:
+                    raise ValueError("Node dimensions do not match with the existing node for connection")
+
+    def connect_nodes(self, from_node: Node, to_node: Node) -> None:
+        try:
+            from_node.connect_to(to_node)
+        except ValueError as e:
+            raise e
+
+    def to_pytorch_code(self) -> str:
+        code_lines = []
+        for node in self.nodes:
+            code_lines.append(node.to_pytorch_code())
+            # sequential = nn.Sequential(*modules)
+        return "\n".join(code_lines)
 
 
 class MergeNode(Node):
@@ -40,7 +94,7 @@ class MergeNode(Node):
         - in_dims (List[Tuple[int, ...]]): Dimensions of the input nodes.
         - out_dim (Tuple[int, ...]): Dimension of the output node.
         """
-        self.in_dims = in_dims
+        self.in_dims = in_dims 
         self.out_dim = out_dim
         self.input_nodes: List[Node] = []  # Multiple input nodes
         self.output_node: Node = None
@@ -51,7 +105,7 @@ class MergeNode(Node):
             raise ValueError("Number of input nodes must match the number of input dimensions specified.")
         
         for node, in_dim in zip(input_nodes, self.in_dims):
-            if node.out_dim != in_dim:
+            if node.out_dim != in_dim:     #############TODO! THIS NEEDS TO IMPLEMENTED ACCORDING TO THE ACTUAL CASE. DIFFERENET MERGE OPERATIONS HAVE DIFFERENT DIMENSION REQUIREMENTS 
                 raise ValueError(f"Dimension mismatch: {node.name} output dim ({node.out_dim}) != expected input dim ({in_dim})")
             self.input_nodes.append(node)
 
@@ -84,7 +138,7 @@ class BranchNode(Node):
 
     def connect_outputs(self, output_nodes: List[Node]) -> None:
         """Connect this branch node to multiple output nodes."""
-        if len(output_nodes) != len(self.out_dims):
+        if len(output_nodes) != len(self.out_dims): #############TODO! THIS NEEDS TO IMPLEMENTED ACCORDING TO THE ACTUAL CASE. DIFFERENET BRANCH OPERATIONS HAVE DIFFERENT DIMENSION REQUIREMENTS 
             raise ValueError("Number of output nodes must match the number of output dimensions specified.")
         
         for node, out_dim in zip(output_nodes, self.out_dims):
@@ -97,42 +151,6 @@ class BranchNode(Node):
 
     def to_pytorch_code(self) -> str:
         raise NotImplementedError("Must be implemented by subclass.")
-
-class Seq:
-    def __init__(self, in_node: Node, out_node: Node):
-        self.nodes: List[Node] = []
-        self.in_node: Node = in_node
-        self.out_node: Node = out_node
-        self.completed: bool = False
-        self.add_node(in_node)
-        self.add_node(out_node)
-
-    def add_node(self, node: Node, existing_node: Node = None, to_the_front: bool = False) -> None:
-        if existing_node and existing_node not in self.nodes:
-            raise ValueError("The specified existing node is not part of the sequence")
-        if node not in self.nodes:
-            self.nodes.append(node)
-            if existing_node:
-                if node.in_dim == existing_node.out_dim or node.out_dim == existing_node.in_dim:
-                    if to_the_front:
-                        self.connect_nodes(node, existing_node)
-                    else:
-                        self.connect_nodes(existing_node, node)
-                else:
-                    raise ValueError("Node dimensions do not match with the existing node for connection")
-
-    def connect_nodes(self, from_node: Node, to_node: Node) -> None:
-        try:
-            from_node.connect_to(to_node)
-        except ValueError as e:
-            raise e
-
-    def to_pytorch_code(self) -> str:
-        code_lines = []
-        for node in self.nodes:
-            code_lines.append(node.to_pytorch_code())
-            # sequential = nn.Sequential(*modules)
-        return "\n".join(code_lines)
 
 
 class LinearNode(Node):
@@ -652,6 +670,111 @@ class LPPool3D(PoolNode3D):
         raise NotImplementedError("Must be implemented by subclass.")
 
 
+
+#AdaptivePool 
+class AdaptivePool1D(Node):
+    def __init__(self, batch_size: int, in_channels: int, input_size: int, output_size: int):
+        """
+        Initializes an AdaptivePool1D node representing a 1D adaptive pooling layer.
+
+        Parameters:
+        - batch_size (int): Number of samples in a batch.
+        - in_channels (int): Number of input channels.
+        - input_size (int): Length of the input sequence.
+        - output_size (int): Desired length of the output sequence.
+        """
+        assert isinstance(output_size, int) and output_size > 0, "output_size must be a positive integer"
+        assert output_size <= input_size, "output_size must be less than or equal to input_size"
+
+        super().__init__((batch_size, in_channels, input_size), (batch_size, in_channels, output_size))
+        self.output_size = output_size
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        raise NotImplementedError("Must be implemented by subclass.")
+
+
+class AdaptivePool2D(Node):
+    def __init__(self, batch_size: int, in_channels: int, input_size: Tuple[int, int], output_size: Tuple[int, int]):
+        """
+        Initializes an AdaptivePool2D node representing a 2D adaptive pooling layer.
+
+        Parameters:
+        - batch_size (int): Number of samples in a batch.
+        - in_channels (int): Number of input channels.
+        - input_size (Tuple[int, int]): Height and width of the input.
+        - output_size (Tuple[int, int]): Desired height and width of the output.
+        """
+        assert isinstance(output_size, tuple) and len(output_size) == 2 and all(isinstance(o, int) and o > 0 for o in output_size), \
+            "output_size must be a tuple of two positive integers"
+        assert all(o <= i for o, i in zip(output_size, input_size)), "output_size must be less than or equal to input_size in each dimension"
+
+        super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
+        self.output_size = output_size
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        raise NotImplementedError("Must be implemented by subclass.")
+
+
+class AdaptivePool3D(Node):
+    def __init__(self, batch_size: int, in_channels: int, input_size: Tuple[int, int, int], output_size: Tuple[int, int, int]):
+        """
+        Initializes an AdaptivePool3D node representing a 3D adaptive pooling layer.
+
+        Parameters:
+        - batch_size (int): Number of samples in a batch.
+        - in_channels (int): Number of input channels.
+        - input_size (Tuple[int, int, int]): Depth, height, and width of the input.
+        - output_size (Tuple[int, int, int]): Desired depth, height, and width of the output.
+        """
+        assert isinstance(output_size, tuple) and len(output_size) == 3 and all(isinstance(o, int) and o > 0 for o in output_size), \
+            "output_size must be a tuple of three positive integers"
+        assert all(o <= i for o, i in zip(output_size, input_size)), "output_size must be less than or equal to input_size in each dimension"
+
+        super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
+        self.output_size = output_size
+
+    def forward(self, x):
+        pass
+
+    def to_pytorch_code(self) -> str:
+        raise NotImplementedError("Must be implemented by subclass.")
+
+class AdaptiveMaxPool1D(AdaptivePool1D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveMaxPool1d(output_size={self.output_size})"
+
+
+class AdaptiveAveragePool1D(AdaptivePool1D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveAvgPool1d(output_size={self.output_size})"
+
+
+class AdaptiveMaxPool2D(AdaptivePool2D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveMaxPool2d(output_size={self.output_size})"
+
+
+class AdaptiveAveragePool2D(AdaptivePool2D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveAvgPool2d(output_size={self.output_size})"
+
+
+class AdaptiveMaxPool3D(AdaptivePool3D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveMaxPool3d(output_size={self.output_size})"
+
+
+class AdaptiveAveragePool3D(AdaptivePool3D):
+    def to_pytorch_code(self) -> str:
+        return f"nn.AdaptiveAvgPool3d(output_size={self.output_size})"
+    
+
 # Example usage
 conv_node = ConvNode(batch_size=32, in_channels=3, out_channels=16, input_size=(32, 32), kernel_size=3)
 batch_norm_node = BatchNormNode(num_features=16)
@@ -668,4 +791,4 @@ graph.add_node(dropout_node, existing_node=max_pool_node)
 
 # Serialize to PyTorch code
 pytorch_code = graph.to_pytorch_code()
-print(pytorch_code)
+print(pytorch_code) 
