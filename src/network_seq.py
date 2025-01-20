@@ -1,22 +1,25 @@
 import torch.nn as nn
 from typing import List, Tuple, Union
-from enum import Enum
-
+from enum import Enum  
+import torch
 
 class Node:
-    def __init__(self, in_dim: Tuple[int, ...], out_dim: Tuple[int, ...]):
+    def __init__(self, in_dim: Tuple[int, ...] | None, out_dim: Tuple[int, ...] | None):
         """
         Initialize a Node with input and output dimensions.
 
         Parameters:
-        - in_dim (Tuple[int, ...]): Input dimensions
-        - out_dim (Tuple[int, ...]): Output dimensions
+        - in_dim (Union[Tuple[int, ...], None]): Input dimensions or None
+        - out_dim (Union[Tuple[int, ...], None]): Output dimensions or None
+         
+        front-end should not reach this 
         """
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.name = f"Node_{id(self)}"
+        self.name = f"{self.__class__.__name__}_{id(self)}"
         self.input_node: 'Node' = None
-        self.output_node: 'Node' = None
+        self.output_node: 'Node' = None 
+        self.has_fixed_dim = in_dim is not None and out_dim is not None
 
     def forward(self, x):
         raise NotImplementedError("Must be implemented by subclass.")
@@ -24,76 +27,103 @@ class Node:
     def to_pytorch_code(self) -> str:
         raise NotImplementedError("Must be implemented by subclass.")
 
+    def reset_dimensions(self, in_dim: Union[Tuple[int, ...], None], out_dim: Union[Tuple[int, ...], None]): 
+        """
+        front-end should not reach this 
+        """
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.has_fixed_dim = in_dim is not None and out_dim is not None 
 
+###Figure out a way to prevent edge cases where undefined dimension gets dimension matched to undefined dimension 
+
+
+    def has_fixed_dimensions(self) -> bool:
+        """
+        Returns whether both in_dim and out_dim are not None.
+
+        Returns:
+        - bool: True if both in_dim and out_dim are not None, False otherwise.
+        """
+        return self.has_fixed_dim
+
+#A seq cannot start off with a node that needs to infer its in_dim (input dimension) from the previous node
 class Seq:
-    def __init__(self, in_node: Node, out_node: Node):
+    def __init__(self, nodes: List[Node]):
         """
-        Initialize a sequence with input and output nodes.
+        Initialize a sequence with a list of nodes.
 
         Parameters:
-        - in_node (Node): The first node in the sequence
-        - out_node (Node): The last node in the sequence
+        - nodes (List[Node]): A list of nodes forming the sequence
         """
-        self.nodes: List[Node] = [in_node, out_node]
-        self.in_node: Node = in_node
-        self.out_node: Node = out_node
-        self.completed: bool = False
+        if not nodes:
+            raise ValueError("The sequence must contain at least one node.")
+        
+        self._validate_dimensions(nodes)
+        self.nodes = nodes
+        self.in_node = nodes[0]
+        self.out_node = nodes[-1]
+        self._rename_nodes()
 
-    def connect_to(self, node: Node, to_seq: 'Seq') -> None:
+    def _validate_dimensions(self, nodes: List[Node]) -> None:
         """
-        Connect this sequence to another sequence through a new node.
-        The node will be connected after this sequence's out_node.
+        Validate that each node's out_dim matches the next node's in_dim.
 
         Parameters:
-        - node (Node): Node to connect with
+        - nodes (List[Node]): A list of nodes to validate
+        """
+        for i in range(len(nodes) - 1):
+            if nodes[i].out_dim != nodes[i + 1].in_dim:
+                raise ValueError(
+                    f"Dimension mismatch: {nodes[i].name} output dim ({nodes[i].out_dim}) "
+                    f"!= {nodes[i + 1].name} input dim ({nodes[i + 1].in_dim})"
+                )
+            
+
+    def _rename_nodes(self):
+        seq_id = id(self)
+        for index, node in enumerate(self.nodes):
+            node.name = f"Seq{seq_id}_{node.__class__.__name__}_{index}"
+
+    def connect_to(self, to_seq: 'Seq') -> None:
+        """
+        Connect this sequence to another sequence.
+
+        Parameters:
         - to_seq (Seq): Target sequence to connect to
         """
-        if node.in_dim != self.out_node.out_dim:
+        if self.out_node.out_dim != to_seq.in_node.in_dim:
             raise ValueError(
                 f"Dimension mismatch: {self.out_node.name} output dim ({self.out_node.out_dim}) "
-                f"!= {node.name} input dim ({node.in_dim})"
+                f"!= {to_seq.in_node.name} input dim ({to_seq.in_node.in_dim})"
             )
-        
-        if self.out_node.output_node is not None:
-            raise ValueError(f"{self.out_node.name} already has an output node")
-        if node.input_node is not None:
-            raise ValueError(f"{node.name} already has an input node")
 
-        # Connect the nodes
-        self.out_node.output_node = node
-        node.input_node = self.out_node
+        # Connect the sequences
+        self.out_node.output_node = to_seq.in_node
+        to_seq.in_node.input_node = self.out_node
 
-        # Update the sequences
-        self.nodes.insert(-1, node)
-        to_seq.nodes.insert(1, node)
+        # Merge the sequences
+        self.nodes.extend(to_seq.nodes)
 
-    def connect_from(self, node: Node, from_seq: 'Seq') -> None:
+    def connect_from(self, from_seq: 'Seq') -> None:
         """
-        Connect this sequence from another sequence through a new node.
-        The node will be connected before this sequence's in_node.
+        Connect this sequence from another sequence.
 
         Parameters:
-        - node (Node): Node to connect with
         - from_seq (Seq): Source sequence to connect from
         """
-        if node.out_dim != self.in_node.in_dim:
+        if from_seq.out_node.out_dim != self.in_node.in_dim:
             raise ValueError(
-                f"Dimension mismatch: {node.name} output dim ({node.out_dim}) "
+                f"Dimension mismatch: {from_seq.out_node.name} output dim ({from_seq.out_node.out_dim}) "
                 f"!= {self.in_node.name} input dim ({self.in_node.in_dim})"
             )
-        
-        if node.output_node is not None:
-            raise ValueError(f"{node.name} already has an output node")
-        if self.in_node.input_node is not None:
-            raise ValueError(f"{self.in_node.name} already has an input node")
 
-        # Connect the nodes
-        node.output_node = self.in_node
-        self.in_node.input_node = node
+        # Connect the sequences
+        from_seq.out_node.output_node = self.in_node
+        self.in_node.input_node = from_seq.out_node
 
-        # Update the sequences
-        self.nodes.insert(0, node)
-        from_seq.nodes.insert(-1, node)
+        # Merge the sequences
+        self.nodes = from_seq.nodes + self.nodes
 
     def to_pytorch_code(self) -> str:
         """
@@ -102,15 +132,76 @@ class Seq:
         Returns:
         - str: PyTorch code representing the sequence
         """
-        code_lines = [node.to_pytorch_code() for node in self.nodes]
-        return "\n".join(code_lines)
+        module_calls = [node.to_pytorch_code() for node in self.nodes]
+        module_list = ",\n            ".join(module_calls)
+        
+        return f"""
+import torch
+import torch.nn as nn
 
+class GeneratedModel(nn.Module):
+    def __init__(self):
+        super(GeneratedModel, self).__init__()
+        self.model = nn.Sequential(
+            {module_list}
+        )
+
+    def forward(self, x):
+        return self.model(x)
+"""
+    
+class FlattenNode(Node):
+    def __init__(self, dim, start_dim: int = 1, end_dim = -1): 
+        """
+        Initializes a FlattenNode representing a flatten operation. Asumming (B, ..) format 
+
+        Parameters:
+        - start_dim (int): The first dimension to flatten. Default is 1.
+        - end_dim (int): The last dimension to flatten. Default is -1.
+        """
+        
+        self.start_dim = start_dim
+        self.end_dim = end_dim if end_dim != -1 else len(dim)
+        super().__init__(dim, self.calculate_output_size(dim, start_dim, self.end_dim)) 
+        self.name = f"Flatten_{id(self)}"
+
+    def calculate_output_size(self, dim, start_dim, end_dim):
+        flattened_dim = 1
+        for d in dim[start_dim:end_dim]:
+            flattened_dim *= d
+
+         # Construct the out_dim
+        out_dim = dim[:start_dim] + (flattened_dim,) + dim[end_dim:]
+        print(out_dim)
+        return out_dim
+    
+    def to_pytorch_code(self) -> str:
+        return f"nn.Flatten(start_dim={self.start_dim}, end_dim={self.end_dim})"
+    
+
+    
+    #def reset_dimensions(self, in_dim: Tuple[int] | None):
+    #    """
+    #   Resetting in_dimension and inferring out_dimension.
+    #    """
+    #    if in_dim is None:
+    #        return super().reset_dimensions(None, None)
+#
+    #    # Calculate the flattened dimension
+    #    flattened_dim = 1
+    #    for dim in in_dim[self.start_dim:self.end_dim]:
+    #        flattened_dim *= dim
+
+    #    # Construct the out_dim
+    #    out_dim = in_dim[:self.start_dim] + (flattened_dim,) + in_dim[self.end_dim:]
+    #   return super().reset_dimensions(in_dim, out_dim) 
+        
 
 
 class LinearNode(Node):
     def __init__(self, batch_size: int, input_features: int, output_features: int):
         """
-        Initializes a LinearNode representing a fully connected layer.
+        Initializes a LinearNode representing a fully connected layer. 
 
         Parameters:
         - batch_size (int): Number of samples in a batch.
@@ -120,11 +211,12 @@ class LinearNode(Node):
         assert isinstance(batch_size, int) and batch_size > 0, "batch_size must be a positive integer"
         assert isinstance(input_features, int) and input_features > 0, "input_features must be a positive integer"
         assert isinstance(output_features, int) and output_features > 0, "output_features must be a positive integer"
-
+        
         super().__init__((batch_size, input_features), (batch_size, output_features))
         self.batch_size = batch_size
         self.input_features = input_features
         self.output_features = output_features
+        self.name = f"Linear_{id(self)}"
 
     def forward(self, x):
         pass
@@ -171,6 +263,7 @@ class ElementWiseNonlinearity(Node):
         """
         super().__init__(dim, dim)
         self.nonlinearity = nonlinearity
+        self.name = f"ElementWiseNonlinearity_{id(self)}"
 
     def forward(self, x):
         pass
@@ -214,6 +307,7 @@ class Nonlinearity1D(Node):
         super().__init__(dim, dim)
         self.nonlinearity = nonlinearity
         self.dim_index = dim_index
+        self.name = f"Nonlinearity1D_{id(self)}"
 
     def forward(self, x):
         pass
@@ -268,6 +362,7 @@ class Conv1DNode(Node):
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+        self.name = f"Conv1D_{id(self)}"
 
     def calculate_output_size(self, input_size, kernel_size, stride, padding):
         return (input_size + 2 * padding[0] - kernel_size[0]) // stride[0] + 1
@@ -318,6 +413,7 @@ class Conv2DNode(Node):
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+        self.name = f"Conv2D_{id(self)}"
 
     def calculate_output_size(self, input_size, kernel_size, stride, padding):
         return tuple(
@@ -371,6 +467,7 @@ class Conv3DNode(Node):
         self.kernel_size = kernel_size
         self.stride = stride 
         self.padding = padding
+        self.name = f"Conv3D_{id(self)}"
 
     def calculate_output_size(self, input_size, kernel_size, stride, padding):
         return tuple(
@@ -391,11 +488,7 @@ class Conv3DNode(Node):
 
 # Dropout 
 
-
-
 ##Pool 
-
-
 class PoolNode1D(Node):
     def __init__(self, batch_size: int, in_channels: int, input_size: int, kernel_size: int, stride=None, padding=0):
         """
@@ -424,6 +517,7 @@ class PoolNode1D(Node):
         )
 
         super().__init__((batch_size, in_channels, input_size), (batch_size, in_channels, output_size))
+        self.name = f"PoolNode1D_{id(self)}"
 
     def calculate_output_size(self, input_size: int) -> int:
         """
@@ -471,6 +565,7 @@ class LPPool1D(PoolNode1D):
         assert isinstance(norm_type, (int, float)) and norm_type > 0, "norm_type must be a positive number"
         super().__init__(batch_size, in_channels, input_size, kernel_size, stride, padding)
         self.norm_type = norm_type
+        self.name = f"LPPool1D_{id(self)}"
 
     def to_pytorch_code(self) -> str:
         return f"nn.LPPool1d(norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
@@ -502,6 +597,7 @@ class PoolNode2D(Node):
         )
 
         super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
+        self.name = f"PoolNode2D_{id(self)}"
 
     def calculate_output_dimension(self, input_size: Tuple[int, int]) -> Tuple[int, int]:
         return tuple(
@@ -543,6 +639,7 @@ class LPPool2D(PoolNode2D):
         assert isinstance(norm_type, (int, float)) and norm_type > 0, "norm_type must be a positive number"
         super().__init__(batch_size, in_channels, input_size, kernel_size, stride, padding)
         self.norm_type = norm_type
+        self.name = f"LPPool2D_{id(self)}"
 
     def to_pytorch_code(self) -> str:
         return f"nn.LPPool2d(norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
@@ -572,6 +669,7 @@ class PoolNode3D(Node):
         )
 
         super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
+        self.name = f"PoolNode3D_{id(self)}"
 
     def calculate_output_dimension(self, input_size: Tuple[int, int, int]) -> Tuple[int, int, int]:
         return tuple(
@@ -613,6 +711,7 @@ class LPPool3D(PoolNode3D):
         assert isinstance(norm_type, (int, float)) and norm_type > 0, "norm_type must be a positive number"
         super().__init__(batch_size, in_channels, input_size, kernel_size, stride, padding)
         self.norm_type = norm_type
+        self.name = f"LPPool3D_{id(self)}"
 
     def to_pytorch_code(self) -> str:
         return f"nn.LPPool3d(norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding})"
@@ -642,6 +741,7 @@ class AdaptivePool1D(Node):
 
         super().__init__((batch_size, in_channels, input_size), (batch_size, in_channels, output_size))
         self.output_size = output_size
+        self.name = f"AdaptivePool1D_{id(self)}"
 
     def forward(self, x):
         pass
@@ -667,6 +767,7 @@ class AdaptivePool2D(Node):
 
         super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
         self.output_size = output_size
+        self.name = f"AdaptivePool2D_{id(self)}"
 
     def forward(self, x):
         pass
@@ -692,6 +793,7 @@ class AdaptivePool3D(Node):
 
         super().__init__((batch_size, in_channels, *input_size), (batch_size, in_channels, *output_size))
         self.output_size = output_size
+        self.name = f"AdaptivePool3D_{id(self)}"
 
     def forward(self, x):
         pass
@@ -729,21 +831,27 @@ class AdaptiveAveragePool3D(AdaptivePool3D):
         return f"nn.AdaptiveAvgPool3d(output_size={self.output_size})"
     
 
+
 # Example usage
-conv_node = ConvNode(batch_size=32, in_channels=3, out_channels=16, input_size=(32, 32), kernel_size=3)
-batch_norm_node = BatchNormNode(num_features=16)
-relu_node = ElementWiseNonlinearity(dim=(16,))
-max_pool_node = MaxPoolNode(kernel_size=2)
-dropout_node = DropoutNode(p=0.5)
-linear_node = LinearNode(in_features=16, out_features=10)
+# Assuming you have defined some Node subclasses with to_pytorch_code implemented
+# nodes = [ConvNode(...), BatchNormNode(...), ReLUNode(...)]
+# seq = Seq(nodes)
+# print(seq.to_pytorch_code())
 
-graph = Graph(in_node=conv_node, out_node=linear_node)
-graph.add_node(batch_norm_node, existing_node=conv_node)
-graph.add_node(relu_node, existing_node=batch_norm_node)
-graph.add_node(max_pool_node, existing_node=relu_node)
-graph.add_node(dropout_node, existing_node=max_pool_node)
 
-# Serialize to PyTorch code
-pytorch_code = graph.to_pytorch_code()
+# Assuming the Node and Seq classes are already defined as provided
+
+# Create a sequence of nodes using the provided Conv1DNode and other nodes
+nodes = [
+    Conv1DNode(batch_size=1, in_channels=3, out_channels=16, input_size=32, kernel_size=3, stride=1, padding=1),
+    ElementWiseNonlinearity(dim=(1, 16, 32), nonlinearity=ElementWiseNonlinearityType.RELU),
+    FlattenNode(dim = (1, 16, 32), start_dim = 1), 
+    LinearNode(batch_size=1, input_features=16 * 32, output_features=10)
+
+]
+
+seq = Seq(nodes)
+
+# Generate PyTorch code
+pytorch_code = seq.to_pytorch_code()
 print(pytorch_code)
-
