@@ -1,5 +1,7 @@
+import torch.nn as nn
 from typing import List, Tuple, Union
 from enum import Enum  
+import torch
 
 class Node:
     def __init__(self, in_dim: Tuple[int, ...] | None, out_dim: Tuple[int, ...] | None):
@@ -31,8 +33,6 @@ class Node:
         """
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.has_fixed_dim = in_dim is not None and out_dim is not None 
-
 ###Figure out a way to prevent edge cases where undefined dimension gets dimension matched to undefined dimension 
 
 
@@ -85,8 +85,7 @@ class Seq:
 
     def connect_to(self, to_seq: 'Seq') -> None:
         """
-        Connect this sequence to another sequence.
-
+        Connect this sequence to another sequence.  
         Parameters:
         - to_seq (Seq): Target sequence to connect to
         """
@@ -843,7 +842,8 @@ nodes = [
     Conv1DNode(batch_size=1, in_channels=3, out_channels=16, input_size=32, kernel_size=3, stride=1, padding=1),
     ElementWiseNonlinearity(dim=(1, 16, 32), nonlinearity=ElementWiseNonlinearityType.RELU),
     FlattenNode(dim = (1, 16, 32), start_dim = 1), 
-    LinearNode(batch_size=1, input_features=16 * 32, output_features=10)
+    LinearNode(batch_size=1, input_features=16 * 32, output_features=10), 
+    LinearNode(batch_size=1, input_features = 10, output_features=1)
 ]
 
 seq = Seq(nodes)

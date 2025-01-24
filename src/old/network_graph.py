@@ -745,5 +745,4 @@ graph.add_node(dropout_node, existing_node=max_pool_node)
 
 # Serialize to PyTorch code
 pytorch_code = graph.to_pytorch_code()
-print(pytorch_code)
-
+print(pytorch_code) 
