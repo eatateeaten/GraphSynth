@@ -9,7 +9,7 @@
     input_nodes?: string[];
     output_nodes?: string[];
   }
-  
+
   export let layer: Layer;
 </script>
 

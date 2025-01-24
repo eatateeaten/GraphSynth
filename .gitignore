@@ -74,7 +74,6 @@ model_weights/
 data/
 datasets/
 *.csv
-*.json
 *.txt
 !requirements.txt
 *.db

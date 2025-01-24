@@ -1,13 +1,14 @@
 import asyncio
 import json
 import uuid
-from pathlib import Path
 import websockets
 from jsonschema import validate
-from network_graph import Node, ConvNode, BatchNormNode, ReLUNode, MaxPoolNode, DropoutNode, LinearNode, Graph
+from network_seq import (Node, Conv1DNode, Conv2DNode, Conv3DNode, 
+                        ElementWiseNonlinearity, ElementWiseNonlinearityType,
+                        LinearNode, FlattenNode, Seq)
 
 # Load JSON schema
-with open('schema/schema.json', 'r') as f:
+with open('schema.json', 'r') as f:
     SCHEMA = json.load(f)
 
 def create_node_from_json(node_data):
@@ -15,68 +16,64 @@ def create_node_from_json(node_data):
     node_type = node_data['type']
     params = node_data['params']
     
-    if node_type == 'conv2d':
-        return ConvNode(
-            batch_size=1,  # Default batch size
+    if node_type == 'conv1d':
+        return Conv1DNode(
+            batch_size=params['batch_size'],
             in_channels=params['in_channels'],
             out_channels=params['out_channels'],
-            input_size=(224, 224),  # Default input size
+            input_size=params['input_size'],
             kernel_size=params['kernel_size'],
-            stride=params.get('stride', (1, 1)),
-            padding=params.get('padding', (0, 0))
-        )
-    elif node_type == 'batchnorm':
-        return BatchNormNode(num_features=params['num_features'])
-    elif node_type == 'relu':
-        return ReLUNode(dim=(params.get('features', 1),))
-    elif node_type == 'maxpool':
-        return MaxPoolNode(
-            kernel_size=params['kernel_size'],
-            stride=params.get('stride'),
+            stride=params.get('stride', 1),
             padding=params.get('padding', 0)
         )
-    elif node_type == 'dropout':
-        return DropoutNode(p=params['probability'])
+    elif node_type == 'conv2d':
+        return Conv2DNode(
+            batch_size=params['batch_size'],
+            in_channels=params['in_channels'],
+            out_channels=params['out_channels'],
+            input_size=tuple(params['input_size']),
+            kernel_size=params['kernel_size'],
+            stride=params.get('stride', 1),
+            padding=params.get('padding', 0)
+        )
+    elif node_type == 'elementwise_nonlinearity':
+        return ElementWiseNonlinearity(
+            dim=tuple(params['dim']),
+            nonlinearity=ElementWiseNonlinearityType[params['nonlinearity'].upper()]
+        )
     elif node_type == 'linear':
         return LinearNode(
-            in_features=params['in_features'],
-            out_features=params['out_features']
+            batch_size=params['batch_size'],
+            input_features=params['input_features'],
+            output_features=params['output_features']
+        )
+    elif node_type == 'flatten':
+        return FlattenNode(
+            dim=tuple(params['dim']),
+            start_dim=params.get('start_dim', 1),
+            end_dim=params.get('end_dim', -1)
         )
     else:
         raise ValueError(f"Unknown node type: {node_type}")
 
-def create_graph_from_json(data):
-    """Create a Graph instance from JSON data."""
-    # First create all nodes
-    nodes = {}
+def create_sequence_from_json(data):
+    """Create a Seq instance from JSON data."""
+    # Create nodes in order
+    nodes = []
+    node_map = {}
+    
+    # First pass: create all nodes
     for node_data in data['nodes']:
         node = create_node_from_json(node_data)
-        node.name = node_data['name']  # Override auto-generated name
-        nodes[node.name] = node
+        node_map[node_data['name']] = node
+        nodes.append(node)
     
-    # Then connect them
-    for node_data in data['nodes']:
-        node = nodes[node_data['name']]
-        for out_name in node_data.get('output_nodes', []):
-            if out_name in nodes:
-                node.connect_to(nodes[out_name])
-    
-    # Find input and output nodes
-    input_nodes = [n for n in nodes.values() if not n.input_nodes]
-    output_nodes = [n for n in nodes.values() if not n.output_nodes]
-    
-    if not input_nodes or not output_nodes:
-        raise ValueError("Graph must have at least one input and one output node")
-    
-    # Create graph with first input and output node
-    graph = Graph(input_nodes[0], output_nodes[0])
-    
-    # Add all other nodes
-    for node in nodes.values():
-        if node not in [input_nodes[0], output_nodes[0]]:
-            graph.add_node(node)
-    
-    return graph
+    # Create sequence
+    try:
+        seq = Seq(nodes)
+        return seq
+    except Exception as e:
+        raise ValueError(f"Failed to create sequence: {str(e)}")
 
 async def handle_graph(websocket):
     """Handle incoming WebSocket connections and messages."""
@@ -88,13 +85,13 @@ async def handle_graph(websocket):
                 # Validate against schema
                 validate(instance=data, schema=SCHEMA)
 
-                # Process the graph
+                # Process the sequence
                 try:
-                    graph = create_graph_from_json(data)
+                    seq = create_sequence_from_json(data)
                     response = {
                         'success': True,
-                        'graph_id': str(uuid.uuid4()),
-                        'pytorch_code': graph.to_pytorch_code()
+                        'id': str(uuid.uuid4()),
+                        'pytorch_code': seq.to_pytorch_code()
                     }
                 except Exception as e:
                     response = {
