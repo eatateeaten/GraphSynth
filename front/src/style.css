@@ -1,0 +1,60 @@
+main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.flowchart {
+  flex-grow: 1;
+  background: #1e1e1e;
+  border-radius: 4px;
+  padding: 2rem;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  min-height: 250px;
+}
+
+.layer-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+}
+
+.arrow {
+  color: #d4d4d4;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.input {
+  height: 150px;
+}
+
+textarea {
+  width: 100%;
+  height: 100%;
+  background: #2d2d2d;
+  color: #d4d4d4;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  resize: none;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.error {
+  color: #f44336;
+  margin-top: 0.5rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+} 

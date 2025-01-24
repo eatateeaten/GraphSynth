@@ -1,7 +1,5 @@
-import torch.nn as nn
 from typing import List, Tuple, Union
 from enum import Enum  
-import torch
 
 class Node:
     def __init__(self, in_dim: Tuple[int, ...] | None, out_dim: Tuple[int, ...] | None):
@@ -847,7 +845,6 @@ nodes = [
     ElementWiseNonlinearity(dim=(1, 16, 32), nonlinearity=ElementWiseNonlinearityType.RELU),
     FlattenNode(dim = (1, 16, 32), start_dim = 1), 
     LinearNode(batch_size=1, input_features=16 * 32, output_features=10)
-
 ]
 
 seq = Seq(nodes)
