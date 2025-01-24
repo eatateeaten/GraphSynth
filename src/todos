@@ -1,6 +1,11 @@
-1. rewrite ConvNode and Conv3DNode to check the stride, padding are valid 
-2. check batch size for ConvNode and Conv3DNode 
-3. change the ReLU, BatchNorm, and Dropout definitions too 
+
+
+in_dim out_dim have to be renamed 
+users can either build it left to right with in_shape inference for the next node 
+
+once it's done if they break the sequence auto shape inference is off
+
+BatchNorm, and Dropout definitions too 
 4. Make the compute graph creation consistent with PyTorch, TF, and ONNX 
 
 5. NN.sequential 

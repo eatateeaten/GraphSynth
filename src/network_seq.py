@@ -170,7 +170,6 @@ class FlattenNode(Node):
 
          # Construct the out_dim
         out_dim = dim[:start_dim] + (flattened_dim,) + dim[end_dim:]
-        print(out_dim)
         return out_dim
     
     def to_pytorch_code(self) -> str:
