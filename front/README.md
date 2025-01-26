@@ -3,7 +3,7 @@
 ## Setup Instructions for Mac
 
 1. First, install Node.js:
-   - Open Terminal (press Cmd + Space, type "Terminal")
+   - Open Terminal
    - Install Homebrew if you don't have it:
      ```bash
      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -36,15 +36,4 @@
    pnpm dev
    ```
    - You should see a message saying the server is running
-   - The site will automatically open in your browser
-   - If it doesn't, go to: http://localhost:5173
-
-## Common Issues
-
-- If you see "command not found: pnpm":
-  - Try closing and reopening Terminal
-  - If that doesn't work, run the pnpm install command again
-
-- If you see errors about missing dependencies:
-  - Try running `pnpm install` again
-  - Make sure you're in the correct folder (front)
+   - Go to: http://localhost:5173
