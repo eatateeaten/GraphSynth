@@ -1,7 +1,13 @@
 import { defineConfig } from 'vite'
-import { svelte } from '@sveltejs/vite-plugin-svelte'
+import react from '@vitejs/plugin-react-swc'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      // /esm/icons/index.mjs only exports the icons statically, so no separate chunks are created
+      '@tabler/icons-react': '@tabler/icons-react/dist/esm/icons/index.mjs',
+    },
+  },
 })
