@@ -11,6 +11,8 @@ from network_seq import (Node, Conv1DNode, Conv2DNode, Conv3DNode,
 with open('schema.json', 'r') as f:
     SCHEMA = json.load(f)
 
+
+
 def create_node_from_json(node_data):
     """Create a Node instance from JSON data."""
     node_type = node_data['type']
@@ -75,33 +77,57 @@ def create_sequence_from_json(data):
     except Exception as e:
         raise ValueError(f"Failed to create sequence: {str(e)}")
 
-async def handle_graph(websocket):
-    """Handle incoming WebSocket connections and messages."""
+async def handle_message(websocket):
+    """Handle incoming WebSocket messages with different operations."""
     try:
         async for message in websocket:
             try:
                 data = json.loads(message)
                 
-                # Validate against schema
-                validate(instance=data, schema=SCHEMA)
-
-                # Process the sequence
-                try:
-                    seq = create_sequence_from_json(data)
-                    response = {
-                        'success': True,
-                        'id': str(uuid.uuid4()),
-                        'pytorch_code': seq.to_pytorch_code()
-                    }
-                except Exception as e:
-                    response = {
+                # Check if operation field exists
+                if 'operation' not in data:
+                    await websocket.send(json.dumps({
                         'success': False,
-                        'error': str(e)
-                    }
+                        'error': 'Missing operation field'
+                    }))
+                    continue
 
-                # Send response
-                await websocket.send(json.dumps(response))
-                
+                # Handle different operations
+                if data['operation'] == 'addNode':
+                    if 'layer' not in data:
+                        await websocket.send(json.dumps({
+                            'success': False,
+                            'error': 'Missing layer data for addNode operation'
+                        }))
+                        continue
+                    
+                    try:
+                        # Validate against schema
+                        validate(instance=data['layer'], schema=SCHEMA)
+                        
+                        # Process the node
+                        node = create_node_from_json(data['layer'])
+                        response = {
+                            'success': True,
+                            'id': str(uuid.uuid4()),
+                            'operation': 'addNode',
+                            'pytorch_code': node.to_pytorch_code()
+                        }
+                    except Exception as e:
+                        response = {
+                            'success': False,
+                            'operation': 'addNode',
+                            'error': str(e)
+                        }
+                    
+                    await websocket.send(json.dumps(response))
+
+                else:
+                    await websocket.send(json.dumps({
+                        'success': False,
+                        'error': f'Unknown operation: {data["operation"]}'
+                    }))
+
             except json.JSONDecodeError:
                 await websocket.send(json.dumps({
                     'success': False,
@@ -120,7 +146,7 @@ async def handle_graph(websocket):
 
 async def main():
     """Start the WebSocket server."""
-    async with websockets.serve(handle_graph, "localhost", 8765):
+    async with websockets.serve(handle_message, "localhost", 8765):
         print("WebSocket server started on ws://localhost:8765")
         await asyncio.Future()  # run forever
 

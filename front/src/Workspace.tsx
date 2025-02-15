@@ -20,7 +20,7 @@ const nodeTypes = {
   default: LayerBox
 };
 
-const GRID_SIZE = 20;
+const GRID_SIZE = 10;
 
 export interface WorkspaceHandle {
   addLayer: (layer: Layer) => void;

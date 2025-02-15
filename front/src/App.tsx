@@ -20,7 +20,13 @@ function App() {
   }, []);
 
   const handleLayerAdd = (layer: Layer) => {
+    const requestId = crypto.randomUUID();
     workspaceRef.current?.addLayer(layer);
+    ws.current?.send(JSON.stringify({
+      requestId,
+      operation: "addNode", 
+      layer
+    }));
   };
 
   return (
