@@ -1,5 +1,5 @@
     
-from network_seq import Node 
+from seq import Node 
 from typing import Tuple, Union
 from enum import Enum
 

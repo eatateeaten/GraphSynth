@@ -3,47 +3,60 @@ from typing import List, Tuple, Union
 from enum import Enum  
 import torch
 
-class Node:
-    def __init__(self, in_dim: Tuple[int, ...] | None, out_dim: Tuple[int, ...] | None):
-        """
-        Initialize a Node with input and output dimensions.
+class Seq():
+    """
+    The unit for model code generation. Generate "nn.Sequantial"-like model code. 
+    All nodes forming a Seq are serialized into a compressed representation
+    Seq only works with Regular Nodes. It does not work with MergeNode and BranchNode. 
+    Supports Training Code Generation. 
+    """ 
+    def __init__(self, start_node, end_node): 
+        self.in_shape = Tuple[int, ...]
+        self.out_shape = Tuple[int, ...]
+        start_node = Node 
+         end_node = Node 
+        
 
-        Parameters:
-        - in_dim (Union[Tuple[int, ...], None]): Input dimensions or None
-        - out_dim (Union[Tuple[int, ...], None]): Output dimensions or None
-         
-        front-end should not reach this 
-        """
-        self.in_dim = in_dim
-        self.out_dim = out_dim
-        self.name = f"{self.__class__.__name__}_{id(self)}"
-        self.input_node: 'Node' = None
-        self.output_node: 'Node' = None 
-        self.has_fixed_dim = in_dim is not None and out_dim is not None
+    def to_torch(self): 
+        return 
 
-    def forward(self, x):
-        raise NotImplementedError("Must be implemented by subclass.")
+    def serialize_from_nodes(self): 
+        return 
 
-    def to_pytorch_code(self) -> str:
-        raise NotImplementedError("Must be implemented by subclass.")
+    def parse_to_nodes(self):
+        return 
+    
+    
+    
+class Train_loop():
+    """
+    The unit for model code generation. Generate "nn.Sequantial"-like model code. 
+    All nodes forming a Seq are serialized into a compressed representation
+    Only works with Regular Nodes.
+    Does not work with MergeNode and BranchNode. 
+    Supports Training Code Generation. 
+    """
+    in_shape = Tuple[int, ...]
+    out_shape = Tuple[int, ...]
 
-    def reset_dimensions(self, in_dim: Union[Tuple[int, ...], None], out_dim: Union[Tuple[int, ...], None]): 
-        """
-        front-end should not reach this 
-        """
-        self.in_dim = in_dim
-        self.out_dim = out_dim
-###Figure out a way to prevent edge cases where undefined dimension gets dimension matched to undefined dimension 
+    def to_torch(): 
+        
+        return 
 
+    def serialize_from_nodes(): 
+        return 
 
-    def has_fixed_dimensions(self) -> bool:
-        """
-        Returns whether both in_dim and out_dim are not None.
+    def parse_to_nodes():
+        return 
+    
+    
 
-        Returns:
-        - bool: True if both in_dim and out_dim are not None, False otherwise.
-        """
-        return self.has_fixed_dim
+class NN_Graph():
+    """
+    Combines Seqs and MergeNode, BranchNode to cover all Neural Network Architecture Cases 
+    Training Code Generation 
+    """
+
 
 #A seq cannot start off with a node that needs to infer its in_dim (input dimension) from the previous node
 class Seq:

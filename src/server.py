@@ -3,7 +3,7 @@ import json
 import uuid
 import websockets
 from jsonschema import validate
-from network_seq import (Node, Conv1DNode, Conv2DNode, Conv3DNode, 
+from seq import (Node, Conv1DNode, Conv2DNode, Conv3DNode, 
                         ElementWiseNonlinearity, ElementWiseNonlinearityType,
                         LinearNode, FlattenNode, Seq)
 
