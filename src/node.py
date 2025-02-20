@@ -3,7 +3,7 @@ from enum import Enum
 import torch
 import abc
 import uuid
-from typing import Optional, Tuple, List, override
+from typing import Optional, Tuple, List
 import tensorflow as tf 
 import numpy as np 
 
@@ -107,7 +107,7 @@ class Node(abc.ABC):
         Link a node to the input of this node, throw error if the other_node's out_shape is defined and mismatched with this node's in_shape
         """
         if self.in_shape is None:
-            raise ValueError("Tensor in_shape should never be None.")
+            self.set_in_shape(other_node.out_shape)
         if self.in_shape != other_node.out_shape: # in_shape assigned and mismatched with prev out_shape
             raise ValueError("Invalid add node, link node {self} to the output of {other_node}, {self} in_shape mismatch with {other_node} out_shape")
         # all things check out, connect the two nodes
@@ -119,7 +119,7 @@ class Node(abc.ABC):
         Link a node to the output of this node, throw error if the other_node's in_shape is defined and mismatched with this node's out_shape
         """
         if self.out_shape is None:
-            raise ValueError("Tensor out_shape should never be None.")
+            self.set_out_shape(other_node.in_shape)
         if self.out_shape != other_node.in_shape: # in_shape assigned and mismatched with prev node's out_shape
             raise ValueError("Invalid add node, link node {self} to the input of {other_node}, {self} out_shape mismatch with {other_node} in_shape")
         # all things check out, connect the two nodes
@@ -253,17 +253,17 @@ class Tensor(Node):
         if self.data.shape != self.in_shape:
             raise ValueError("Tensor data shape does not match the specified in_shape")
     
-    @override
     def set_in_shape(self, new_in_shape) -> Node:
+        """Overrides the Node Class method"""
         raise ValueError("Invalid Call. Cannot change in_shape of a Tensor. In_shape is immutable and must match the data shape. Consider creating a new Tensor")
 
-    @override
     def set_out_shape(self, new_out_shape) -> Node:
+        """Overrides the Node Class method"""
         raise ValueError("Invalid Call. Cannot change out_shape of a Tensor. Out_shape is immutable and must match the data shape. Consider creating a new Tensor")
     
-    @override
     def set_input_node(self, other_node: 'Node'):
         """
+        Overrides the Node Class method
         Link a node to the input of this node, throw error if the other_node's out_shape is defined and mismatched with this node's in_shape
         """
         if self.in_shape is None:
@@ -274,9 +274,9 @@ class Tensor(Node):
         self.input_node = other_node
         other_node.output_node = self
 
-    @override
     def set_output_node(self, other_node: 'Node'):
         """
+        Overrides the Node Class method
         Link a node to the output of this node, throw error if the other_node's in_shape is defined and mismatched with this node's out_shape
         """
         if self.out_shape is None:
@@ -317,7 +317,24 @@ class Reshape(Node):
         elif in_elements != out_elements:
             raise ValueError(f"Cannot reshape from {in_shape} to {out_dim}: total elements do not match")
         return out_dim
+    
+    def validate_params(self):
+        """
+        Validate the reshape parameters to ensure they are correct.
+        """
+        out_dim = self.params.get('out_dim')
+        if not isinstance(out_dim, tuple):
+            raise ValueError("out_dim must be a tuple")
 
+        inferred_count = 0
+        for dim in out_dim:
+            if dim == -1:
+                inferred_count += 1
+                if inferred_count > 1:
+                    raise ValueError("Only one dimension can be inferred (-1) in out_dim")
+            elif dim <= 0:
+                raise ValueError(f"Invalid dimension {dim} in out_dim: must be positive or -1")
+    
     def to_torch(self) -> str:
         out_dim = self.params['out_dim']
         return f"torch.reshape(input, {out_dim})"
