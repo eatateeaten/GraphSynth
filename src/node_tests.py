@@ -95,7 +95,16 @@ class TestNodeOperations(unittest.TestCase):
         self.assertIn("Invalid add node", str(context.exception))
         # This step would essentially invalidate all the downstream connections 
 
-        # Next step I will to infer the reshapes  
+        # Next step I will try to assist inferring the reshapes  
+
+        # We can however, swap Reshape (3, 4, -1) to Reshape (3, 4, 6) without any problem.
+        # These are the steps 
+        reshape_node1_2 = Reshape((3, 4, 6))
+        reshape_node1_2.set_input_node(input_node) 
+        reshape_node1_2.set_output_node(reshape_node2)
+        # When you swap a layer, you should call these three steps. Catch the error to determine whether the layer inference is invalid or the output shape is not matching
+
+        
 
 if __name__ == '__main__':
     unittest.main()
