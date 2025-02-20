@@ -5,7 +5,7 @@ import torch
 
 class Seq():
     """
-    The unit for model code generation. Generate "nn.Sequantial"-like model code. 
+    The unit for model code generation. Generate "nn.Sequantial" - like model code. 
     All nodes forming a Seq are serialized into a compressed representation
     Seq only works with Regular Nodes. It does not work with MergeNode and BranchNode. 
     Supports Training Code Generation. 
