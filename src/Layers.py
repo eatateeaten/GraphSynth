@@ -2,6 +2,45 @@ from node import Node
 from typing import Tuple, Union
 from enum import Enum
 
+class Linear(Node):
+    def __init__(self, input_features: int, output_features: int):
+        """
+        Initializes a LinearNode representing a fully-connected layer. 
+        The transformation will be by default applied to the last dimension. 
+
+        Parameters:
+        - input_features (int): Number of input features.
+        - output_features (int): Number of output features.
+        """
+        params = {
+            'input_features': input_features, 
+            'output_features': output_features
+        }
+        super().__init__(type="Linear", params = params)
+
+    def __init__(self, params: Tuple[int, ...]):
+        super().__init__(type="Linear", params=params)
+    
+    def forward_dimension_inference(self, in_shape: Tuple[int, ...]) -> Tuple[int, ...]:
+        # Ensure the input shape matches the expected input features
+        if in_shape[-1] != self.params['input_features']:
+            raise ValueError("Input shape does not match the number of input features.")
+        
+        # The output shape is the same as the input shape, except the last dimension
+        # is replaced by the number of output features
+        return in_shape[:-1] + (self.params['output_features'],)
+    
+    def validate_params(self):
+        # Ensure input_features and output_features are positive integers
+        if not isinstance(self.params['input_features'], int) or self.params['input_features'] <= 0:
+            raise ValueError("input_features must be a positive integer.")
+        if not isinstance(self.params['output_features'], int) or self.params['output_features'] <= 0:
+            raise ValueError("output_features must be a positive integer.")
+
+    def to_pytorch_code(self) -> str:
+        return f"nn.Linear({self.input_features}, {self.output_features})"
+
+
 class ElementWiseNonlinearityType(Enum):
     RELU = "ReLU"
     SIGMOID = "Sigmoid"
@@ -25,9 +64,12 @@ class ElementWiseNonlinearityType(Enum):
     MISH = "Mish"
 
 class ElementWiseNonlinearity(Node):
-    def __init__(self, dim: Tuple[int, ...], nonlinearity: ElementWiseNonlinearityType = ElementWiseNonlinearityType.RELU):
+    def __init__(self, nonlinearity: ElementWiseNonlinearityType = ElementWiseNonlinearityType.RELU):
         params = {'nonlinearity': nonlinearity}
-        super().__init__(type="ElementWiseNonlinearity", params=params, in_shape=dim, out_shape=dim)
+        super().__init__(type="ElementWiseNonlinearity", params=params)
+
+    def __init__(self, params: Tuple[int, ...]):
+        super().__init__(type="ElementWiseNonlinearity", params=params)
 
     def forward_dimension_inference(self, in_shape) -> Tuple[int, ...]:
         # For element-wise operations, the output shape is the same as the input shape
@@ -63,6 +105,8 @@ class ElementWiseNonlinearity(Node):
         }
         return nonlinearity_map[self.params['nonlinearity']]
 
+
+### Conv & Pool, we will support non-rectangular kernel_size, stride and padding later 
 
 class Conv1D(Node):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros'):
@@ -345,5 +389,97 @@ class LPPool3D(PoolNode3D):
 
     def to_torch(self) -> str:
         return f"nn.LPPool3d(norm_type={self.params['norm_type']}, kernel_size={self.params['kernel_size']}, stride={self.params['stride']}, padding={self.params['padding']})"
+
+class Conv1DTranspose(Node):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, output_padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros'):
+        params = {
+            'in_channels': in_channels,
+            'out_channels': out_channels,
+            'kernel_size': kernel_size,
+            'stride': stride,
+            'padding': padding,
+            'output_padding': output_padding,
+            'dilation': dilation,
+            'groups': groups,
+            'bias': bias,
+            'padding_mode': padding_mode
+        }
+        super().__init__(type="Conv1DTranspose", params=params)
+
+    def __init__(self, params: Tuple[int, ...]):
+        super().__init__(type="Conv1DTranspose", params=params)
+
+    def forward_dimension_inference(self, in_shape) -> Tuple[int, ...]:
+        n, c, l = in_shape
+        if c != self.params['in_channels']:
+            raise ValueError("Input channels do not match")
+        l_out = (l - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        return (n, self.params['out_channels'], l_out)
+
+    def to_torch(self) -> str:
+        return f"nn.ConvTranspose1d({self.params['in_channels']}, {self.params['out_channels']}, {self.params['kernel_size']}, stride={self.params['stride']}, padding={self.params['padding']}, output_padding={self.params['output_padding']}, dilation={self.params['dilation']}, groups={self.params['groups']}, bias={self.params['bias']}, padding_mode='{self.params['padding_mode']}')"
+
+
+class Conv2DTranspose(Node):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, output_padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros'):
+        params = {
+            'in_channels': in_channels,
+            'out_channels': out_channels,
+            'kernel_size': kernel_size,
+            'stride': stride,
+            'padding': padding,
+            'output_padding': output_padding,
+            'dilation': dilation,
+            'groups': groups,
+            'bias': bias,
+            'padding_mode': padding_mode
+        }
+        super().__init__(type="Conv2DTranspose", params=params)
+
+    def __init__(self, params: Tuple[int, ...]):
+        super().__init__(type="Conv2DTranspose", params=params)
+
+    def forward_dimension_inference(self, in_shape) -> Tuple[int, ...]:
+        n, c, h, w = in_shape
+        if c != self.params['in_channels']:
+            raise ValueError("Input channels do not match")
+        h_out = (h - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        w_out = (w - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        return (n, self.params['out_channels'], h_out, w_out)
+
+    def to_torch(self) -> str:
+        return f"nn.ConvTranspose2d({self.params['in_channels']}, {self.params['out_channels']}, {self.params['kernel_size']}, stride={self.params['stride']}, padding={self.params['padding']}, output_padding={self.params['output_padding']}, dilation={self.params['dilation']}, groups={self.params['groups']}, bias={self.params['bias']}, padding_mode='{self.params['padding_mode']}')"
+
+
+class Conv3DTranspose(Node):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, output_padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros'):
+        params = {
+            'in_channels': in_channels,
+            'out_channels': out_channels,
+            'kernel_size': kernel_size,
+            'stride': stride,
+            'padding': padding,
+            'output_padding': output_padding,
+            'dilation': dilation,
+            'groups': groups,
+            'bias': bias,
+            'padding_mode': padding_mode
+        }
+        super().__init__(type="Conv3DTranspose", params=params)
+
+    def __init__(self, params: Tuple[int, ...]):
+        super().__init__(type="Conv3DTranspose", params=params)
+
+    def forward_dimension_inference(self, in_shape) -> Tuple[int, ...]:
+        n, c, d, h, w = in_shape
+        if c != self.params['in_channels']:
+            raise ValueError("Input channels do not match")
+        d_out = (d - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        h_out = (h - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        w_out = (w - 1) * self.params['stride'] - 2 * self.params['padding'] + self.params['dilation'] * (self.params['kernel_size'] - 1) + self.params['output_padding'] + 1
+        return (n, self.params['out_channels'], d_out, h_out, w_out)
+
+    def to_torch(self) -> str:
+        return f"nn.ConvTranspose3d({self.params['in_channels']}, {self.params['out_channels']}, {self.params['kernel_size']}, stride={self.params['stride']}, padding={self.params['padding']}, output_padding={self.params['output_padding']}, dilation={self.params['dilation']}, groups={self.params['groups']}, bias={self.params['bias']}, padding_mode='{self.params['padding_mode']}')"
 
 

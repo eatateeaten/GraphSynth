@@ -3,6 +3,7 @@ from typing import List, Tuple, Union
 from enum import Enum
 
 
+
 class Node:
     def __init__(self, in_dim: Tuple[int, ...], out_dim: Tuple[int, ...]):
         """
