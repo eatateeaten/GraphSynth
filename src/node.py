@@ -198,6 +198,8 @@ class Node(abc.ABC):
 
 
 class Tensor(Node):
+    ## Tensor Type should be drawn with a different UI than other nodes 
+    ## You should not allow people edit its input ouput shape
     """
     Represents a tensor node
     It's usually defined as an input and output node of a Seq 
@@ -283,6 +285,7 @@ class Tensor(Node):
 
 
 class Reshape(Node):
+    ## I'm working to make Reshape and Swap_dim automatic, but for now make Reshape a specific node ig
     """
     Maps to reshape in Torch 
     """
@@ -332,6 +335,7 @@ class Reshape(Node):
     
 
 class NodeError(Exception, ABC):
+    ## Abstract don't need to be handled 
     """
     Abstract base class for errors related to Node operations.
     """
@@ -344,6 +348,7 @@ class NodeError(Exception, ABC):
 
 
 class InvalidShapeError(NodeError):
+    ## Can appear in the chatbox on the right side
     """
     Exception raised for errors in the shape of a tensor or node.
 
@@ -356,6 +361,7 @@ class InvalidShapeError(NodeError):
 
 
 class InvalidLayerParametersError(NodeError):
+    ## Can appear in the chatbox on the right side 
     """
     Exception raised for errors in the parameters of a layer.
 
@@ -368,42 +374,51 @@ class InvalidLayerParametersError(NodeError):
 
 
 class NoInputNodeError(NodeError):
+    ## This one will be rare and is not an intended feature if all things work out 
+    ## You don't need to implement anything for it on the front-end yet 
     def __init__(self, message: str = ""):
         default_message = "No input node connected."
         super().__init__(f"{default_message} {message}")
 
 
 class NoOutputNodeError(NodeError):
-    def __init__(self, message: str = ""):
+    ## This one will be rare and is not an intended feature if all things work out 
+    ## You don't need to implement anything for it on the front-end yet 
+    def __init__(self, message: str = ""): 
         default_message = "No output node connected."
         super().__init__(f"{default_message} {message}")
 
 
 class ForwardDimensionInferenceFailureError(NodeError):
+    ## The bubble can become a pinkish red? 
     def __init__(self, message: str = ""):
         default_message = "Failed to infer forward dimensions."
         super().__init__(f"{default_message} {message}")
 
 
 class ImmutableInShapeError(NodeError):
+    ## Just don't give people the option to change a Tensor shape, this will never occur
     def __init__(self, message: str = ""):
         default_message = "Attempt to set immutable input shape."
         super().__init__(f"{default_message} {message}")
 
 
 class ImmutableOutShapeError(NodeError):
+     ##Just don't give people the option to change a Tensor shape, this will never occur 
     def __init__(self, message: str = ""):
         default_message = "Attempt to set immutable output shape."
         super().__init__(f"{default_message} {message}")
 
 
 class InShapeMismatchError(NodeError):
+    ## the left side of the bubble become red. the left side can just be the left edge. You can put a very thin rectangle there on the left edge of the bubble. And it becomes red if it bugs. When it works the in_shape can be displayed when you hover over the rectangle  
     def __init__(self, message: str = ""):
         default_message = "Input shape mismatch with previous output shape."
         super().__init__(f"{default_message} {message}")
 
 
 class OutShapeMismatchError(NodeError):
+    ## the right side of the bubble become red. the left side can just be the left edge. You can put a very thin rectangle there on the left edge of the bubble. And it becomes red if it bugs. When it works the in_shape can be displayed when you hover over the rectangle  
     def __init__(self, message: str = ""):
         default_message = "Output shape mismatch with subsequent input shape."
         super().__init__(f"{default_message} {message}")
