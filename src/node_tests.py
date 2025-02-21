@@ -111,26 +111,30 @@ def test_conv_pool(self):
         input_node = Tensor(input) 
         
         
-        C1 = Conv2D(3, 9, 4, 4) 
+        C1 = Conv2D(3, 9, 4) 
         C1.set_input_node(input_node)
-        self.assertEqual(C1.out_shape, (64, 64, 6, 16))
+        self.assertEqual(C1.out_shape, (16, 6, 64, 64))
 
-        C2= Conv2D((9, 18, 4, 4))
+        C2= Conv2D(9, 18, 4)
         C2.set_input_node(C1)
-        self.assertEqual(C2.out_shape, (16, 16, 18, 16))
+        self.assertEqual(C2.out_shape, (16, 18, 16, 16))
 
-        C3= Conv2D((18, 36, 4, 4))
+        C3= Conv2D(18, 36, 4)
         C3.set_input_node(C3)
-        self.assertEqual(C3.out_shape, (4, 4, 36, 16))
+        self.assertEqual(C3.out_shape, (16, 36, 4, 4))
 
-        C3= MaxPool2D((4, 4))
-        C3.set_input_node(C3)
-        self.assertEqual(C3.out_shape, (1, 1, , 16))
+        M1= MaxPool2D(4)
+        M1.set_input_node(M1)
+        self.assertEqual(M1.out_shape, (16, 72, 1, 1))
+    
 
-        C3 = torch.randn(3, 12, 2)
-        C3 = Tensor(output)
-        output_node.set_input_node(reshape_node2) 
+        reshape_node1_2 = Reshape((16, 72))
+        reshape_node1_2.set_input_node(M1) 
+        
+        output = torch.randn(16, 72)
+        output = Tensor(output)
 
+        reshape_node1_2.set_output_node(output)
         
 
 
