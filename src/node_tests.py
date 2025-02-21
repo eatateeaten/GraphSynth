@@ -1,4 +1,5 @@
 from node import Node, Reshape, Tensor
+from layers import * 
 import unittest
 import torch
 import tensorflow as tf
@@ -95,7 +96,7 @@ class TestNodeOperations(unittest.TestCase):
         self.assertIn("Invalid add node", str(context.exception))
         # This step would essentially invalidate all the downstream connections 
 
-        # Next step I will try to assist inferring the reshapes  
+        # TODO MAYBE SOMEWHERE DOWN THE LINE I will try to assist inferring the reshapes, one-click infer like a dominos rolling down 
 
         # We can however, swap Reshape (3, 4, -1) to Reshape (3, 4, 6) without any problem.
         # These are the steps 
@@ -104,7 +105,34 @@ class TestNodeOperations(unittest.TestCase):
         reshape_node1_2.set_output_node(reshape_node2)
         # When you swap a layer, you should call these three steps. Catch the error to determine whether the layer inference is invalid or the output shape is not matching
 
+def test_conv_pool(self):
+        # Create a tensor with shape (3, 8, 3)
+        input = torch.randn(256, 256, 3, 16)  # lol a random image  
+        input_node = Tensor(input) 
         
+        
+        C1 = Conv2D(3, 9, 4, 4) 
+        C1.set_input_node(input_node)
+        self.assertEqual(C1.out_shape, (64, 64, 6, 16))
+
+        C2= Conv2D((9, 18, 4, 4))
+        C2.set_input_node(C1)
+        self.assertEqual(C2.out_shape, (16, 16, 18, 16))
+
+        C3= Conv2D((18, 36, 4, 4))
+        C3.set_input_node(C3)
+        self.assertEqual(C3.out_shape, (4, 4, 36, 16))
+
+        C3= MaxPool2D((4, 4))
+        C3.set_input_node(C3)
+        self.assertEqual(C3.out_shape, (1, 1, , 16))
+
+        C3 = torch.randn(3, 12, 2)
+        C3 = Tensor(output)
+        output_node.set_input_node(reshape_node2) 
+
+        
+
 
 if __name__ == '__main__':
     unittest.main()
