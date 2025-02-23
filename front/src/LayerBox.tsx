@@ -9,19 +9,38 @@ interface LayerBoxProps extends NodeProps {
 }
 
 function getDimensions(layer: Layer) {
+  if (layer.sourceness === 'source') {
+    // Source nodes only have output shape
+    return {
+      input: undefined,
+      output: layer.params.shape || layer.outShape
+    };
+  }
+  // For middle/sink nodes, use inShape/outShape
+  return {
+    input: layer.inShape,
+    output: layer.outShape
+  };
+}
+
+function renderParams(layer: Layer) {
   switch (layer.type) {
-    case 'conv1d':
-      return {
-        input: [layer.params.batch_size, layer.params.in_channels, layer.params.input_size],
-        output: [layer.params.batch_size, layer.params.out_channels, layer.params.input_size]
-      };
-    case 'linear':
-      return {
-        input: [layer.params.batch_size, layer.params.input_features],
-        output: [layer.params.batch_size, layer.params.output_features]
-      };
+    case 'tensor':
+      return layer.params.shape ? (
+        <div>
+          <Text size="xs" c="dimmed">shape:</Text>
+          <Text size="sm">[{layer.params.shape.join(', ')}]</Text>
+        </div>
+      ) : null;
+    case 'reshape':
+      return layer.params.out_dim ? (
+        <div>
+          <Text size="xs" c="dimmed">out_dim:</Text>
+          <Text size="sm">[{layer.params.out_dim.join(', ')}]</Text>
+        </div>
+      ) : null;
     default:
-      return { input: undefined, output: undefined };
+      return null;
   }
 }
 
@@ -30,11 +49,14 @@ export function LayerBox({ data }: LayerBoxProps) {
 
   return (
     <>
-      <LayerHandle 
-        dimensions={dimensions.input}
-        position={Position.Left}
-        type="target"
-      />
+      {/* Only show input handle for non-source nodes */}
+      {data.sourceness !== 'source' && (
+        <LayerHandle 
+          dimensions={dimensions.input}
+          position={Position.Left}
+          type="target"
+        />
+      )}
 
       <Card shadow="sm" radius="md" withBorder style={{ width: 180, minHeight: 180 }}>
         <Card.Section withBorder inheritPadding py="xs">
@@ -52,20 +74,18 @@ export function LayerBox({ data }: LayerBoxProps) {
         </Card.Section>
 
         <Card.Section p="sm">
-          {Object.entries(data.params).map(([key, value]) => (
-            <div key={key}>
-              <Text size="xs" c="dimmed">{key}:</Text>
-              <Text size="sm">{value}</Text>
-            </div>
-          ))}
+          {renderParams(data)}
         </Card.Section>
       </Card>
 
-      <LayerHandle 
-        dimensions={dimensions.output}
-        position={Position.Right}
-        type="source"
-      />
+      {/* Only show output handle for non-sink nodes */}
+      {data.sourceness !== 'sink' && (
+        <LayerHandle 
+          dimensions={dimensions.output}
+          position={Position.Right}
+          type="source"
+        />
+      )}
     </>
   );
-} 
+}

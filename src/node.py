@@ -1,5 +1,3 @@
-import torch.nn as nn
-from enum import Enum  
 import torch
 import abc
 import uuid
@@ -147,8 +145,8 @@ class Node(abc.ABC):
             raise ForwardDimensionInferenceFailureError(f"Failed to infer out_shape from the new in_shape {new_in_shape}: {str(e)}")
         self.in_shape = new_in_shape
         return 
-     
-    
+
+
     def set_out_shape(self, new_out_shape) -> 'Node':
         """
         Set the output shape.
@@ -178,7 +176,7 @@ class Node(abc.ABC):
         validate the layer parameters with requirements specific to each layer type 
         """
         pass
-    
+
     @abc.abstractmethod
     def forward_dimension_inference(self, in_shape) -> Tuple[int, ...]:
         """
@@ -188,7 +186,7 @@ class Node(abc.ABC):
         if it can be, it returns the predefined out_shape 
         """
         pass
-    
+
     @abc.abstractmethod
     def to_torch(self) -> str:
         """
@@ -250,7 +248,7 @@ class Tensor(Node):
         """
         if self.data.shape != self.in_shape:
             raise ValueError("Tensor data shape does not match the specified in_shape")
-    
+
     def set_in_shape(self, new_in_shape) -> Node:
         """Overrides the Node Class method"""
         raise ImmutableInShapeError("Invalid Call. Cannot change in_shape of a Tensor. In_shape is immutable and must match the data shape. Consider creating a new Tensor")
@@ -258,7 +256,7 @@ class Tensor(Node):
     def set_out_shape(self, new_out_shape) -> Node:
         """Overrides the Node Class method"""
         raise ImmutableOutShapeError("Invalid Call. Cannot change out_shape of a Tensor. Out_shape is immutable and must match the data shape. Consider creating a new Tensor")
-    
+
     def set_input_node(self, other_node: 'Node'):
         """
         Overrides the Node Class method
@@ -314,7 +312,7 @@ class Reshape(Node):
         elif in_elements != out_elements:
             raise ForwardDimensionInferenceFailureError(f"Cannot reshape from {in_shape} to {out_dim}: total elements do not match")
         return out_dim
-    
+
     def validate_params(self):
         out_dim = self.params.get('out_dim')
         if not isinstance(out_dim, tuple):
@@ -328,11 +326,11 @@ class Reshape(Node):
                     raise InvalidLayerParametersError("Only one dimension can be inferred (-1) in out_dim")
             elif dim <= 0:
                 raise InvalidLayerParametersError(f"Invalid dimension {dim} in out_dim: must be positive or -1")
-    
+
     def to_torch(self) -> str:
         out_dim = self.params['out_dim']
         return f"torch.reshape(input, {out_dim})"
-    
+
 
 class NodeError(Exception, ABC):
     ## Abstract don't need to be handled 
@@ -404,7 +402,7 @@ class ImmutableInShapeError(NodeError):
 
 
 class ImmutableOutShapeError(NodeError):
-     ##Just don't give people the option to change a Tensor shape, this will never occur 
+    ## Just don't give people the option to change a Tensor shape, this will never occur 
     def __init__(self, message: str = ""):
         default_message = "Attempt to set immutable output shape."
         super().__init__(f"{default_message} {message}")
@@ -422,5 +420,3 @@ class OutShapeMismatchError(NodeError):
     def __init__(self, message: str = ""):
         default_message = "Output shape mismatch with subsequent input shape."
         super().__init__(f"{default_message} {message}")
-    
-

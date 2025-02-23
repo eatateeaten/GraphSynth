@@ -1,68 +1,64 @@
-// Layer types
-export const ConvTypes = ['conv1d', 'conv2d', 'conv3d'] as const;
-export type ConvType = typeof ConvTypes[number];
+import type { Node as FlowNode } from 'reactflow';
 
-export const LinearTypes = ['linear'] as const;
-export type LinearType = typeof LinearTypes[number];
-
-export const FlattenTypes = ['flatten'] as const;
-export type FlattenType = typeof FlattenTypes[number];
-
-export const ElementWiseNonlinearityTypes = [
-  'relu', 'sigmoid', 'tanh', 'leaky_relu', 'elu', 'selu', 'celu', 'gelu',
-  'softplus', 'softsign', 'hardtanh', 'hardshrink', 'hardsigmoid', 'hardswish',
-  'softshrink', 'tanhshrink', 'threshold', 'relu6', 'silu', 'mish'
-] as const;
-export type ElementWiseNonlinearityType = typeof ElementWiseNonlinearityTypes[number];
-
-export const Nonlinearity1DTypes = ['softmax', 'log_softmax', 'glu'] as const;
-export type Nonlinearity1DType = typeof Nonlinearity1DTypes[number];
-
-export const PoolTypes = [
-  'maxpool1d', 'maxpool2d', 'maxpool3d',
-  'avgpool1d', 'avgpool2d', 'avgpool3d',
-  'lppool1d', 'lppool2d', 'lppool3d'
-] as const;
-export type PoolType = typeof PoolTypes[number];
-
-export const AdaptivePoolTypes = [
-  'adaptive_maxpool1d', 'adaptive_maxpool2d', 'adaptive_maxpool3d',
-  'adaptive_avgpool1d', 'adaptive_avgpool2d', 'adaptive_avgpool3d'
-] as const;
-export type AdaptivePoolType = typeof AdaptivePoolTypes[number];
+export type Sourceness = 'source' | 'middle' | 'sink';  // How the node participates in data flow
 
 export type LayerType = 
-  | ConvType 
-  | LinearType 
-  | FlattenType 
-  | ElementWiseNonlinearityType 
-  | Nonlinearity1DType 
-  | PoolType 
-  | AdaptivePoolType;
+  | 'tensor' 
+  | 'reshape';  // Only keeping types that exist in node.py
 
-export type LayerParams = {
-  [key: string]: number | number[] | string;
-};
+export interface LayerParams {
+  data?: number[];      // For tensor data
+  shape?: number[];     // For tensor shape
+  out_dim?: number[];   // For reshape dimensions
+}
 
-export type Layer = {
-  id: string;
+export interface Layer {
+  id: string;           // Frontend ID (for React Flow)
+  serverId?: string;    // Backend ID (from server)
   name: string;
   type: LayerType;
+  sourceness: Sourceness;  // Whether node generates, transforms, or consumes data
   params: LayerParams;
-  inputNodes: string[];
-};
+  inShape?: number[];
+  outShape?: number[];
+  isValid?: boolean;
+}
 
 export type Sequence = {
   name: string;
   nodes: Layer[];
 };
 
-export type WSResponse = {
+// WebSocket Messages
+export interface WSRequest {
+  requestId: string;
+  operation: 'addNode' | 'setInputNode' | 'setOutputNode';
+  nodeId?: string;      // Use server ID
+  inputId?: string;     // Use server ID
+  outputId?: string;    // Use server ID
+  type?: LayerType;
+  params?: LayerParams;
+}
+
+export interface WSResponse {
   success: boolean;
-  id?: string;
-  pytorch_code?: string;
+  requestId?: string;
+  id?: string;          // Server ID
   error?: string;
-};
+  in_shape?: number[];
+  out_shape?: number[];
+  completed?: boolean;
+}
+
+// Node UI States
+export interface NodeData extends Layer {
+  status: 'bubble' | 'validating' | 'valid' | 'error';
+  errorMessage?: string;
+}
+
+export interface GraphNode extends FlowNode {
+  data: NodeData;
+}
 
 // Helper to convert snake_case to Title Case
 export function formatLabel(value: string): string {
@@ -70,4 +66,4 @@ export function formatLabel(value: string): string {
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
-} 
+}

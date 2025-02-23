@@ -26,14 +26,14 @@ export function LayerHandle({ dimensions, position, type, ...handleProps }: Laye
         {dimensions ? (
           <Stack gap={2} align="center" style={{ width: '100%' }}>
             {dimensions.map((dim, i) => (
-              <>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Text size="xs" style={{ width: '100%', textAlign: 'center' }}>
                   {dim}
                 </Text>
                 {i < dimensions.length - 1 && (
                   <Text size="xs" c="dimmed">×</Text>
                 )}
-              </>
+              </div>
             ))}
           </Stack>
         ) : (

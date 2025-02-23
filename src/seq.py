@@ -14,8 +14,7 @@ class Seq():
         self.in_shape = Tuple[int, ...]
         self.out_shape = Tuple[int, ...]
         start_node = Node 
-         end_node = Node 
-        
+        end_node = Node 
 
     def to_torch(self): 
         return 
@@ -25,9 +24,8 @@ class Seq():
 
     def parse_to_nodes(self):
         return 
-    
-    
-    
+
+
 class Train_loop():
     """
     The unit for model code generation. Generate "nn.Sequantial"-like model code. 
@@ -48,8 +46,7 @@ class Train_loop():
 
     def parse_to_nodes():
         return 
-    
-    
+
 
 class NN_Graph():
     """
@@ -89,7 +86,6 @@ class Seq:
                     f"Dimension mismatch: {nodes[i].name} output dim ({nodes[i].out_dim}) "
                     f"!= {nodes[i + 1].name} input dim ({nodes[i + 1].in_dim})"
                 )
-            
 
     def _rename_nodes(self):
         seq_id = id(self)
@@ -144,5 +140,3 @@ class Seq:
         """
         module_calls = [node.to_pytorch_code() for node in self.nodes]
         module_list = ",\n            ".join(module_calls)
-        
-        return f"""
