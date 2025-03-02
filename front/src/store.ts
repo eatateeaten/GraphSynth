@@ -1,102 +1,135 @@
+/**
+ * This store implements a global state management pattern using Zustand.
+ * Rather than prop-drilling or managing distributed state across components,
+ * we centralize our application state here for predictable data flow and updates.
+ * 
+ * The store maintains two parallel graph representations:
+ * 1. CheckerGraph: Domain logic layer
+ *    - Validates tensor shapes and parameter constraints
+ *    - Manages node connectivity and data flow
+ *    - Source of truth for computational graph structure
+ * 
+ * 2. React Flow: Presentation layer
+ *    - Handles node positioning and visual layout
+ *    - Manages UI state (selection, dragging, etc)
+ *    - Displays validation errors from CheckerGraph
+ * 
+ * Operations follow a consistent pattern:
+ * 1. Validate operation against CheckerGraph (shape checking, valid connections)
+ * 2. On success: update React Flow state
+ * 3. On failure: propagate error to UI layer
+ */
+
 import { create } from 'zustand';
-import type { Edge, Connection } from 'reactflow';
-import type { Layer, GraphNode, NodeData } from './types';
+import type { LayerConfig, FlowNode, FlowEdge } from './types';
+import { createCheckerNode } from './types';
+import { CheckerGraph } from './CheckerGraph';
 import { GRID_SIZE } from './config';
 
 interface GraphState {
-  layers: Layer[];
-  nodes: GraphNode[];
-  edges: Edge[];
-  selectedNode: string | null;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  selectedId: string | null;
+  checkerGraph: CheckerGraph;
 }
 
 interface GraphActions {
-  addLayer: (layer: Layer) => void;
-  deleteNode: (nodeId: string) => void;
-  setSelectedNode: (nodeId: string | null) => void;
-  updateNodes: (nodes: GraphNode[]) => void;
-  updateEdges: (edges: Edge[]) => void;
-  addEdge: (edge: Edge) => void;
-  updateNodeData: (nodeId: string, data: Partial<NodeData> & { serverId?: string }) => void;
+  addNode: (id: string, config: LayerConfig) => void;
+  deleteNode: (id: string) => void;
+  setSelectedId: (id: string | null) => void;
+  updateNodes: (nodes: FlowNode[]) => void;
+  updateEdges: (edges: FlowEdge[]) => void;
+  addEdge: (edge: FlowEdge) => void;
+  updateNodeParams: (id: string, params: Record<string, any>) => void;
 }
 
-export const useGraphStore = create<GraphState & GraphActions>((set, get) => ({
-  // State
-  layers: [],
-  nodes: [],
-  edges: [],
-  selectedNode: null,
-
-  // Actions
-  addLayer: (layer) => {
-    // Create node in bubble state
-    const nodeData: NodeData = {
-      ...layer,
-      status: 'bubble',
-      inShape: undefined,
-      outShape: undefined
-    };
-
-    const flowNode: GraphNode = {
-      id: layer.id,
-      type: 'default',
-      data: nodeData,
-      position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
-      draggable: true,
-    };
-
+export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
+  // Helper to set error message on nodes
+  const setNodeError = (ids: string[], error?: string) => 
     set(state => ({
-      layers: [...state.layers, layer],
-      nodes: [...state.nodes, flowNode]
+      nodes: state.nodes.map(node => 
+        ids.includes(node.id)
+          ? { ...node, data: { ...node.data, errorMessage: error } }
+          : node
+      )
     }));
-  },
 
-  deleteNode: (nodeId) => set(state => ({
-    nodes: state.nodes.filter(node => node.id !== nodeId),
-    edges: state.edges.filter(edge => 
-      edge.source !== nodeId && edge.target !== nodeId
-    ),
-    layers: state.layers.filter(layer => layer.id !== nodeId),
-    selectedNode: null
-  })),
+  return {
+    // State
+    nodes: [],
+    edges: [],
+    selectedId: null,
+    checkerGraph: new CheckerGraph(),
 
-  setSelectedNode: (nodeId) => set({ selectedNode: nodeId }),
+    // Actions
+    addNode: (id, config) => {
+      try {
+        const checkerNode = createCheckerNode(config);
+        get().checkerGraph.addNode(id, checkerNode);
 
-  updateNodes: (nodes) => set({ nodes }),
+        const flowNode: FlowNode = {
+          id,
+          type: 'default',
+          data: { type: config.type },
+          position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
+          draggable: true,
+        };
 
-  updateEdges: (edges) => set({ edges }),
+        set(state => ({ nodes: [...state.nodes, flowNode] }));
+      } catch (e) {
+        const flowNode: FlowNode = {
+          id,
+          type: 'default',
+          data: { 
+            type: config.type,
+            errorMessage: e instanceof Error ? e.message : 'Unknown error'
+          },
+          position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
+          draggable: true,
+        };
+        set(state => ({ nodes: [...state.nodes, flowNode] }));
+      }
+    },
 
-  addEdge: (edge) => set(state => ({
-    edges: [...state.edges, edge]
-  })),
+    deleteNode: (id) => {
+      get().checkerGraph.deleteNode(id);
+      set(state => ({
+        nodes: state.nodes.filter(node => node.id !== id),
+        edges: state.edges.filter(edge => 
+          edge.source !== id && edge.target !== id
+        ),
+        selectedId: null
+      }));
+    },
 
-  updateNodeData: (nodeId, data) => set(state => {
-    // Update node data including server ID if provided
-    const updatedNodes = state.nodes.map(node => 
-      node.id === nodeId
-        ? { 
-            ...node,
-            data: { 
-              ...node.data,
-              ...data,
-            }
-          }
-        : node
-    );
+    setSelectedId: (id) => set({ selectedId: id }),
 
-    // Update layers with the same data
-    const updatedLayers = state.layers.map(layer =>
-      layer.id === nodeId
-        ? { 
-            ...layer,
-            ...data,
-          }
-        : layer
-    );
+    updateNodes: (nodes) => set({ nodes }),
 
-    return {
-      nodes: updatedNodes,
-      layers: updatedLayers
-    };
-  })
-}));
+    updateEdges: (edges) => set({ edges }),
+
+    addEdge: (edge) => {
+      try {
+        get().checkerGraph.connect(edge.source, edge.target);
+        set(state => ({ edges: [...state.edges, edge] }));
+        setNodeError([edge.source, edge.target]);
+      } catch (e) {
+        setNodeError(
+          [edge.source, edge.target],
+          e instanceof Error ? e.message : 'Unknown error'
+        );
+      }
+    },
+
+    updateNodeParams: (id, params) => {
+      try {
+        const node = get().checkerGraph.getNode(id);
+        if (!node) throw new Error("Node not found");
+        node.set_params(params);
+        setNodeError([id]);
+      } catch (e) {
+        setNodeError([id], e instanceof Error ? e.message : 'Unknown error');
+      }
+    }
+  };
+});

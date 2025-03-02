@@ -1,69 +1,32 @@
-import type { Node as FlowNode } from 'reactflow';
+import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
+import { CheckerNode, Tensor, Reshape } from './CheckerGraph';
 
-export type Sourceness = 'source' | 'middle' | 'sink';  // How the node participates in data flow
+export type LayerType = 'tensor' | 'reshape';
 
-export type LayerType = 
-  | 'tensor' 
-  | 'reshape';  // Only keeping types that exist in node.py
-
-export interface LayerParams {
-  data?: number[];      // For tensor data
-  shape?: number[];     // For tensor shape
-  out_dim?: number[];   // For reshape dimensions
-}
-
-export interface Layer {
-  id: string;           // Frontend ID (for React Flow)
-  serverId?: string;    // Backend ID (from server)
-  name: string;
+// Just the minimal info needed to create a node
+export interface LayerConfig {
   type: LayerType;
-  sourceness: Sourceness;  // Whether node generates, transforms, or consumes data
-  params: LayerParams;
-  inShape?: number[];
-  outShape?: number[];
-  isValid?: boolean;
+  params: Record<string, any>;
 }
 
-export type Sequence = {
-  name: string;
-  nodes: Layer[];
-};
-
-// WebSocket Messages
-export interface WSRequest {
-  requestId: string;
-  operation: 'addNode' | 'setInputNode' | 'setOutputNode';
-  nodeId?: string;      // Use server ID
-  inputId?: string;     // Use server ID
-  outputId?: string;    // Use server ID
-  type?: LayerType;
-  params?: LayerParams;
+// Only store UI-specific data in the Flow node
+export interface FlowNode extends ReactFlowNode {
+  data: {
+    type: LayerType;
+    errorMessage?: string;
+  };
 }
 
-export interface WSResponse {
-  success: boolean;
-  requestId?: string;
-  id?: string;          // Server ID
-  error?: string;
-  in_shape?: number[];
-  out_shape?: number[];
-  completed?: boolean;
-}
+export type FlowEdge = ReactFlowEdge;
 
-// Node UI States
-export interface NodeData extends Layer {
-  status: 'bubble' | 'validating' | 'valid' | 'error';
-  errorMessage?: string;
-}
-
-export interface GraphNode extends FlowNode {
-  data: NodeData;
-}
-
-// Helper to convert snake_case to Title Case
-export function formatLabel(value: string): string {
-  return value
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join('');
+// Factory function to create CheckerNode instances
+export function createCheckerNode(config: LayerConfig): CheckerNode {
+  switch (config.type) {
+    case 'tensor':
+      return new Tensor(config.params);
+    case 'reshape':
+      return new Reshape(config.params);
+    default:
+      throw new Error(`Unknown layer type: ${config.type}`);
+  }
 }
