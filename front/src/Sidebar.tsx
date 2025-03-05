@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Select, Button, TextInput, Box, Text } from '@mantine/core';
-import type { LayerType, LayerConfig } from './types';
+import type { CheckerNodeType } from './checker';
 import { useGraphStore } from './store';
 
 const layerTypes = [
@@ -9,14 +9,14 @@ const layerTypes = [
 ] as const;
 
 export function Sidebar() {
-  const [type, setType] = useState<LayerType | null>(null);
+  const [type, setType] = useState<CheckerNodeType | null>(null);
   const [params, setParams] = useState<Record<string, any>>({});
   const addNode = useGraphStore(state => state.addNode);
 
   const handleAdd = useCallback(() => {
     if (!type) return;
     
-    const config: LayerConfig = {
+    const config = {
       type,
       params,
     };
@@ -105,7 +105,7 @@ export function Sidebar() {
         data={layerTypes}
         value={type}
         onChange={(v) => {
-          setType(v as LayerType);
+          setType(v as CheckerNodeType);
           setParams({});
         }}
         searchable
@@ -121,4 +121,4 @@ export function Sidebar() {
       </Button>
     </Box>
   );
-} 
+}

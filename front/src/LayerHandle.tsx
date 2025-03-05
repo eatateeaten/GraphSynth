@@ -1,6 +1,6 @@
 import { Handle, Position, type HandleProps } from 'reactflow';
 import { Text, Stack } from '@mantine/core';
-import type { Shape } from './CheckerGraph';
+import type { Shape } from './checker';
 
 interface LayerHandleProps extends Omit<HandleProps, 'position'> {
   dimensions?: Shape;

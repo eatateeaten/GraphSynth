@@ -21,9 +21,8 @@
  */
 
 import { create } from 'zustand';
-import type { LayerConfig, FlowNode, FlowEdge } from './types';
-import { createCheckerNode } from './types';
-import { CheckerGraph } from './CheckerGraph';
+import type { FlowNode, FlowEdge } from './types';
+import { createCheckerNode, CheckerNodeConfig, CheckerGraph } from './checker';
 import { GRID_SIZE } from './config';
 
 interface GraphState {
@@ -34,7 +33,7 @@ interface GraphState {
 }
 
 interface GraphActions {
-  addNode: (id: string, config: LayerConfig) => void;
+  addNode: (id: string, config: CheckerNodeConfig) => void;
   deleteNode: (id: string) => void;
   setSelectedId: (id: string | null) => void;
   updateNodes: (nodes: FlowNode[]) => void;

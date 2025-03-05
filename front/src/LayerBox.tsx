@@ -1,12 +1,12 @@
 import { Position, type NodeProps } from 'reactflow';
 import { Card, Text, Group } from '@mantine/core';
-import type { LayerType } from './types';
+import type { CheckerNodeType } from './checker';
 import { LayerHandle } from './LayerHandle';
 import { useGraphStore } from './store';
 
 interface LayerBoxProps extends NodeProps {
   data: {
-    type: LayerType;
+    type: CheckerNodeType;
     errorMessage?: string;
   };
 }
