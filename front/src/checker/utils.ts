@@ -1,5 +1,5 @@
 // src/checker/utils.ts
-import { Shape, validate_shape, shapes_equal } from './shape';
+import { Shape } from './shape';
 import { CheckerNode, NodeParams } from './node';
 
 export interface TensorParams extends NodeParams {
@@ -11,7 +11,6 @@ export class Tensor extends CheckerNode<TensorParams> {
 
     constructor(params: TensorParams) {
         super(params);
-        validate_shape(params.shape);
         this.in_shape = params.shape;
         this.recompute_out_shape();
     }
@@ -21,7 +20,6 @@ export class Tensor extends CheckerNode<TensorParams> {
         if (!Array.isArray(shape)) {
             throw new Error("shape must be an array");
         }
-        validate_shape(shape);
     }
 
     compute_out_shape(in_shape: Shape): Shape {
@@ -29,7 +27,7 @@ export class Tensor extends CheckerNode<TensorParams> {
     }
 
     set_in_shape(shape: Shape | null): void {
-        if (shape !== null && !shapes_equal(shape, this.in_shape)) {
+        if (shape !== null && !shape.equals(this.in_shape)) {
             throw new Error("Cannot change tensor shape: tensor shapes are immutable");
         }
     }
@@ -73,7 +71,7 @@ export class Reshape extends CheckerNode<ReshapeParams> {
             if (!Number.isInteger(missing_dim)) {
                 throw new Error("Cannot compute missing dimension: total elements do not match");
             }
-            return out_dim.map(d => d === -1 ? missing_dim : d);
+            return new Shape(out_dim.map(d => d === -1 ? missing_dim : d));
         }
 
         const total_out = out_dim.reduce((a, b) => a * b, 1);

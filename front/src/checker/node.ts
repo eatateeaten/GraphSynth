@@ -17,7 +17,7 @@
  * - so in that sense I assumed the left to right building thingy
  */
 
-import { Shape, validate_shape, shapes_equal } from './shape';
+import { Shape } from './shape';
 
 export interface NodeParams {
   [key: string]: any;
@@ -48,7 +48,7 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         
         this.out_shape = this.compute_out_shape(this.in_shape);
         
-        if (this.out_node && !shapes_equal(this.out_shape, this.out_node.in_shape)) {
+        if (this.out_node && this.out_shape.equals(this.out_node.in_shape)) {
             throw new Error(`Output shape mismatch with subsequent input shape: ${this.out_shape} vs ${this.out_node.in_shape}`);
         }
     }
@@ -62,7 +62,7 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     connect_to(target: CheckerNode<any>): void {
         if (this.in_shape !== null) {
             if (target.in_shape !== null) {
-                if (!shapes_equal(this.out_shape, target.in_shape)) {
+                if (!this.out_shape?.equals(target.in_shape)) {
                     throw new Error(`Input shape mismatch: cannot connect output shape ${this.out_shape} to input shape ${target.in_shape}`);
                 }
             } else {
@@ -74,9 +74,6 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     }
 
     set_in_shape(shape: Shape | null): void {
-        if (shape !== null) {
-            validate_shape(shape);
-        }
         this.in_shape = shape;
         this.recompute_out_shape();
     }

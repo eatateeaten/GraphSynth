@@ -1,6 +1,5 @@
 // Export shape types and utilities
 export type { Shape } from './shape';
-export { validate_shape, shapes_equal } from './shape';
 
 // Export graph
 export { CheckerGraph } from './graph';
