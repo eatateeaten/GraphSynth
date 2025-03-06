@@ -95,11 +95,21 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         if (error) throw new Error(error);
         
         this.params = params;
+<<<<<<< HEAD
         this.updateOutShape();
+=======
+        this.validate_params();
+<<<<<<< HEAD
+        this.update_out_shape();
+=======
+        this.update_out_shape(); 
+>>>>>>> 0c84b1d (changed node.ts and node.py)
+>>>>>>> c6d38dc (changed node.ts and node.py)
     }
 
     abstract computeOutShape(in_shape: Shape): Shape;
 
+<<<<<<< HEAD
     /**
      * Instance method that delegates to static validation.
      * This is implemented in the base class and should NOT be overridden.
@@ -109,6 +119,15 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     }
 
     protected updateOutShape(): void {
+=======
+<<<<<<< HEAD
+    // Rest of the methods remain largely the same
+    protected update_out_shape(): void {
+=======
+    // recompute out shape changes the outshape 
+    protected update_out_shape(): void { 
+>>>>>>> 0c84b1d (changed node.ts and node.py)
+>>>>>>> c6d38dc (changed node.ts and node.py)
         if (this.in_shape === null) {
             this.out_shape = null;
             return;
@@ -132,10 +151,27 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         if (error) throw new ValidationError(`Parameter validation failed: ${error}`);
         
         this.params = params;
+<<<<<<< HEAD
         this.updateOutShape();
     }
 
     connectTo(target: CheckerNode<any>): void {
+=======
+<<<<<<< HEAD
+        try {
+            this.validate_params();
+        } catch (e) {
+            throw new ValidationError(`Parameter validation failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+=======
+        this.validate_params();
+>>>>>>> 0c84b1d (changed node.ts and node.py)
+        this.update_out_shape();
+    }
+    
+    //connect this node's output to target input 
+    connect_to(target: CheckerNode<any>): void {
+>>>>>>> c6d38dc (changed node.ts and node.py)
         if (target.in_shape !== null) {
             if (!Shape.equals(this.out_shape, target.in_shape)) {
                 throw new OutputError(
@@ -149,6 +185,7 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         target.in_node = this;
     }
 
+<<<<<<< HEAD
     setInShape(shape: Shape | null): void {
         // Try computing output shape first before committing to the input shape
         try {
@@ -162,5 +199,14 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
             }
             throw e;
         }
+=======
+    set_in_shape(shape: Shape | null): void {
+        this.in_shape = shape;
+        this.update_out_shape();
+<<<<<<< HEAD
+>>>>>>> c6d38dc (changed node.ts and node.py)
     }
+=======
+    } 
+>>>>>>> 0c84b1d (changed node.ts and node.py)
 }

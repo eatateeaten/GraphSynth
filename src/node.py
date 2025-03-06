@@ -5,87 +5,113 @@ from typing import Optional, Tuple, List, Dict, Union, Iterable, Iterator, Any
 import tensorflow as tf 
 import numpy as np 
 from abc import ABC
+from .shape import Shape, InvalidShapeError
 
 Sample_String = " "
 
-class Shape:
+
+class Node(abc.ABC):
     """
-    Class representing the shape of a tensor.
+    Abstract Node class 
+    An abstraction for all layers and aggregated NN-graph 
     """
-    def __init__(self, dimensions: Iterable[int]):
-        """
-        Initialize a Shape object with the given dimensions.
-        
-        Parameters:
-        - dimensions: An iterable of integers representing the dimensions
-        """
-        self.dimensions = tuple(int(dim) for dim in dimensions)
-        self._validate()
+    def __init__(
+        self,
+        type: str = "",
+        params: dict = {},
+        in_shape: Optional[Shape] = None,
+        out_shape: Optional[Shape] = None,
+        in_node: Optional["Node"] = None,
+        out_node: Optional["Node"] = None,
+    ):
+        self.id = str(uuid.uuid4())  # Unique ID
+        self.type= type or f"Node_{self.id}"
+        self.params = params
+        self.in_shape = in_shape
+        self.out_shape = out_shape
+
+        if self.out_shape is None and self.in_shape is not None:
+            try:
+                self.out_shape = self.compute_out_shape(self.in_shape)
+            except (NotImplementedError, ValueError) as e:
+                raise ValueError(f"Failed to infer out_shape: {str(e)}") 
+            
+        self.in_node: Optional["Node"] = in_node
+        self.out_node: Optional["Node"] = out_node
     
-    def _validate(self):
-        """
-        Validate that all dimensions are valid.
-        """
-        for i, dim in enumerate(self.dimensions):
-            if dim <= 0:
-                raise InvalidShapeError(f"Invalid dimension at index {i}: {dim}. All dimensions must be positive.")
-    
-    def __eq__(self, other) -> bool:
-        """
-        Check if this shape is equal to another shape.
-        """
-        if isinstance(other, Shape):
-            return self.dimensions == other.dimensions
-        elif isinstance(other, tuple):
-            return self.dimensions == other
-        return False
-    
-    def __ne__(self, other) -> bool:
-        """
-        Check if this shape is not equal to another shape.
-        """
-        return not self.__eq__(other)
-    
-    def __len__(self) -> int:
-        """
-        Get the number of dimensions.
-        """
-        return len(self.dimensions)
-    
-    def __getitem__(self, index) -> int:
-        """
-        Get a dimension by index.
-        """
-        return self.dimensions[index]
-    
-    def __iter__(self) -> Iterator[int]:
-        """
-        Iterate over the dimensions.
-        """
-        return iter(self.dimensions)
-    
-    def __repr__(self) -> str:
-        """
-        Get a string representation of the shape.
-        """
-        return f"Shape{self.dimensions}"
     
     def __str__(self) -> str:
         """
-        Get a string representation of the shape.
+        Return a readable summary of the node.
         """
-        return str(self.dimensions)
+        params_str = ", ".join(f"{param}={val}" for param, val in self.params.items())
+        return f"{self.type}({params_str})"
     
-    def total_elements(self) -> int:
+    def completed(self):
+        return self.in_shape is not None and self.out_shape is not None and self.in_node is not None and self.out_node is not None 
+
+    def _recompute_out_shape(self):
         """
-        Calculate the total number of elements in a tensor with this shape.
+        Recompute the output shape based on the input shape.
+        This is a protected method (indicated by leading underscore).
         """
-        if not self.dimensions:
-            return 0
-        total = 1
-        for dim in self.dimensions:
-            total *= dim
-        return total
+        if self.in_shape is None:
+            self.out_shape = None
+            return
+
+        self.out_shape = self.compute_out_shape(self.in_shape)
+    
+        #If shape changes and this node has an out node and it doesn't match the next node's input shape, throw an error
+        if self.out_node is not None and not Node.shapes_equal(self.out_shape, self.out_node.in_shape):
+            raise OutShapeMismatchError(f"Output shape mismatch with subsequent input shape: {self.out_shape} vs {self.out_node.in_shape}")
+
+
+    def set_input_node(self, other_node: 'Node'):
+        """
+        Link a node to the input of this node, throw error if the other_node's out_shape is defined and mismatched with this node's in_shape
+        """
+        if self.in_shape is None:
+            self.set_in_shape(other_node.out_shape)
+        if self.in_shape != other_node.out_shape:
+            raise InShapeMismatchError(f"Invalid add node, link node {self} to the output of {other_node}, {self} in_shape mismatch with {other_node} out_shape")
+        self.in_node = other_node
+        other_node.out_node = self 
+
+    def set_output_node(self, other_node: 'Node'):
+        """
+        Link a node to the output of this node, throw error if the other_node's in_shape is defined and mismatched with this node's out_shape
+        """
+        if self.out_shape is None:
+            self.set_out_shape(other_node.in_shape)
+        if self.out_shape != other_node.in_shape:
+            raise OutShapeMismatchError(f"Invalid add node, link node {self} to the input of {other_node}, {self} out_shape mismatch with {other_node} in_shape")
+        self.out_node = other_node 
+        other_node.in_node = self
+
+
+    @abc.abstractmethod
+    def validate_params(self):
+        """
+        validate the layer parameters with requirements specific to each layer type 
+        """
+        pass
+
+    @abc.abstractmethod
+    def compute_out_shape(self, in_shape: Shape) -> Shape:
+        """
+        infer out_shape from in_shape with layer type and layer parameters
+        TODO  in some cases, the layer parameters already defined the out_shape, like Reshape 
+        in these cases, we check if the defined operations can be applied on this in_shape, and throw errors if it cannot be,
+        if it can be, it returns the predefined out_shape 
+        """
+        pass
+
+    @abc.abstractmethod
+    def to_torch(self) -> str:
+        """
+        Return a string with the PyTorch layer construction (e.g. 'nn.Linear(128, 64)').
+        """
+        pass
 
 
 class Seq(): 
@@ -356,7 +382,7 @@ class Node(abc.ABC):
 
         if self.out_shape is None and self.in_shape is not None:
             try:
-                self.out_shape = self.forward_dimension_inference(self.in_shape)
+                self.out_shape = self.compute_out_shape(self.in_shape)
             except (NotImplementedError, ValueError) as e:
                 raise ValueError(f"Failed to infer out_shape: {str(e)}") 
             
@@ -457,7 +483,7 @@ class Node(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def compute_out_shape_from_in_shape(self, in_shape) -> Shape:
+    def compute_out_shape(self, in_shape: Shape) -> Shape:
         """
         infer out_shape from in_shape with layer type and layer parameters
         TODO  in some cases, the layer parameters already defined the out_shape, like Reshape 
