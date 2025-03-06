@@ -1,6 +1,7 @@
 // src/checker/utils.ts
 import { Shape } from './shape';
 import { CheckerNode, NodeParams } from './node';
+import { NodeMetadata } from './node';
 
 export interface TensorParams extends NodeParams {
     shape: Shape;
@@ -8,6 +9,22 @@ export interface TensorParams extends NodeParams {
 
 export class Tensor extends CheckerNode<TensorParams> {
     static readonly type = 'tensor' as const;
+    static readonly description = 'Creates a tensor with the given shape.';
+
+    static getMeta(): NodeMetadata<TensorParams> {
+        return {
+            label: 'Tensor',
+            description: this.description,
+            category: 'basic',
+            paramFields: {
+                shape: {
+                    label: 'Shape',
+                    description: 'Dimensions of the tensor',
+                    type: 'shape',
+                }
+            }
+        } as const;
+    }
 
     constructor(params: TensorParams) {
         super(params);
@@ -39,6 +56,23 @@ export interface ReshapeParams extends NodeParams {
 
 export class Reshape extends CheckerNode<ReshapeParams> {
     static readonly type = 'reshape' as const;
+    static readonly description = 'Reshapes the input tensor to the specified dimensions.';
+
+    static getMeta(): NodeMetadata<ReshapeParams> {
+        return {
+            label: 'Reshape',
+            description: this.description,
+            category: 'basic',
+            paramFields: {
+                out_dim: {
+                    label: 'Output Dimensions',
+                    description: 'Target shape (use -1 for automatic inference)',
+                    type: 'shape',
+                    allowNegativeOne: true
+                }
+            }
+        } as const;
+    }
 
     constructor(params: ReshapeParams) {
         super(params);
@@ -81,6 +115,11 @@ export class Reshape extends CheckerNode<ReshapeParams> {
         return out_dim;
     }
 }
+
+export const UtilNodes = {
+    [Tensor.type]: Tensor,
+    [Reshape.type]: Reshape,
+} as const;
 
 export type UtilNodeParams = {
     [Tensor.type]: TensorParams;

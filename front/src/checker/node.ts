@@ -23,7 +23,31 @@ export interface NodeParams {
   [key: string]: any;
 }
 
+export type ParamFieldMetadata = {
+    label: string;
+    description: string;
+    type: 'shape' | 'number' | 'option';
+    allowNegativeOne?: boolean;
+    options?: string[];
+}
+
+export type NodeMetadata<T extends NodeParams = NodeParams> = {
+    label: string;
+    description: string;
+    category: 'basic' | 'convolution' | 'pooling' | 'activation';
+    paramFields: {
+        [K in keyof T]: ParamFieldMetadata;
+    };
+}
+
 export abstract class CheckerNode<T extends NodeParams = NodeParams> {
+    static readonly description: string = '';
+    static readonly type: string;
+    
+    static getMeta(): NodeMetadata {
+        throw new Error('getMeta() not implemented');
+    }
+
     in_shape: Shape | null = null;
     out_shape: Shape | null = null;
     in_node: CheckerNode<any> | null = null;
@@ -45,9 +69,9 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
             this.out_shape = null;
             return;
         }
-        
+
         this.out_shape = this.compute_out_shape(this.in_shape);
-        
+
         if (this.out_node && this.out_shape.equals(this.out_node.in_shape)) {
             throw new Error(`Output shape mismatch with subsequent input shape: ${this.out_shape} vs ${this.out_node.in_shape}`);
         }
