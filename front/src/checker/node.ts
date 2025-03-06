@@ -13,14 +13,19 @@
  * - we raise an error if the shape doesn't match the next node's input shape
  *      UI is expected to disconnect the nodes in this case
  * - compute_out_shape() is pure - just takes in_shape & params and returns result
- * - recompute_out_shape() handles the caching and error handling
+ * - update_out_shape() handles the caching and error handling
  * - so in that sense I assumed the left to right building thingy
  */
 
 import { Shape } from './shape';
 
+// Error types for different failure cases
+export class ShapeError extends Error {}
+export class ValidationError extends Error {}
+export class ConnectionError extends Error {}
+
 export interface NodeParams {
-  [key: string]: any;
+    [key: string]: any;
 }
 
 export type ParamFieldMetadata = {
@@ -57,41 +62,51 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     constructor(params: T) {
         this.params = params;
         this.validate_params();
-        this.recompute_out_shape();
+        this.update_out_shape();
     }
 
     abstract compute_out_shape(in_shape: Shape): Shape;
     abstract validate_params(): void;
 
     // Rest of the methods remain largely the same
-    protected recompute_out_shape(): void {
+    protected update_out_shape(): void {
         if (this.in_shape === null) {
             this.out_shape = null;
             return;
         }
 
-        this.out_shape = this.compute_out_shape(this.in_shape);
+        try {
+            this.out_shape = this.compute_out_shape(this.in_shape);
+        } catch (e) {
+            throw new ShapeError(`Output shape computation failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
 
-        if (this.out_node && this.out_shape.equals(this.out_node.in_shape)) {
-            throw new Error(`Output shape mismatch with subsequent input shape: ${this.out_shape} vs ${this.out_node.in_shape}`);
+        if (this.out_node && !this.out_shape.equals(this.out_node.in_shape)) {
+            throw new ConnectionError(
+                `Output shape mismatch with subsequent input shape: ${this.out_shape} vs ${this.out_node.in_shape}`
+            );
         }
     }
 
     set_params(params: T): void {
         this.params = params;
-        this.validate_params();
-        this.recompute_out_shape();
+        try {
+            this.validate_params();
+        } catch (e) {
+            throw new ValidationError(`Parameter validation failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        this.update_out_shape();
     }
 
     connect_to(target: CheckerNode<any>): void {
-        if (this.in_shape !== null) {
-            if (target.in_shape !== null) {
-                if (!this.out_shape?.equals(target.in_shape)) {
-                    throw new Error(`Input shape mismatch: cannot connect output shape ${this.out_shape} to input shape ${target.in_shape}`);
-                }
-            } else {
-                target.set_in_shape(this.out_shape);
+        if (target.in_shape !== null) {
+            if (!this.out_shape?.equals(target.in_shape)) {
+                throw new ConnectionError(
+                    `Input shape mismatch: cannot connect output shape ${this.out_shape} to input shape ${target.in_shape}`
+                );
             }
+        } else {
+            target.set_in_shape(this.out_shape);
         }
         this.out_node = target;
         target.in_node = this;
@@ -99,6 +114,6 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
 
     set_in_shape(shape: Shape | null): void {
         this.in_shape = shape;
-        this.recompute_out_shape();
+        this.update_out_shape();
     }
 }
