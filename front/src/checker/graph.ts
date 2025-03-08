@@ -20,7 +20,7 @@ export class CheckerGraph {
             throw new Error("Node not found");
         }
 
-        source.connect_to(target);
+        source.connectTo(target);
     }
 
     deleteNode(id: string): void {

@@ -1,6 +1,5 @@
-// src/checker/utils.ts
 import { Shape } from './shape';
-import { CheckerNode, NodeParams } from './node';
+import { CheckerNode, NodeParams, OutputError } from './node';
 import { NodeMetadata } from './node';
 
 export interface TensorParams extends NodeParams {
@@ -21,31 +20,36 @@ export class Tensor extends CheckerNode<TensorParams> {
                     label: 'Shape',
                     description: 'Dimensions of the tensor',
                     type: 'shape',
+                    default: [1, 64, 32, 32]
                 }
             }
         } as const;
     }
 
+    static validateParams(params: NodeParams): string | null {
+        if (!params || typeof params !== 'object') return 'Invalid params';
+        const p = params as TensorParams;
+        
+        if (!p.shape) return 'Shape must be specified';
+        if (!Array.isArray(p.shape)) return 'Shape must be an array';
+        if (p.shape.length === 0) return 'Shape cannot be empty';
+        
+        return null;
+    }
+
     constructor(params: TensorParams) {
         super(params);
         this.in_shape = params.shape;
-        this.recompute_out_shape();
+        this.updateOutShape();
     }
 
-    validate_params(): void {
-        const { shape } = this.params;
-        if (!Array.isArray(shape)) {
-            throw new Error("shape must be an array");
-        }
-    }
-
-    compute_out_shape(in_shape: Shape): Shape {
+    computeOutShape(in_shape: Shape): Shape {
         return in_shape;
     }
 
-    set_in_shape(shape: Shape | null): void {
-        if (shape !== null && !shape.equals(this.in_shape)) {
-            throw new Error("Cannot change tensor shape: tensor shapes are immutable");
+    setInShape(shape: Shape | null): void {
+        if (shape !== null && !Shape.equals(shape, this.in_shape)) {
+            throw new OutputError("Cannot change tensor shape: tensor shapes are immutable");
         }
     }
 }
@@ -68,34 +72,30 @@ export class Reshape extends CheckerNode<ReshapeParams> {
                     label: 'Output Dimensions',
                     description: 'Target shape (use -1 for automatic inference)',
                     type: 'shape',
-                    allowNegativeOne: true
+                    allowNegativeOne: true,
+                    default: [1, -1]
                 }
             }
         } as const;
     }
 
-    constructor(params: ReshapeParams) {
-        super(params);
-    }
+    static validateParams(params: NodeParams): string | null {
+        if (!params || typeof params !== 'object') return 'Invalid params';
+        const p = params as ReshapeParams;
 
-    validate_params(): void {
-        const { out_dim } = this.params;
-        if (!Array.isArray(out_dim)) {
-            throw new Error("out_dim must be an array");
-        }
+        if (!p.out_dim) return 'Output dimensions must be specified';
+        if (!Array.isArray(p.out_dim)) return 'Output dimensions must be an array';
+        if (p.out_dim.length === 0) return 'Output dimensions cannot be empty';
 
-        const inferredDims = out_dim.filter(d => d === -1);
-        if (inferredDims.length > 1) {
-            throw new Error("Only one dimension can be inferred (-1) in out_dim");
-        }
-
-        const invalidDims = out_dim.filter(d => d !== -1 && d <= 0);
-        if (invalidDims.length > 0) {
-            throw new Error(`Invalid dimension ${invalidDims[0]} in out_dim: must be positive or -1`);
+        try {
+            Shape.validateReshapeShape(p.out_dim);
+            return null;
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
         }
     }
 
-    compute_out_shape(in_shape: Shape): Shape {
+    computeOutShape(in_shape: Shape): Shape {
         const out_dim = this.params.out_dim;
         const total_in = in_shape.reduce((a, b) => a * b, 1);
         
@@ -103,14 +103,14 @@ export class Reshape extends CheckerNode<ReshapeParams> {
             const known_out = out_dim.filter(d => d !== -1).reduce((a, b) => a * b, 1);
             const missing_dim = total_in / known_out;
             if (!Number.isInteger(missing_dim)) {
-                throw new Error("Cannot compute missing dimension: total elements do not match");
+                throw new OutputError("Cannot compute missing dimension: total elements do not match");
             }
-            return new Shape(out_dim.map(d => d === -1 ? missing_dim : d));
+            return out_dim.map(d => d === -1 ? missing_dim : d);
         }
 
         const total_out = out_dim.reduce((a, b) => a * b, 1);
         if (total_in !== total_out) {
-            throw new Error(`Cannot reshape from ${in_shape} to ${out_dim}: total elements do not match`);
+            throw new OutputError(`Cannot reshape from ${in_shape} to ${out_dim}: total elements do not match`);
         }
         return out_dim;
     }

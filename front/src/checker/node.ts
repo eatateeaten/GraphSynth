@@ -20,9 +20,24 @@
 import { Shape } from './shape';
 
 // Error types for different failure cases
-export class ShapeError extends Error {}
-export class ValidationError extends Error {}
-export class ConnectionError extends Error {}
+export class ValidationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ValidationError';
+    }
+}
+export class InputError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'InputError';
+    }
+}
+export class OutputError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'OutputError';
+    }
+}
 
 export interface NodeParams {
     [key: string]: any;
@@ -34,6 +49,7 @@ export type ParamFieldMetadata = {
     type: 'shape' | 'number' | 'option';
     allowNegativeOne?: boolean;
     options?: string[];
+    default?: number | string | Shape;
 }
 
 export type NodeMetadata<T extends NodeParams = NodeParams> = {
@@ -46,11 +62,26 @@ export type NodeMetadata<T extends NodeParams = NodeParams> = {
 }
 
 export abstract class CheckerNode<T extends NodeParams = NodeParams> {
-    static readonly description: string = '';
     static readonly type: string;
+    static readonly description: string = '';
     
-    static getMeta(): NodeMetadata {
+    // Add a getter to access the static type from instances
+    get type(): string {
+        return (this.constructor as typeof CheckerNode).type;
+    }
+
+    static getMeta(..._args: any[]): NodeMetadata {
         throw new Error('getMeta() not implemented');
+    }
+
+    /**
+     * Static validation that can be used before node creation.
+     * This is treated as an abstract static method, but TypeScript doesn't support 
+     * abstract static methods, so we throw an error instead.
+     * All derived classes MUST implement this method.
+     */
+    static validateParams(_params: NodeParams): string | null {
+        throw new Error(`validateParams() not implemented`);
     }
 
     in_shape: Shape | null = null;
@@ -60,60 +91,76 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     params: T;
 
     constructor(params: T) {
+        const error = this.validateParams(params);
+        if (error) throw new Error(error);
+        
         this.params = params;
-        this.validate_params();
-        this.update_out_shape();
+        this.updateOutShape();
     }
 
-    abstract compute_out_shape(in_shape: Shape): Shape;
-    abstract validate_params(): void;
+    abstract computeOutShape(in_shape: Shape): Shape;
 
-    // Rest of the methods remain largely the same
-    protected update_out_shape(): void {
+    /**
+     * Instance method that delegates to static validation.
+     * This is implemented in the base class and should NOT be overridden.
+     */
+    validateParams(params: T = this.params): string | null {
+        return (this.constructor as any).validateParams(params);
+    }
+
+    protected updateOutShape(): void {
         if (this.in_shape === null) {
             this.out_shape = null;
             return;
         }
 
         try {
-            this.out_shape = this.compute_out_shape(this.in_shape);
+            this.out_shape = this.computeOutShape(this.in_shape);
         } catch (e) {
-            throw new ShapeError(`Output shape computation failed: ${e instanceof Error ? e.message : String(e)}`);
+            throw new OutputError(`Output shape computation failed: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        if (this.out_node && !this.out_shape.equals(this.out_node.in_shape)) {
-            throw new ConnectionError(
+        if (this.out_node && !Shape.equals(this.out_shape, this.out_node.in_shape)) {
+            throw new OutputError(
                 `Output shape mismatch with subsequent input shape: ${this.out_shape} vs ${this.out_node.in_shape}`
             );
         }
     }
 
-    set_params(params: T): void {
+    setParams(params: T): void {
+        const error = this.validateParams(params);
+        if (error) throw new ValidationError(`Parameter validation failed: ${error}`);
+        
         this.params = params;
-        try {
-            this.validate_params();
-        } catch (e) {
-            throw new ValidationError(`Parameter validation failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
-        this.update_out_shape();
+        this.updateOutShape();
     }
 
-    connect_to(target: CheckerNode<any>): void {
+    connectTo(target: CheckerNode<any>): void {
         if (target.in_shape !== null) {
-            if (!this.out_shape?.equals(target.in_shape)) {
-                throw new ConnectionError(
+            if (!Shape.equals(this.out_shape, target.in_shape)) {
+                throw new OutputError(
                     `Input shape mismatch: cannot connect output shape ${this.out_shape} to input shape ${target.in_shape}`
                 );
             }
         } else {
-            target.set_in_shape(this.out_shape);
+            target.setInShape(this.out_shape);
         }
         this.out_node = target;
         target.in_node = this;
     }
 
-    set_in_shape(shape: Shape | null): void {
-        this.in_shape = shape;
-        this.update_out_shape();
+    setInShape(shape: Shape | null): void {
+        // Try computing output shape first before committing to the input shape
+        try {
+            const newOutShape = shape ? this.computeOutShape(shape) : null;
+            // Only set shapes if computation succeeds
+            this.in_shape = shape;
+            this.out_shape = newOutShape;
+        } catch (e) {
+            if (e instanceof OutputError) {
+                throw new InputError(e.message);
+            }
+            throw e;
+        }
     }
 }

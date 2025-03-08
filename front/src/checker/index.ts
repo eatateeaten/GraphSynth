@@ -7,14 +7,18 @@ export { CheckerGraph } from './graph';
 // Import all node types
 import { type UtilNodeParams, UtilNodes } from './utils';
 import { type ConvNodeParams, ConvNodes } from './conv';
-import { CheckerNode } from './node';
+import { CheckerNode, NodeMetadata, NodeParams } from './node';
 
 // Combine all node params into a single type
-export type CheckerNodeParams = UtilNodeParams & ConvNodeParams;
-export type CheckerNodeType = keyof CheckerNodeParams;
+export type CheckerNodeParams = UtilNodeParams[keyof UtilNodeParams] | ConvNodeParams[keyof ConvNodeParams];
+export type CheckerNodeType = keyof (UtilNodeParams & ConvNodeParams);
 
 // Create a type for the node constructors
-type CheckerNodeConstructor<T extends CheckerNodeType> = new (params: CheckerNodeParams[T]) => CheckerNode<CheckerNodeParams[T]>;
+type CheckerNodeConstructor<T extends CheckerNodeType> = {
+    new (params: CheckerNodeParams[T]): CheckerNode<CheckerNodeParams[T]>;
+    getMeta(): NodeMetadata<CheckerNodeParams[T]>;
+    validateParams(params: NodeParams): string | null;
+};
 
 // Combine all node constructors into a single record
 export const CheckerNodes: { [T in CheckerNodeType]: CheckerNodeConstructor<T> } = {

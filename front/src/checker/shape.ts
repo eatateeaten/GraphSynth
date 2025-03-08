@@ -1,49 +1,47 @@
-export class Shape extends Array<number> {
-    constructor(dimensions: number[], allowNegativeOne = false) {
-        super(...dimensions);
-        this.validate(allowNegativeOne);
-    }
+export type Shape = number[];
 
-    static fromArray(dims: number[], allowNegativeOne = false): Shape {
-        return new Shape(dims, allowNegativeOne);
-    }
+export const Shape = {
+    equals(a: Shape | null, b: Shape | null): boolean {
+        if (a === null || b === null) return a === b;
+        if (a.length !== b.length) return false;
+        return a.every((dim, i) => dim === b[i]);
+    },
 
-    static fromNumber(dim: number): Shape {
-        return new Shape([dim]);
-    }
-
-    static fromString(str: string, allowNegativeOne = false): Shape {
-        const dims = str.split(',')
-            .map(s => parseInt(s.trim(), 10))
-            .filter(n => !isNaN(n));
-        
-        if (dims.length === 0) {
-            throw new Error('Invalid shape string: no valid numbers found');
-        }
-        return new Shape(dims, allowNegativeOne);
-    }
-
-    private validate(allowNegativeOne: boolean): void {
-        const badDim = this.findIndex(dim => 
-            allowNegativeOne 
-                ? (dim !== -1 && dim <= 0)
-                : dim <= 0
-        );
+    // Common shape validation functions
+    validatePositive(shape: Shape, name: string = 'shape'): void {
+        const badDim = shape.findIndex(dim => dim <= 0);
         if (badDim !== -1) {
-            const msg = allowNegativeOne 
-                ? 'must be positive or -1'
-                : 'must be positive';
-            throw new Error(`Invalid shape ${this}: ${badDim}-th dim ${this[badDim]} ${msg}`);
+            throw new Error(`Invalid ${name} ${shape}: ${badDim}-th dim ${shape[badDim]} must be positive`);
+        }
+    },
+
+    validateSpatialDims(shape: Shape, expectedDims: number, name: string = 'shape'): void {
+        if (shape.length !== expectedDims + 2) {
+            throw new Error(
+                `Invalid ${name} ${shape}: expected ${expectedDims + 2} dimensions ` +
+                `(batch, channels, spatial...), got ${shape.length}`
+            );
+        }
+    },
+
+    validateChannels(shape: Shape, expectedChannels: number): void {
+        if (shape[1] !== expectedChannels) {
+            throw new Error(
+                `Channel mismatch: expected ${expectedChannels}, got ${shape[1]}`
+            );
+        }
+    },
+
+    // For reshape operations
+    validateReshapeShape(shape: Shape): void {
+        const inferredDims = shape.filter(d => d === -1);
+        if (inferredDims.length > 1) {
+            throw new Error('Only one dimension can be inferred (-1)');
+        }
+        
+        const invalidDims = shape.filter(d => d !== -1 && d <= 0);
+        if (invalidDims.length > 0) {
+            throw new Error(`Invalid dimension ${invalidDims[0]}: must be positive or -1`);
         }
     }
-
-    toString(): string {
-        return `[${this.join(', ')}]`;
-    }
-
-    equals(other: Shape | null): boolean {
-        if (other === null) return false;
-        if (this.length !== other.length) return false;
-        return this.every((dim, i) => dim === other[i]);
-    }
-}
+} as const;

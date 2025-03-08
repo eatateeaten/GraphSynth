@@ -5,7 +5,8 @@ import { CheckerNodeType } from './checker';
 export interface FlowNode extends ReactFlowNode {
     data: {
         type: CheckerNodeType;
-        errorMessage?: string;
+        inputError?: string;
+        outputError?: string;
     };
 }
 

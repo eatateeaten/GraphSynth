@@ -5,45 +5,46 @@ import { LayerHandle } from './LayerHandle';
 import { useGraphStore } from './store';
 
 interface LayerBoxProps extends NodeProps {
-  data: {
-    type: CheckerNodeType;
-    errorMessage?: string;
-  };
+    data: {
+        type: CheckerNodeType;
+        inputError?: string;
+        outputError?: string;
+    };
 }
 
 export function LayerBox({ data, id }: LayerBoxProps) {
-  const { type, errorMessage } = data;
-  const checkerNode = useGraphStore(state => state.checkerGraph.getNode(id));
-  const inShape = checkerNode?.in_shape || undefined;
-  const outShape = checkerNode?.out_shape || undefined;
+    const { type, inputError, outputError } = data;
+    const checkerNode = useGraphStore(state => state.checkerGraph.getNode(id));
+    const inShape = checkerNode?.in_shape || undefined;
+    const outShape = checkerNode?.out_shape || undefined;
 
-  return (
-    <>
-      <LayerHandle 
-        position={Position.Left}
-        type="target"
-        dimensions={inShape}
-      />
+    const card = (
+        <Card shadow="sm" radius="md" withBorder style={{ width: 180, minHeight: 100 }}>
+            <Card.Section withBorder inheritPadding py="xs">
+                <Group justify="space-between">
+                    <Text fw={500}>{type}</Text>
+                </Group>
+            </Card.Section>
+        </Card>
+    );
 
-      <Card shadow="sm" radius="md" withBorder style={{ width: 180, minHeight: 100 }}>
-        <Card.Section withBorder inheritPadding py="xs">
-          <Group justify="space-between">
-            <Text fw={500}>{type}</Text>
-          </Group>
-        </Card.Section>
+    return (
+        <>
+            <LayerHandle 
+                position={Position.Left}
+                type="target"
+                dimensions={inShape}
+                error={inputError}
+            />
 
-        {errorMessage && (
-          <Card.Section p="sm">
-            <Text size="sm" c="red">{errorMessage}</Text>
-          </Card.Section>
-        )}
-      </Card>
+            {card}
 
-      <LayerHandle 
-        position={Position.Right}
-        type="source"
-        dimensions={outShape}
-      />
-    </>
-  );
+            <LayerHandle 
+                position={Position.Right}
+                type="source"
+                dimensions={outShape}
+                error={outputError}
+            />
+        </>
+    );
 }
