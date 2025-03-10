@@ -99,16 +99,19 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         this.updateOutShape();
 =======
         this.validate_params();
-<<<<<<< HEAD
         this.update_out_shape();
+<<<<<<< HEAD
 =======
         this.update_out_shape(); 
 >>>>>>> 0c84b1d (changed node.ts and node.py)
 >>>>>>> c6d38dc (changed node.ts and node.py)
+=======
+>>>>>>> 2c38fac (anxiety)
     }
 
     abstract computeOutShape(in_shape: Shape): Shape;
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     /**
      * Instance method that delegates to static validation.
@@ -128,6 +131,10 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
     protected update_out_shape(): void { 
 >>>>>>> 0c84b1d (changed node.ts and node.py)
 >>>>>>> c6d38dc (changed node.ts and node.py)
+=======
+    // Rest of the methods remain largely the same
+    protected update_out_shape(): void {
+>>>>>>> 2c38fac (anxiety)
         if (this.in_shape === null) {
             this.out_shape = null;
             return;
@@ -152,20 +159,20 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         
         this.params = params;
 <<<<<<< HEAD
+<<<<<<< HEAD
         this.updateOutShape();
     }
 
     connectTo(target: CheckerNode<any>): void {
 =======
 <<<<<<< HEAD
+=======
+>>>>>>> 2c38fac (anxiety)
         try {
             this.validate_params();
         } catch (e) {
             throw new ValidationError(`Parameter validation failed: ${e instanceof Error ? e.message : String(e)}`);
         }
-=======
-        this.validate_params();
->>>>>>> 0c84b1d (changed node.ts and node.py)
         this.update_out_shape();
     }
     
@@ -204,9 +211,9 @@ export abstract class CheckerNode<T extends NodeParams = NodeParams> {
         this.in_shape = shape;
         this.update_out_shape();
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> c6d38dc (changed node.ts and node.py)
-    }
 =======
-    } 
->>>>>>> 0c84b1d (changed node.ts and node.py)
+>>>>>>> 2c38fac (anxiety)
+    }
 }
