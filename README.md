@@ -1,7 +1,7 @@
-This project is going to cover a Visual/graph-compiler for all existing neuralnet architectures.
+This project is going to cover a no-code user-friendly Visual/graph-compiler for all existing neuralnet architectures.
 As well as graph representations that translate to PyTorch, JAX, Tensorflow model and training routine code. 
-I will also develop another distributed training/inferencing framework based on this project. 
-Please stay tuned! 
+I will develop a distributed training/inferencing framework based on this project. 
+
 
 For Merge: we can have TensorConcatMerge, PositionwiseMerge(Like addition of Tensors), ContractionMerge(Like cross-product of Tensors) and OuterProductMerge(Like outer-product of Tensors). 
 
