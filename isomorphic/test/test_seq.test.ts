@@ -2,14 +2,14 @@ import { Op, Seq } from '../front/graph';
 import { describe, test, expect, beforeEach } from '@jest/globals';
 
 describe('Seq', () => {
-    let conv1: Op<number>;
-    let relu1: Op<number>;
-    let conv2: Op<number>;
-    let seq: Seq<number>;
+    let conv1: Op<number | number[]>;
+    let relu1: Op<number | number[]>;
+    let conv2: Op<number | number[]>;
+    let seq: Seq<number | number[]>;
 
     beforeEach(() => {
         // Create a Conv2D operation
-        conv1 = new Op<number>(
+        conv1 = new Op<number | number[]>(
             [1, 3, 224, 224],  // inShape
             [1, 64, 112, 112], // outShape
             "torch",
@@ -24,7 +24,7 @@ describe('Seq', () => {
         );
 
         // Create a ReLU operation
-        relu1 = new Op<number>(
+        relu1 = new Op<number | number[]>(
             [1, 64, 112, 112], // inShape
             [1, 64, 112, 112], // outShape
             "torch",
@@ -33,7 +33,7 @@ describe('Seq', () => {
         );
 
         // Create another Conv2D operation
-        conv2 = new Op<number>(
+        conv2 = new Op<number | number[]>(
             [1, 64, 112, 112], // inShape
             [1, 128, 56, 56],  // outShape
             "torch",
@@ -48,7 +48,7 @@ describe('Seq', () => {
         );
 
         // Initialize sequence with conv1
-        seq = new Seq<number>(conv1);
+        seq = new Seq<number | number[]>(conv1);
     });
 
     test('constructor initializes with single operation', () => {
@@ -73,7 +73,7 @@ describe('Seq', () => {
     });
 
     test('push throws error on shape mismatch', () => {
-        const invalidOp = new Op<number>(
+        const invalidOp = new Op<number | number[]>(
             [1, 32, 112, 112], // Wrong input shape
             [1, 64, 56, 56],
             "torch",
@@ -110,7 +110,7 @@ describe('Seq', () => {
 
     test('insert throws error on shape mismatch', () => {
         seq.push(conv2);
-        const invalidOp = new Op<number>(
+        const invalidOp = new Op<number | number[]>(
             [1, 32, 112, 112],
             [1, 64, 56, 56],
             "torch",
@@ -137,7 +137,7 @@ describe('Seq', () => {
 
     test('remove throws error on shape mismatch', () => {
         // Create a sequence where removing the middle operation would create a shape mismatch
-        const op1 = new Op<number>(
+        const op1 = new Op<number | number[]>(
             [1, 3, 224, 224],
             [1, 64, 112, 112],
             "torch",
@@ -145,7 +145,7 @@ describe('Seq', () => {
             { in_channels: 3, out_channels: 64, kernel_size: 7 }
         );
 
-        const op2 = new Op<number>(
+        const op2 = new Op<number | number[]>(
             [1, 64, 112, 112],
             [1, 32, 56, 56],
             "torch",
@@ -153,7 +153,7 @@ describe('Seq', () => {
             { in_channels: 64, out_channels: 32, kernel_size: 3 }
         );
 
-        const op3 = new Op<number>(
+        const op3 = new Op<number | number[]>(
             [1, 32, 56, 56],
             [1, 16, 28, 28],
             "torch",
@@ -161,7 +161,7 @@ describe('Seq', () => {
             { in_channels: 32, out_channels: 16, kernel_size: 3 }
         );
 
-        const testSeq = new Seq<number>(op1);
+        const testSeq = new Seq<number | number[]>(op1);
         testSeq.push(op2);
         testSeq.push(op3);
 

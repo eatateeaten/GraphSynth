@@ -2,10 +2,10 @@ import { Op } from '../front/graph';
 import { describe, test, expect, beforeEach } from '@jest/globals';
 
 describe('Op', () => {
-    let op: Op<number>;
+    let op: Op<number | number[]>;
 
     beforeEach(() => {
-        op = new Op<number>(
+        op = new Op<number | number[]>(
             [1, 3, 224, 224],  // inShape
             [1, 64, 112, 112], // outShape
             "torch",
@@ -42,7 +42,7 @@ describe('Op', () => {
     });
 
     test('to_torch throws error for non-PyTorch operations', () => {
-        const nonTorchOp = new Op<number>(
+        const nonTorchOp = new Op<number | number[]>(
             [1, 3, 224, 224],
             [1, 64, 112, 112],
             "tensorflow",
@@ -60,7 +60,7 @@ describe('Op', () => {
     });
 
     test('prev and next setters work correctly', () => {
-        const prevOp = new Op<number>(
+        const prevOp = new Op<number | number[]>(
             [1, 1, 448, 448],
             [1, 3, 224, 224],
             "torch",
@@ -68,7 +68,7 @@ describe('Op', () => {
             { in_channels: 1, out_channels: 3, kernel_size: 3 }
         );
 
-        const nextOp = new Op<number>(
+        const nextOp = new Op<number | number[]>(
             [1, 64, 112, 112],
             [1, 64, 112, 112],
             "torch",
@@ -81,5 +81,31 @@ describe('Op', () => {
 
         expect(op.prev).toBe(prevOp);
         expect(op.next).toBe(nextOp);
+    });
+
+    test('reshape operation generates correct PyTorch code', () => {
+        const reshapeOp = new Op<number | number[]>(
+            [1, 64, 112, 112],  // inShape
+            [1, 64 * 112 * 112], // outShape flattened
+            "torch",
+            "Reshape",
+            { shape: [1, 64 * 112 * 112] }
+        );
+
+        const torchCode = reshapeOp.to_torch();
+        expect(torchCode).toBe('torch.reshape(1, 802816)');
+    });
+
+    test('permute operation generates correct PyTorch code', () => {
+        const permuteOp = new Op<number | number[]>(
+            [1, 64, 112, 112],  // inShape
+            [112, 112, 1, 64],  // outShape permuted
+            "torch",
+            "Permute",
+            { dims: [2, 3, 0, 1] }  // permute dimensions
+        );
+
+        const torchCode = permuteOp.to_torch();
+        expect(torchCode).toBe('torch.permute(2, 3, 0, 1)');
     });
 }); 

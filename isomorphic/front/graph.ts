@@ -36,7 +36,7 @@
 // }
 
 import { v4 as uuidv4 } from 'uuid';
-import { getTorchCode } from './torch_nn_module_call_map';
+import { getTorchCode } from './torch_nn_module_op_to_call_map';
 
 export class Op<T> {
     private readonly _id: string;
@@ -65,12 +65,20 @@ export class Op<T> {
         this._params = params;
     }
 
-    to_torch(): string {
+    to_torch(): string { 
         if (this._target !== "torch") {
             throw new Error("Operation is not a PyTorch operation");
         } 
         //TODO We need to add the dim_select stuff here otherwise it wouldn't work for some PyTorch nn.module lol lol 
         return getTorchCode(this._opType, this._params);
+    }
+
+    to_torch_functional(input: string): string {
+        if (this._target !== "torch") {
+            throw new Error("Operation is not a PyTorch operation");
+        }
+        const module = this.to_torch();
+        return `${input} = ${module}(${input})`;
     }
 
     // Getter for id
@@ -129,6 +137,35 @@ export class Seq<T> extends Op<T> implements Iterable<Op<T>> {
             {}
         );
         this._operations = [initialOp];
+    }
+
+    to_torch(): string {
+        // Verify all operations are PyTorch operations
+        for (const op of this._operations) {
+            if (op.target !== "torch") {
+                throw new Error("All operations in sequence must be PyTorch operations");
+            }
+        }
+
+        // Generate sequential module code
+        const moduleLines = this._operations.map((op, index) => {
+            return `            (${index}): ${op.to_torch()}`;
+        });
+
+        return `nn.Sequential(\n${moduleLines.join(',\n')}\n        )`;
+    }
+
+    to_torch_functional(input: string): string {
+        if (this._operations.some(op => op.target !== "torch")) {
+            throw new Error("All operations in sequence must be PyTorch operations");
+        }
+
+        // Generate multi-line code with each operation on its own line
+        const lines = this._operations.map(op => {
+            return `        ${op.to_torch_functional(input)}`;
+        });
+
+        return lines.join('\n');
     }
 
     private shapeMatch(op1: Op<T>, op2: Op<T>): boolean {

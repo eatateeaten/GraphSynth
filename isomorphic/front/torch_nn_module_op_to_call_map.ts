@@ -410,6 +410,18 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
     },
 
     // Reshape operations
+    "Reshape": {
+        required_params: ["shape"],
+        optional_params: [],
+        code_generator: (params) => `torch.reshape(${params['shape'].join(', ')})`
+    },
+
+    "Permute": {
+        required_params: ["dims"],
+        optional_params: [],
+        code_generator: (params) => `torch.permute(${params['dims'].join(', ')})`
+    },
+
     "Flatten": {
         required_params: [],
         optional_params: ["start_dim", "end_dim"],
@@ -420,9 +432,10 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         required_params: ["dim", "unflattened_size"],
         optional_params: [],
         code_generator: (params) => `nn.Unflatten(dim=${params['dim']}, unflattened_size=${params['unflattened_size']})`
-    },
+    }
 
     // Recurrent layers
+    /*
     "RNN": {
         required_params: ["input_size", "hidden_size"],
         optional_params: ["num_layers", "nonlinearity", "bias", "batch_first", "dropout", "bidirectional"],
@@ -468,6 +481,7 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `norm_type=${params['norm_type'] ?? 2.0}, scale_grad_by_freq=${params['scale_grad_by_freq'] ?? false}, ` +
             `sparse=${params['sparse'] ?? false})`
     }
+    */
 };
 
 export function validateParams(module_type: string, params: Record<string, any>): boolean {
