@@ -1,4 +1,4 @@
-from node import Node
+from node_v3 import Node
 from typing import Tuple, Union
 from enum import Enum
 

@@ -4,7 +4,7 @@ import logging
 import structlog
 import websockets
 from typing import Dict, Any, Tuple
-from node import Node, Tensor, Reshape
+from node_v3 import Node, Tensor, Reshape
 import numpy as np
 
 # Configure structured logging

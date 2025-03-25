@@ -9,13 +9,13 @@ from .torch_nn_module_calls import validate_params, get_torch_code
 
 class Node:
     """
-    An abstraction for all layers and aggregated NN-seq 
+    An abstraction for all sequential NN-op and aggregated NN-ops 
     """
     def __init__(
         self,
         type: str,
         params: dict = {},
-        id: str = None,                     #ID assigned from front-end 
+        id: str = None,                         # ID assigned from front-end 
         in_shape: Optional[Shape] = None, 
         out_shape: Optional[Shape] = None, 
         in_node: Optional["Node"] = None,  
@@ -39,9 +39,7 @@ class Node:
         params_str = ", ".join(f"{param}={val}" for param, val in self.params.items())
         return f"{self.type}({params_str})"
     
-    # def completed(self):
-    #    return self.in_shape is not None and self.out_shape is not None and self.in_node is not None and self.out_node is not None 
-   
+
     def to_torch(self) -> str:
         """
         Return a string with the PyTorch layer construction.
@@ -56,6 +54,305 @@ class Node:
         pass 
 
 
+class Merge(Node):
+    """
+    A class for merging NN-op that takes multiple tensors and gives one tensor.
+    """
+    def __init__(self, input_nodes: List[Node], output_node: Optional[Node] = None, params: dict = None, **kwargs):
+        params = params or {}
+        super().__init__(type="Merge", params=params, **kwargs)
+        self.input_nodes = input_nodes
+        self.output_node = output_node
+
+
+class Branch(Node):
+    """
+    A class for branching NN-op that takes one tensor and gives multiple tensors.
+    """
+    def __init__(self, input_node: Node, output_nodes: Optional[List[Node]] = None, params: dict = None, **kwargs):
+        params = params or {}
+        super().__init__(type="Branch", params=params, **kwargs)
+        self.in_node = input_node
+        self.output_nodes = output_nodes or []
+
+
+class ConcatMerge(Merge):
+    """
+    Concatenates multiple tensors along a specified dimension.
+    """
+    def __init__(self, input_nodes: List[Node], params: dict = None, output_node: Optional[Node] = None, **kwargs):
+        params = params or {}
+        concat_dim = params.get('concat_dim', 0)
+        merge_params = {'concat_dim': concat_dim}
+        super().__init__(input_nodes=input_nodes, output_node=output_node, params=merge_params, **kwargs)
+        self.type = "ConcatMerge"
+        
+    def validate_shapes(self):
+        """Validate that input tensors have compatible shapes for concatenation."""
+        if not self.input_nodes or len(self.input_nodes) < 2:
+            raise ValueError("ConcatMerge requires at least two input tensors")
+        
+        shapes = [node.out_shape for node in self.input_nodes]
+        concat_dim = self.params['concat_dim']
+        
+        # Check that all shapes have the same dimensionality
+        ndims = len(shapes[0])
+        if any(len(shape) != ndims for shape in shapes):
+            raise ValueError("All input tensors must have the same number of dimensions")
+            
+        # Check that all dimensions except concat_dim match
+        for dim in range(ndims):
+            if dim != concat_dim:
+                if any(shape[dim] != shapes[0][dim] for shape in shapes):
+                    raise ValueError(f"Input tensors must have the same size in all dimensions except concat_dim, mismatch found in dimension {dim}")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for tensor concatenation."""
+        return f"torch.cat(tensors=[{', '.join(f'x{i}' for i, _ in enumerate(self.input_nodes))}], dim={self.params['concat_dim']})"
+
+
+class PositionwiseMerge(Merge):
+    """
+    Applies element-wise operations (default: addition) to input tensors.
+    """
+    def __init__(self, input_nodes: List[Node], params: dict = None, output_node: Optional[Node] = None, **kwargs):
+        params = params or {}
+        op = params.get('op', 'add')
+        merge_params = {'op': op}
+        super().__init__(input_nodes=input_nodes, output_node=output_node, params=merge_params, **kwargs)
+        self.type = "PositionwiseMerge"
+        
+    def validate_shapes(self):
+        """Validate that input tensors have the same shape."""
+        if not self.input_nodes or len(self.input_nodes) < 2:
+            raise ValueError("PositionwiseMerge requires at least two input tensors")
+            
+        shapes = [node.out_shape for node in self.input_nodes]
+        
+        # Check that all shapes are identical
+        for shape in shapes[1:]:
+            if shape != shapes[0]:
+                raise ValueError(f"All input tensors must have the same shape. Found {shapes[0]} and {shape}")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for element-wise operation."""
+        if self.params['op'] == 'add':
+            # For two inputs, use simple addition
+            if len(self.input_nodes) == 2:
+                return f"(x0 + x1)"
+            # For more inputs, use sum
+            else:
+                return f"torch.sum(torch.stack([{', '.join(f'x{i}' for i, _ in enumerate(self.input_nodes))}]), dim=0)"
+        elif self.params['op'] == 'multiply':
+            # For two inputs, use simple multiplication
+            if len(self.input_nodes) == 2:
+                return f"(x0 * x1)"
+            # For more inputs, use product
+            else:
+                return f"torch.prod(torch.stack([{', '.join(f'x{i}' for i, _ in enumerate(self.input_nodes))}]), dim=0)"
+        else:
+            # For custom operations, this would need to be handled accordingly
+            return f"custom_op([{', '.join(f'x{i}' for i, _ in enumerate(self.input_nodes))}])"
+
+
+class ContractionMerge(Merge):
+    """
+    Performs contraction operations (like matrix multiplication) between tensors.
+    """
+    def __init__(self, input_nodes: List[Node], params: dict = None, output_node: Optional[Node] = None, **kwargs):
+        params = params or {}
+        contraction_dim = params.get('contraction_dim', 0)
+        op = params.get('op', 'multiply')
+        agg_op = params.get('agg_op', 'add')
+        merge_params = {
+            'contraction_dim': contraction_dim,
+            'op': op,
+            'agg_op': agg_op
+        }
+        super().__init__(input_nodes=input_nodes, output_node=output_node, params=merge_params, **kwargs)
+        self.type = "ContractionMerge"
+    
+    def validate_shapes(self):
+        """Validate that input tensors have compatible shapes for contraction."""
+        if not self.input_nodes or len(self.input_nodes) != 2:
+            raise ValueError("ContractionMerge currently supports exactly two input tensors")
+            
+        shape1 = self.input_nodes[0].out_shape
+        shape2 = self.input_nodes[1].out_shape
+        
+        # Check dimensions for matrix multiplication
+        if len(shape1) != len(shape2):
+            raise ValueError(f"Input tensors must have the same number of dimensions. Found {shape1} and {shape2}")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for tensor contraction."""
+        return f"torch.matmul(x0, x1)"  # Simplified for common case
+
+
+class OuterProductMerge(Merge):
+    """
+    Performs outer product operations between tensors.
+    """
+    def __init__(self, input_nodes: List[Node], params: dict = None, output_node: Optional[Node] = None, **kwargs):
+        params = params or {}
+        outer_product_dim = params.get('outer_product_dim', 0)
+        op = params.get('op', 'multiply')
+        merge_params = {
+            'outer_product_dim': outer_product_dim,
+            'op': op
+        }
+        super().__init__(input_nodes=input_nodes, output_node=output_node, params=merge_params, **kwargs)
+        self.type = "OuterProductMerge"
+    
+    def validate_shapes(self):
+        """Validate input tensor shapes for outer product."""
+        if not self.input_nodes or len(self.input_nodes) != 2:
+            raise ValueError("OuterProductMerge currently supports exactly two input tensors")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for outer product."""
+        return f"torch.einsum('i,j->ij', x0, x1)"  # Simplified for common case
+
+
+class AttentionMerge(Merge):
+    """
+    Applies attention mechanism to merge tensors.
+    """
+    def __init__(self, input_nodes: List[Node], params: dict = None, output_node: Optional[Node] = None, **kwargs):
+        params = params or {}
+        num_heads = params.get('num_heads', 1)
+        embed_dim = params.get('embed_dim', None)
+        merge_params = {
+            'num_heads': num_heads
+        }
+        if embed_dim:
+            merge_params['embed_dim'] = embed_dim
+            
+        # Expecting input_nodes to be in order: [query, key, value]
+        if len(input_nodes) != 3:
+            raise ValueError("AttentionMerge requires exactly three input tensors (query, key, value)")
+            
+        super().__init__(input_nodes=input_nodes, output_node=output_node, params=merge_params, **kwargs)
+        self.type = "AttentionMerge"
+    
+    def validate_shapes(self):
+        """Validate shapes for attention mechanism."""
+        if len(self.input_nodes) != 3:
+            raise ValueError("AttentionMerge requires exactly three input tensors (query, key, value)")
+        
+        # Check that all inputs have compatible shapes for attention
+        query_shape = self.input_nodes[0].out_shape
+        key_shape = self.input_nodes[1].out_shape
+        value_shape = self.input_nodes[2].out_shape
+        
+        # Validate dimensions
+        if len(query_shape) != 3 or len(key_shape) != 3 or len(value_shape) != 3:
+            raise ValueError("Query, key, and value tensors must be 3D (batch_size, seq_length, embed_dim)")
+        
+        # Validate batch sizes match
+        if query_shape[0] != key_shape[0] or query_shape[0] != value_shape[0]:
+            raise ValueError(f"Batch sizes must match. Found query: {query_shape[0]}, key: {key_shape[0]}, value: {value_shape[0]}")
+            
+        # Validate embedding dimensions
+        embed_dim = query_shape[2]
+        if embed_dim != key_shape[2]:
+            raise ValueError(f"Query and key must have same embedding dimension. Found query: {embed_dim}, key: {key_shape[2]}")
+            
+        # For multi-head attention, embedding dimension should be divisible by number of heads
+        num_heads = self.params['num_heads']
+        if embed_dim % num_heads != 0:
+            raise ValueError(f"Embedding dimension ({embed_dim}) must be divisible by number of heads ({num_heads})")
+            
+        # Key and value should have the same sequence length
+        if key_shape[1] != value_shape[1]:
+            raise ValueError(f"Key and value must have same sequence length. Found key: {key_shape[1]}, value: {value_shape[1]}")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for attention mechanism."""
+        embed_dim = self.input_nodes[0].out_shape[2]  # Get embedding dimension from query shape
+        return f"nn.MultiheadAttention(embed_dim={embed_dim}, num_heads={self.params['num_heads']})(query=x0, key=x1, value=x2)[0]"
+
+
+class CopyBranch(Branch):
+    """
+    Copies a tensor to multiple downstream paths.
+    """
+    def __init__(self, input_node: Node, params: dict = None, output_nodes: Optional[List[Node]] = None, **kwargs):
+        params = params or {}
+        num_copies = params.get('num_copies', len(output_nodes) if output_nodes else 2)
+        branch_params = {'num_copies': num_copies}
+        
+        if output_nodes is None:
+            output_nodes = [None] * num_copies
+            
+        super().__init__(input_node=input_node, output_nodes=output_nodes, params=branch_params, **kwargs)
+        self.type = "CopyBranch"
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for tensor copying."""
+        # Simple case: no actual operation needed, just reference the same tensor multiple times
+        return f"x0"
+
+
+class SplitBranch(Branch):
+    """
+    Splits a tensor along a specified dimension at specific indices.
+    """
+    def __init__(self, input_node: Node, params: dict = None, output_nodes: Optional[List[Node]] = None, **kwargs):
+        """
+        Initialize a SplitBranch.
+        
+        Args:
+            input_node: The node providing the tensor to split
+            params: Dictionary containing:
+                - 'split_dim': The dimension along which to split the tensor
+                - 'split_indices': List of indices at which to split (exclusive of 0 and tensor size)
+            output_nodes: List of nodes to receive the split results (optional)
+        """
+        params = params or {}
+        split_dim = params.get('split_dim', 0)
+        split_indices = params.get('split_indices', [])
+        
+        # Create output nodes if not provided
+        n_outputs = len(split_indices) + 1  # One more output than split points
+        if output_nodes is None:
+            output_nodes = [None] * n_outputs
+        
+        branch_params = {
+            'split_dim': split_dim,
+            'split_indices': split_indices
+        }
+        
+        super().__init__(input_node=input_node, output_nodes=output_nodes, params=branch_params, **kwargs)
+        self.type = "SplitBranch"
+    
+    def validate_shapes(self):
+        """Validate that the split parameters are valid for the input tensor."""
+        if not self.input_node or not self.input_node.out_shape:
+            raise ValueError("Input node must have a defined output shape")
+            
+        input_shape = self.input_node.out_shape
+        split_dim = self.params['split_dim']
+        split_indices = self.params['split_indices']
+        
+        if split_dim >= len(input_shape):
+            raise ValueError(f"Split dimension {split_dim} exceeds tensor dimensions {len(input_shape)}")
+        
+        dim_size = input_shape[split_dim]
+        
+        # Validate indices are in ascending order and within range
+        if not all(0 < idx < dim_size for idx in split_indices):
+            raise ValueError(f"Split indices must be between 0 and {dim_size} (exclusive)")
+        if not all(split_indices[i] < split_indices[i+1] for i in range(len(split_indices)-1)):
+            raise ValueError("Split indices must be in ascending order")
+    
+    def to_torch(self) -> str:
+        """Return PyTorch code for tensor splitting."""
+        split_dim = self.params['split_dim']
+        split_indices = self.params['split_indices']
+        
+        return f"torch.split(x0, split_size_or_sections={split_indices}, dim={split_dim})"
+
 
 class Seq(Node):
     """
@@ -64,10 +361,10 @@ class Seq(Node):
     """
     def __init__(
         self, 
-        nodes: List[Node] = None,
+        nodes: List[Node], 
         name: str = None,  # Descriptive name for collapsed view (e.g., "ResNet Block")
         collapsed: bool = False,  # Default display state
-        id: str = None,                     #ID assigned from front-end 
+        id: str = None,         #ID assigned from front-end 
         in_shape: Optional[Shape] = None, 
         out_shape: Optional[Shape] = None, 
         in_node: Optional["Node"] = None,  
@@ -205,7 +502,7 @@ class Seq(Node):
 
 
 class Graph(): 
-    def __init__(self, seqs: Optional[List[Seq]] = None, edges=None, shape_match_check=True):
+    def __init__(self, seqs: Optional[List[Seq]] = None, edges=None):
         """
         Initialize a graph using an adjacency list representation.
         
@@ -216,7 +513,6 @@ class Graph():
         """
         # Dictionary mapping sequences to list of (operation, destination) tuples
         self.seqs: Dict[Seq, List[Tuple[Node, Seq]]] = {}
-        self.shape_match_check = shape_match_check 
         
         # Initialize with provided sequences
         if seqs:
@@ -404,49 +700,6 @@ class Graph():
         return "\n".join(code_lines)
 
 
-
-class Merge(ABC):
-    """
-    Abstract base class for merge operations. A Merge operation is any neurel network operation that takes multiple tensors and output one tensor
-    """
-    def __init__():
-        return 
-    
-    def connect_from():
-        return 
-
-    def connect_to():
-        return 
-    
-    def connect_to():
-        return 
-    
-        
-class Branch(ABC):
-    """
-    Abstract base class for branch operations. A Branch operation is any neurel network operation that takes one tensor and outputs multiple tensors 
-    """
-    def __init__():
-        return 
-    
-    def connect_from():
-        return 
-
-    
-    def connect_to():
-        return 
-    
-    def connect_to():
-        return 
-
-# Example subclass
-class ConcatenateMerge(Merge):
-    def perform(self, *args, **kwargs):
-        print("Performing concatenation merge")
-
-class AddMerge(Merge):
-    def perform(self, *args, **kwargs):
-        print("Performing addition merge")
 
 
 

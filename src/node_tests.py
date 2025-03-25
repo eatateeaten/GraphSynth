@@ -1,5 +1,5 @@
-from node import Node, Reshape, Tensor
-from layers import * 
+from node_v3 import Node, Reshape, Tensor
+from layers_v1 import * 
 import unittest
 import torch
 import tensorflow as tf
