@@ -624,11 +624,6 @@ export class DotMerge implements MergeOp {
     to_torch_functional(inputs: string[]): string {
         throw new Error("Not implemented");
     }
-
-    private shapeMatch(shape1: number[], shape2: number[]): boolean {
-        return shape1.length === shape2.length && 
-               shape1.every((dim, i) => dim === shape2[i]);
-    }
 }
 
 export class CrossMerge implements MergeOp {
