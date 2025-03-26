@@ -36,6 +36,17 @@
 // }
 
 
+// torch.abs(input)       # Absolute value
+// torch.sqrt(input)      # Square root
+// torch.square(input)    # Square
+// torch.exp(input)       # Exponential
+// torch.log(input)       # Natural logarithm
+// torch.sin(input)
+// torch.cos(input)
+// torch.tan(input)
+// torch.asin(input)
+// torch.acos(input)
+// torch.atan(input)
 
 import { v4 as uuidv4 } from 'uuid';
 import { getTorchCode } from './torch_nn_op_call_map';
@@ -437,7 +448,7 @@ export interface BranchOp {
     //addNext(tensor: Tensor): void;
 }
 
-export class ConcatMerge implements MergeOp {
+export class Concat implements MergeOp {
     private readonly _id: string;
     protected _inShapes: number[][];
     protected _outShape: number[];
@@ -506,7 +517,7 @@ export class ConcatMerge implements MergeOp {
     // }
 }
 
-export class PointwiseMerge implements MergeOp {
+export class ElementwiseOp implements MergeOp {
     private readonly _id: string;
     protected _inShapes: number[][];
     protected _outShape: number[];
@@ -553,7 +564,17 @@ export class PointwiseMerge implements MergeOp {
     set next(node: Op | Tensor | null) { this._next = node; }
 
     to_torch_functional(inputs: string[]): string {
-        throw new Error("Not implemented");
+        if (inputs.length < 2) {
+            throw new Error("PointwiseMerge requires at least 2 inputs");
+        }
+        const opCode = getPointwiseOpCode(this._opType);
+        
+        // Use reduce to accumulate the nested function calls
+        const result = inputs.reduce((acc, curr) => 
+            acc ? `${opCode}(${acc}, ${curr})` : curr
+        );
+        
+        return `${inputs[0]} = ${result}`;
     }
 
     // addPrev(tensor: Tensor): void {
@@ -567,7 +588,7 @@ export class PointwiseMerge implements MergeOp {
     // }
 }
 
-export class DotMerge implements MergeOp {
+export class DotOp implements MergeOp {
     private readonly _id: string;
     protected _inShapes: number[][];
     protected _outShape: number[];
@@ -626,7 +647,7 @@ export class DotMerge implements MergeOp {
     }
 }
 
-export class CrossMerge implements MergeOp {
+export class CrossOp implements MergeOp {
     private readonly _id: string;
     protected _inShapes: number[][];
     protected _outShape: number[];
@@ -684,7 +705,7 @@ export class CrossMerge implements MergeOp {
     }
 }
 
-export class SplitBranch implements BranchOp {
+export class Split implements BranchOp {
     private readonly _id: string;
     protected _inShape: number[];
     protected _outShapes: number[][];
@@ -720,11 +741,6 @@ export class SplitBranch implements BranchOp {
     // Implement setter
     set prev(node: Tensor | Op | null) { this._prev = node; }
 
-    // Implement methods
-    to_torch(): string {
-        return `torch.split(split_size_or_sections=[${this._params.sections.join(', ')}], dim=${this._params.dim})`;
-    }
-
     to_torch_functional(input: string): string[] {
         const outputs = this._outShapes.map((_, i) => `out${i}`);
         return [`${outputs.join(', ')} = torch.split(${input}, [${this._params.sections.join(', ')}], dim=${this._params.dim})`];
@@ -742,7 +758,7 @@ export class SplitBranch implements BranchOp {
     // }
 }
 
-export class CopyBranch implements BranchOp {
+export class Copy implements BranchOp {
     private readonly _id: string;
     protected _inShape: number[];
     protected _outShapes: number[][];
@@ -777,28 +793,14 @@ export class CopyBranch implements BranchOp {
     // Implement setter
     set prev(node: Tensor | Op | null) { this._prev = node; }
 
-    // Implement methods
-    to_torch(): string {
-        return "copy";
-    }
-
     to_torch_functional(input: string): string[] {
         const result: string[] = [];
         for (let i = 0; i < this._params.copies; i++) {
-            result.push(`out${i} = ${input}.clone()`);
+            // Simply assign the same tensor to each output
+            result.push(`out${i} = ${input}`);
         }
         return result;
     }
-
-    // addNext(tensor: Tensor): void {
-    //     if (this._nexts.length >= this._params.copies) {
-    //         throw new Error("Cannot add more outputs than specified copies");
-    //     }
-    //     if (!this.shapeMatch(this._inShape, tensor.inShape)) {
-    //         throw new Error(`Shape mismatch: Cannot connect output shape [${this._inShape}] to input shape [${tensor.inShape}]`);
-    //     }
-    //     this._nexts.push(tensor);
-    // }
 }
 
 
