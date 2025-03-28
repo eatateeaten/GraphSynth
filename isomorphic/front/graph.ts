@@ -57,6 +57,19 @@ export abstract class GraphNode {
         return true;
     }
 
+    // Static utility method for index validation
+    static validateIndex(index: number | undefined, arrayLength: number, context: string): number {
+        if (index === undefined) {
+            throw new Error(`${context}: index must be specified`);
+        }
+        
+        if (index < 0 || index >= arrayLength) {
+            throw new Error(`${context}: Invalid index ${index}. Must be between 0 and ${arrayLength - 1}`);
+        }
+        
+        return index;
+    }
+
     // Abstract methods that must be implemented by subclasses
     abstract to_torch_functional(input: string | string[]): string | string[];
     
@@ -262,7 +275,7 @@ export class Op extends GraphNode {
                        this._prev instanceof MergeOp) {
                 this._prev.next = null;
             }
-            this._prev = null;
+            this._prev = null; 
         }
     }
 
@@ -276,7 +289,7 @@ export class Op extends GraphNode {
                        this._next instanceof BranchOp) {
                 this._next.prev = null;
             }
-            this._next = null;
+            this._next = null; 
         }
     }
 }
@@ -284,7 +297,7 @@ export class Op extends GraphNode {
 export abstract class MergeOp extends GraphNode {
     protected _inShapes: number[][];
     protected _outShape: number[];
-    public _prevs: GraphNode[] = [];
+    public _prevs: GraphNode[] = []; //Maybe a bad practice will change it later 
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
     protected readonly _params: Record<string, any>;
@@ -300,7 +313,7 @@ export abstract class MergeOp extends GraphNode {
         this._inShapes = inShapes;
         this._opType = opType;
         this._params = params;
-        this._outShape = this.computeOutShape();
+        this._outShape = this.computeOutShape(); //deal with this 
     }
 
     protected abstract computeOutShape(): number[];
@@ -317,18 +330,12 @@ export abstract class MergeOp extends GraphNode {
     get params(): Record<string, any> { return { ...this._params }; }
 
     connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
-        // Ensure indexSelf is provided
-        if (indexSelf === undefined) {
-            throw new Error("indexSelf must be specified for MergeOp.connectSource");
-        }
-        
-        // Ensure indexSelf is valid
-        if (indexSelf < 0 || indexSelf >= this._inShapes.length) {
-            throw new Error(`Invalid source index: ${indexSelf}. Must be between 0 and ${this._inShapes.length - 1}`);
-        }
+        // Validate index using the static method
+        const validatedIndex = GraphNode.validateIndex(indexSelf, this._inShapes.length, "MergeOp.connectSource");
         
         // Get the output shape from the previous node
         let prevOutShape: number[];
+        
         if (prev instanceof Tensor || prev instanceof Op) {
             prevOutShape = prev.outShape as number[];
         } else if (prev instanceof BranchOp) {
@@ -350,12 +357,12 @@ export abstract class MergeOp extends GraphNode {
         }
         
         // Check shape compatibility
-        if (!GraphNode.shapeMatch(this._inShapes[indexSelf], prevOutShape)) {
-            throw new Error(`Shape mismatch at index ${indexSelf}: Cannot connect MergeOp with input shape [${this._inShapes[indexSelf]}] to previous node with output shape [${prevOutShape}]`);
+        if (!GraphNode.shapeMatch(this._inShapes[validatedIndex], prevOutShape)) {
+            throw new Error(`Shape mismatch at index ${validatedIndex}: Cannot connect MergeOp with input shape [${this._inShapes[validatedIndex]}] to previous node with output shape [${prevOutShape}]`);
         }
         
         // Store the connection
-        this._prevs[indexSelf] = prev;
+        this._prevs[validatedIndex] = prev;
         
         // Create the reciprocal connection
         if (prev instanceof BranchOp && indexPrev !== undefined) {
@@ -704,15 +711,8 @@ export abstract class BranchOp extends GraphNode {
     }
 
     connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        // Ensure indexSelf is provided
-        if (indexSelf === undefined) {
-            throw new Error("indexSelf must be specified for BranchOp.connectSink");
-        }
-        
-        // Ensure indexSelf is valid
-        if (indexSelf < 0 || indexSelf >= this._outShapes.length) {
-            throw new Error(`Invalid sink index: ${indexSelf}. Must be between 0 and ${this._outShapes.length - 1}`);
-        }
+        // Validate index using the static method
+        const validatedIndex = GraphNode.validateIndex(indexSelf, this._outShapes.length, "BranchOp.connectSink");
         
         // Check shape compatibility
         let nextInShape: number[];
@@ -734,12 +734,12 @@ export abstract class BranchOp extends GraphNode {
         }
         
         // Check if our output shape matches the next node's input shape
-        if (!GraphNode.shapeMatch(this._outShapes[indexSelf], nextInShape)) {
-            throw new Error(`Shape mismatch at index ${indexSelf}: Cannot connect BranchOp with output shape [${this._outShapes[indexSelf]}] to next node with input shape [${nextInShape}]`);
+        if (!GraphNode.shapeMatch(this._outShapes[validatedIndex], nextInShape)) {
+            throw new Error(`Shape mismatch at index ${validatedIndex}: Cannot connect BranchOp with output shape [${this._outShapes[validatedIndex]}] to next node with input shape [${nextInShape}]`);
         }
         
         // Store the connection
-        this._nexts[indexSelf] = next;
+        this._nexts[validatedIndex] = next;
         
         // Create the reciprocal connection
         if (next instanceof MergeOp && indexNext !== undefined) {
