@@ -33,6 +33,9 @@ export abstract class BranchOp extends GraphNode {
     get outShape(): number[][] { return this._outShapes; }
     get prev(): GraphNode | null { return this._prev; }
     set prev(node: GraphNode | null) { this._prev = node; }
+    get next(): GraphNode | null { return null; }
+    set next(node: GraphNode | null) { /* Do nothing */ }
+    get nexts(): GraphNode[] { return this._nexts; }
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
 
@@ -315,6 +318,11 @@ export class Split extends BranchOp {
         if (node !== null) {
             this._nexts.push(node);
         }
+    }
+
+    // For test compatibility
+    get nexts(): GraphNode[] {
+        return this._nexts;
     }
 
     connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {

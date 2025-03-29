@@ -31,7 +31,6 @@ describe('GraphNode Connections', () => {
         basicOp = new Op(
             generateId(),
             shape1, // inShape matches tensorA's outShape
-            shape2, // outShape
             "torch",
             "Conv2D",
             {
@@ -166,7 +165,6 @@ describe('GraphNode Connections', () => {
             const nextOp = new Op(
                 generateId(),
                 [1, 128, 112, 112], // inShape matching mergeOp's outShape
-                shape3, // outShape
                 "torch",
                 "Conv2D",
                 {
@@ -255,7 +253,6 @@ describe('GraphNode Connections', () => {
             const nextOp1 = new Op(
                 generateId(),
                 [1, 128, 56, 56], // inShape matching splitOp's outShape
-                [1, 512, 28, 28], // outShape
                 "torch",
                 "Conv2D", 
                 {
@@ -270,7 +267,6 @@ describe('GraphNode Connections', () => {
             const nextOp2 = new Op(
                 generateId(),
                 [1, 128, 56, 56], // inShape matching splitOp's outShape
-                [1, 512, 28, 28], // outShape
                 "torch",
                 "Conv2D",
                 {
@@ -343,7 +339,6 @@ describe('GraphNode Connections', () => {
             const tensor1 = new Tensor(generateId(), shape1, "torch");
             const op1 = new Op(
                 generateId(),
-                shape1,
                 shape1,
                 "torch",
                 "Conv2D",

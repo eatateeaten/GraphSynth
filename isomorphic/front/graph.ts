@@ -157,7 +157,8 @@ export class Graph {
         let code = "";
         
         // Process all source nodes first
-        for (const sourceNode of this._sources) {
+        const sourceNodes = Array.from(this._sources);
+        for (const sourceNode of sourceNodes) {
             code += this._processNode(sourceNode, processedNodes, varCounter);
         }
         
@@ -215,7 +216,8 @@ export class Graph {
         }
         
         // Check if all sinks are reachable
-        for (const sink of this._sinks) {
+        const sinkNodes = Array.from(this._sinks);
+        for (const sink of sinkNodes) {
             if (!visited.has(sink.id)) {
                 throw new Error(`Sink node ${sink.id} is not reachable from any source`);
             }
@@ -232,7 +234,8 @@ export class Graph {
         const visited = new Set<string>();
         
         // Start DFS from each source node
-        for (const source of this._sources) {
+        const sourceNodes = Array.from(this._sources);
+        for (const source of sourceNodes) {
             this._dfsCheckCycle(source, visiting, visited);
         }
     }

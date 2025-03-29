@@ -2,16 +2,18 @@
   "compilerOptions": {
     "target": "es2020",
     "module": "commonjs",
-    "strict": true,
+    "moduleResolution": "node",
     "esModuleInterop": true,
+    "strict": true,
+    "declaration": true,
+    "downlevelIteration": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "./dist",
-    "rootDir": ".",
-    "baseUrl": ".",
+    "baseUrl": "./",
     "paths": {
-      "@/*": ["./*"]
-    }
+      "*": ["node_modules/*"]
+    },
+    "outDir": "./dist",
+    "rootDir": "."
   },
   "include": [
     "isomorphic/**/*.ts"
