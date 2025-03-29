@@ -38,18 +38,15 @@ export abstract class GraphNode {
     //Static utility method for shape matching 
     //Gets called often, can be optimized more 
     static shapeMatch(shape1: number[], shape2: number[]): boolean {
-        // Early return for null/undefined
         if (!shape1 || !shape2) return false;
         
-        // Early return for different lengths
         if (shape1.length !== shape2.length) return false;
         
-        // For small arrays, direct comparison is faster
         if (shape1.length <= 4) {
             return shape1.every((dim, i) => dim === shape2[i]);
         }
-        
-        // For larger arrays, use a more optimized approach
+       
+        // For larger arrays, 
         // Using a for loop instead of every() for better performance
         for (let i = 0; i < shape1.length; i++) {
             if (shape1[i] !== shape2[i]) return false;
@@ -76,8 +73,8 @@ export abstract class GraphNode {
     // Connection methods with optional index parameters
     abstract connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void; 
     abstract connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void;
-    abstract disconnectSource(): void;
-    abstract disconnectSink(): void; 
+    abstract disconnectSource(indexSelf?: number): void;
+    abstract disconnectSink(indexSelf?: number): void;
 
     // Add abstract shape getters
     abstract get inShape(): number[] | number[][];
@@ -154,12 +151,16 @@ export class Tensor extends GraphNode {
         tensor._next = this;
     }
 
-    disconnectSource(): void {
+    disconnectSource(indexSelf?: number): void {
         if (this._prev) {
             if (this._prev instanceof Tensor) {
                 this._prev.next = null;
             } else if (this._prev instanceof BranchOp) {
-                this._prev.disconnectSink(); //TODO implementation in BranchOp should take care of finding the index of this connection 
+                // Find which output of the BranchOp we're connected to
+                const index = this._prev._nexts.indexOf(this);
+                if (index >= 0) {
+                    this._prev._nexts[index] = null as unknown as GraphNode;
+                }
             } else if (this._prev instanceof Op || 
                        this._prev instanceof MergeOp) {
                 this._prev.next = null;
@@ -168,12 +169,16 @@ export class Tensor extends GraphNode {
         }
     }
 
-    disconnectSink(): void {
+    disconnectSink(indexSelf?: number): void {
         if (this._next) {
             if (this._next instanceof Tensor) {
                 this._next.prev = null;
             } else if (this._next instanceof MergeOp) {
-                this._next.disconnectSource();
+                // Find which input of the MergeOp we're connected to
+                const index = this._next._prevs.indexOf(this);
+                if (index >= 0) {
+                    this._next._prevs[index] = null as unknown as GraphNode;
+                }
             } else if (this._next instanceof Op || 
                        this._next instanceof BranchOp) {
                 this._next.prev = null;
@@ -265,12 +270,17 @@ export class Op extends GraphNode {
         }
     }
 
-    disconnectSource(): void {
+    disconnectSource(indexSelf?: number): void {
+        // Op has only one input, so indexSelf is ignored
         if (this._prev) {
             if (this._prev instanceof Tensor) {
                 this._prev.next = null;
             } else if (this._prev instanceof BranchOp) {
-                this._prev.disconnectSink();
+                // Find which output of the BranchOp we're connected to
+                const index = this._prev._nexts.indexOf(this);
+                if (index >= 0) {
+                    this._prev._nexts[index] = null as unknown as GraphNode;
+                }
             } else if (this._prev instanceof Op || 
                        this._prev instanceof MergeOp) {
                 this._prev.next = null;
@@ -279,12 +289,17 @@ export class Op extends GraphNode {
         }
     }
 
-    disconnectSink(): void {
+    disconnectSink(indexSelf?: number): void {
+        // Op has only one output, so indexSelf is ignored
         if (this._next) {
             if (this._next instanceof Tensor) {
                 this._next.prev = null;
             } else if (this._next instanceof MergeOp) {
-                this._next.disconnectSource();
+                // Find which input of the MergeOp we're connected to
+                const index = this._next._prevs.indexOf(this);
+                if (index >= 0) {
+                    this._next._prevs[index] = null as unknown as GraphNode;
+                }
             } else if (this._next instanceof Op || 
                        this._next instanceof BranchOp) {
                 this._next.prev = null;
@@ -347,7 +362,7 @@ export abstract class MergeOp extends GraphNode {
                 indexPrev = validatedPrevIndex;
             } else {
                 // Default to first output if not specified
-                prevOutShape = prev.outShape[0];
+                prevOutShape = prev.outShape[0]; //THIS LOOKS SLIGHTLY WEIRD
                 indexPrev = 0;
             }
         } else if (prev instanceof MergeOp) {
@@ -415,27 +430,40 @@ export abstract class MergeOp extends GraphNode {
         }
     }
 
-    disconnectSource(): void {
-        // Remove all previous connections
-        for (let i = 0; i < this._prevs.length; i++) {
-            const prev = this._prevs[i];
-            if (prev) {
-                if (prev instanceof BranchOp) {
-                    // Find our connection in BranchOp's nexts array and remove it
-                    const index = prev._nexts.indexOf(this);
-                    if (index >= 0) {
-                        prev._nexts[index] = null as unknown as GraphNode;
-                    }
-                } else {
-                    prev.next = null;
+    disconnectSource(indexSelf?: number): void {
+        if (indexSelf !== undefined) {
+            // Disconnect a specific input
+            const validatedIndex = GraphNode.validateIndex(indexSelf, this._inShapes.length, "MergeOp.disconnectSource");
+            this._disconnectSourceAtIndex(validatedIndex);
+        } else {
+            // Disconnect all inputs
+            for (let i = 0; i < this._prevs.length; i++) {
+                if (this._prevs[i]) {
+                    this._disconnectSourceAtIndex(i);
                 }
-                // Clear the reference with a cast to avoid type error
-                this._prevs[i] = null as unknown as GraphNode;
             }
         }
     }
 
-    disconnectSink(): void {
+    private _disconnectSourceAtIndex(index: number): void {
+        const prev = this._prevs[index];
+        if (prev) {
+            if (prev instanceof BranchOp) {
+                // Find our connection in BranchOp's nexts array and remove it
+                const branchIndex = prev._nexts.indexOf(this);
+                if (branchIndex >= 0) {
+                    prev._nexts[branchIndex] = null as unknown as GraphNode;
+                }
+            } else {
+                prev.next = null;
+            }
+            // Clear the reference with a cast to avoid type error
+            this._prevs[index] = null as unknown as GraphNode;
+        }
+    }
+
+    disconnectSink(indexSelf?: number): void {
+        // MergeOp has only one output, so indexSelf is ignored
         if (this._next) {
             if (this._next instanceof MergeOp) {
                 // Find our connection in MergeOp's prevs array and remove it
@@ -701,7 +729,7 @@ export abstract class BranchOp extends GraphNode {
         if (prev instanceof BranchOp) {
             // For BranchOp, use the setConnectionAt method to set a specific index
             if (indexPrev !== undefined && indexPrev >= 0) {
-                prev.setConnectionAt(indexPrev, this);
+                prev._nexts[indexPrev] = this;
             } else {
                 prev.next = this;
             }
@@ -750,7 +778,8 @@ export abstract class BranchOp extends GraphNode {
         }
     }
 
-    disconnectSource(): void {
+    disconnectSource(indexSelf?: number): void {
+        // BranchOp has only one input, so indexSelf is ignored
         if (this._prev) {
             if (this._prev instanceof BranchOp) {
                 // Find our connection in BranchOp's nexts array and remove it
@@ -765,23 +794,35 @@ export abstract class BranchOp extends GraphNode {
         }
     }
 
-    disconnectSink(): void {
-        // Remove all next connections
-        for (let i = 0; i < this._nexts.length; i++) {
-            const next = this._nexts[i];
-            if (next) {
-                if (next instanceof MergeOp) {
-                    // Find our connection in MergeOp's prevs array and remove it
-                    const index = next._prevs.indexOf(this);
-                    if (index >= 0) {
-                        next._prevs[index] = null as unknown as GraphNode;
-                    }
-                } else {
-                    next.prev = null;
+    disconnectSink(indexSelf?: number): void {
+        if (indexSelf !== undefined) {
+            // Disconnect a specific output
+            const validatedIndex = GraphNode.validateIndex(indexSelf, this._outShapes.length, "BranchOp.disconnectSink");
+            this._disconnectSinkAtIndex(validatedIndex);
+        } else {
+            // Disconnect all outputs
+            for (let i = 0; i < this._nexts.length; i++) {
+                if (this._nexts[i]) {
+                    this._disconnectSinkAtIndex(i);
                 }
-                // Clear the reference with a cast to avoid type error
-                this._nexts[i] = null as unknown as GraphNode;
             }
+        }
+    }
+
+    private _disconnectSinkAtIndex(index: number): void {
+        const next = this._nexts[index];
+        if (next) {
+            if (next instanceof MergeOp) {
+                // Find our connection in MergeOp's prevs array and remove it
+                const mergeIndex = next._prevs.indexOf(this);
+                if (mergeIndex >= 0) {
+                    next._prevs[mergeIndex] = null as unknown as GraphNode;
+                }
+            } else {
+                next.prev = null;
+            }
+            // Clear the reference with a cast to avoid type error
+            this._nexts[index] = null as unknown as GraphNode;
         }
     }
 
@@ -797,18 +838,6 @@ export abstract class BranchOp extends GraphNode {
         if (node !== null) {
             this._nexts.push(node);
         }
-    }
-
-    // Add a method to set a specific connection at index for MergeOp to use
-    setConnectionAt(index: number, node: GraphNode): void {
-        const validatedIndex = GraphNode.validateIndex(index, this._outShapes.length, "BranchOp.setConnectionAt");
-        this._nexts[validatedIndex] = node;
-    }
-
-    // Add a method to directly set a connection at a specific index
-    setNextAt(index: number, node: GraphNode): void {
-        const validatedIndex = GraphNode.validateIndex(index, this._outShapes.length, "BranchOp.setNextAt");
-        this._nexts[validatedIndex] = node;
     }
 }
 
@@ -861,6 +890,469 @@ export class Copy extends BranchOp {
     set next(node: GraphNode | null) {
         super.next = node;
     }
+}
+
+
+
+export class Graph {
+  // Efficient storage for all nodes by their ID
+  private _nodes: Map<string, GraphNode> = new Map();
+  
+  // Keep track of source and sink nodes
+  private _sources: Map<string, GraphNode> = new Map();
+  private _sinks: Map<string, GraphNode> = new Map();
+
+  constructor() {}
+
+  /**
+   * Add a node to the graph
+   * @param node The node to add
+   * @returns The node that was added
+   */
+  addNode(node: GraphNode): GraphNode {
+    if (this._nodes.has(node.id)) {
+      throw new Error(`Node with ID ${node.id} already exists in the graph`);
+    }
+    this._nodes.set(node.id, node);
+    // Initially, all nodes are both sources and sinks until connected
+    this._sources.set(node.id, node);
+    this._sinks.set(node.id, node);
+    return node;
+  }
+
+  /**
+   * Get a node by its ID
+   * @param nodeId The ID of the node to get
+   * @returns The node with the given ID
+   */
+  getNode(nodeId: string): GraphNode {
+    const node = this._nodes.get(nodeId);
+    if (!node) {
+      throw new Error(`Node with ID ${nodeId} no longer exists in the graph`);
+    }
+    return node;
+  }
+
+  /**
+   * Connect a node to its predecessor
+   * @param nodeId The ID of the node to connect
+   * @param prevId The ID of the predecessor node
+   * @param indexSelf Optional index for multi-input nodes
+   * @param indexPrev Optional index for multi-output nodes
+   */
+  connectNodeToPrev(nodeId: string, prevId: string, indexSelf?: number, indexPrev?: number): void {
+    const node = this.getNode(nodeId);
+    const prev = this.getNode(prevId);
+
+    node.connectSource(prev, indexSelf, indexPrev);
+    
+    // Update sources and sinks
+    this._sources.delete(nodeId); // No longer a source
+    this._sinks.delete(prevId);   // No longer a sink
+    
+    // Update sink status for the connected nodes
+    this._refreshNodeSinkSourceStatus(node);
+    this._refreshNodeSinkSourceStatus(prev);
+  }
+
+  /**
+   * Connect a node to its successor
+   * @param nodeId The ID of the node to connect
+   * @param nextId The ID of the successor node
+   * @param indexSelf Optional index for multi-output nodes
+   * @param indexNext Optional index for multi-input nodes
+   */
+  connectNodeToNext(nodeId: string, nextId: string, indexSelf?: number, indexNext?: number): void {
+    const node = this.getNode(nodeId);
+    const next = this.getNode(nextId);
+
+    node.connectSink(next, indexSelf, indexNext);
+    
+    // Update sources and sinks
+    this._sources.delete(nextId); // No longer a source
+    this._sinks.delete(nodeId);   // No longer a sink
+    
+    // Update source/sink status for the connected nodes
+    this._refreshNodeSinkSourceStatus(node);
+    this._refreshNodeSinkSourceStatus(next);
+  }
+
+  /**
+   * Disconnect a node from its predecessor(s)
+   * @param nodeId The ID of the node to disconnect
+   * @param indexSelf Optional index for multi-input nodes
+   */
+  disconnectNodeFromPrev(nodeId: string, indexSelf?: number): void { 
+    const node = this.getNode(nodeId);
+    
+    // Store prev reference before disconnecting
+    const prev = node.prev;
+    
+    node.disconnectSource(indexSelf);
+    
+    // Update node status
+    this._refreshNodeSinkSourceStatus(node);
+    
+    // Update prev node status if it exists
+    if (prev) {
+      this._refreshNodeSinkSourceStatus(prev);
+    }
+  }
+
+  /**
+   * Disconnect a node from its successor(s)
+   * @param nodeId The ID of the node to disconnect
+   * @param indexSelf Optional index for multi-output nodes
+   */
+  disconnectNodeFromNext(nodeId: string, indexSelf?: number): void {
+    const node = this.getNode(nodeId);
+    
+    // Store next reference(s) before disconnecting
+    let nexts: GraphNode[] = [];
+    
+    if (node instanceof BranchOp) {
+      if (indexSelf !== undefined) {
+        // If we're disconnecting a specific output, only track that one
+        const next = node.nexts[indexSelf];
+        if (next) nexts = [next];
+      } else {
+        // Otherwise, track all outputs
+        nexts = node.nexts.filter(Boolean);
+      }
+    } else if (node.next) {
+      nexts = [node.next];
+    }
+    
+    node.disconnectSink(indexSelf);
+    
+    // Update node status
+    this._refreshNodeSinkSourceStatus(node);
+    
+    // Update next node statuses
+    nexts.forEach(next => {
+      if (next) {
+        this._refreshNodeSinkSourceStatus(next);
+      }
+    });
+  }
+
+  /**
+   * Delete a node from the graph
+   * @param nodeId The ID of the node to delete
+   */
+  deleteNode(nodeId: string): void {
+    const node = this.getNode(nodeId);
+    
+    // Disconnect from all connections first
+    node.disconnectSource();
+    node.disconnectSink();
+    
+    // Remove from all collections
+    this._nodes.delete(nodeId);
+    this._sources.delete(nodeId);
+    this._sinks.delete(nodeId);
+  }
+
+  /**
+   * Swap a node with a new node
+   * @param oldNodeId The ID of the node to replace
+   * @param newNode The new node to replace it with
+   * @returns The new node
+   */
+  swapNode(oldNodeId: string, newNode: GraphNode): GraphNode {
+    const oldNode = this.getNode(oldNodeId);
+    
+    // Store connections
+    const prevNode = oldNode.prev;
+    let nextNodes: GraphNode[] = [];
+    
+    if (oldNode instanceof BranchOp) {
+      nextNodes = oldNode.nexts.filter(Boolean);
+    } else if (oldNode.next) {
+      nextNodes = [oldNode.next];
+    }
+    
+    // Remove old node
+    this.deleteNode(oldNodeId);
+    
+    // Add new node
+    this.addNode(newNode);
+    
+    // Recreate connections
+    if (prevNode) {
+      newNode.connectSource(prevNode);
+    }
+    
+    for (const next of nextNodes) {
+      if (next) {
+        newNode.connectSink(next);
+      }
+    }
+    
+    return newNode;
+  }
+
+  /**
+   * Generate PyTorch code for the current graph
+   * @returns PyTorch code as a string
+   */
+  to_torch(): string {
+    // Validate the graph first
+    if (!this.validate_torch()) {
+      throw new Error("Cannot generate PyTorch code for invalid graph");
+    }
+    
+    const code: string[] = [];
+    code.push("import torch");
+    code.push("import torch.nn as nn");
+    code.push("import torch.nn.functional as F");
+    code.push("");
+    
+    // Function header
+    code.push("def model(input_tensors):");
+    
+    // Track variables for each node
+    const varNames = new Map<string, string>();
+    
+    // Process sources first
+    const sourceIds = Array.from(this._sources.keys());
+    for (let i = 0; i < sourceIds.length; i++) {
+      const source = this._sources.get(sourceIds[i])!;
+      const varName = `x${i}`;
+      varNames.set(source.id, varName);
+      
+      code.push(`    # Source: ${source.id}`);
+      code.push(`    ${varName} = input_tensors[${i}]`);
+    }
+    
+    code.push("");
+    
+    // For visited tracking
+    const visited = new Set<string>();
+    const outVars: string[] = [];
+    
+    // Process nodes in topological order
+    const processNodeInOrder = (nodeId: string): string => {
+      if (visited.has(nodeId)) {
+        return varNames.get(nodeId)!;
+      }
+      
+      const node = this._nodes.get(nodeId)!;
+      visited.add(nodeId);
+      
+      // For single-input nodes
+      if (!(node instanceof MergeOp)) {
+        let inputVar = "";
+        
+        if (node.prev) {
+          inputVar = processNodeInOrder(node.prev.id);
+        } else {
+          // Source already processed
+          inputVar = varNames.get(nodeId)!;
+          return inputVar;
+        }
+        
+        const outputVar = `x_${nodeId.substring(0, 4)}`;
+        varNames.set(nodeId, outputVar);
+        
+        code.push(`    # Node: ${node.id} (${node.constructor.name})`);
+        
+        if (node instanceof Tensor) {
+          code.push(`    ${outputVar} = ${inputVar}  # Tensor pass-through`);
+        } else if (node instanceof Op) {
+          const opCode = node.to_torch_functional(inputVar);
+          code.push(`    ${opCode.replace(inputVar + " = ", outputVar + " = ")}`);
+        } else if (node instanceof BranchOp) {
+          // For BranchOp, need to create multiple outputs
+          if (node instanceof Split) {
+            const outputNames = node.outShape.map((_, idx) => `${outputVar}_${idx}`);
+            code.push(`    ${outputNames.join(", ")} = torch.split(${inputVar}, [${node.params.sections.join(", ")}], dim=${node.params.dim})`);
+            
+            // Store all output vars for potential use
+            outputNames.forEach((name, idx) => {
+              varNames.set(`${nodeId}_out${idx}`, name);
+            });
+            
+            // Use the first output as the default if needed
+            varNames.set(nodeId, outputNames[0]);
+          }
+        }
+        
+        return outputVar;
+      } else {
+        // For MergeOp (multi-input)
+        const inputs: string[] = [];
+        
+        // Since _prevs is public in MergeOp, we can use it directly
+        for (let i = 0; i < (node as MergeOp)._prevs.length; i++) {
+          const prev = (node as MergeOp)._prevs[i];
+          if (prev) {
+            inputs.push(processNodeInOrder(prev.id));
+          }
+        }
+        
+        const outputVar = `x_${nodeId.substring(0, 4)}`;
+        varNames.set(nodeId, outputVar);
+        
+        code.push(`    # Node: ${node.id} (${node.constructor.name})`);
+        
+        if (node instanceof Concat) {
+          code.push(`    ${outputVar} = torch.cat([${inputs.join(", ")}], dim=${node.params.dim})`);
+        } else {
+          // Other merge ops...
+          const mergeOpCode = node.to_torch_functional(inputs);
+          code.push(`    ${mergeOpCode.replace(inputs[0] + " = ", outputVar + " = ")}`);
+        }
+        
+        return outputVar;
+      }
+    };
+    
+    // Process sink nodes to get outputs
+    for (const sinkId of this._sinks.keys()) {
+      const outVar = processNodeInOrder(sinkId);
+      outVars.push(outVar);
+    }
+    
+    // Return outputs
+    code.push("");
+    code.push("    # Return outputs");
+    
+    if (outVars.length === 1) {
+      code.push(`    return ${outVars[0]}`);
+    } else {
+      code.push(`    return [${outVars.join(", ")}]`);
+    }
+    
+    return code.join("\n");
+  }
+
+  /**
+   * Validate the graph for PyTorch code generation
+   * - No loops
+   * - All sinks reachable from sources
+   * @returns true if valid, false if invalid
+   */
+  validate_torch(): boolean {
+    // If graph is empty, it's valid by default
+    if (this._nodes.size === 0) {
+      return true;
+    }
+    
+    // If no sources or no sinks, it's invalid
+    if (this._sources.size === 0 || this._sinks.size === 0) {
+      return false;
+    }
+    
+    // Check for loops and reachability
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    
+    // DFS with cycle detection
+    const dfs = (nodeId: string): boolean => {
+      if (visited.has(nodeId)) {
+        return true; // Already fully visited, no cycles
+      }
+      
+      if (visiting.has(nodeId)) {
+        return false; // Cycle detected
+      }
+      
+      visiting.add(nodeId);
+      
+      const node = this._nodes.get(nodeId)!;
+      
+      // Check next nodes
+      if (node instanceof BranchOp) {
+        for (const next of node.nexts) {
+          if (next && !dfs(next.id)) {
+            return false; // Cycle detected in branch
+          }
+        }
+      } else if (node.next) {
+        if (!dfs(node.next.id)) {
+          return false; // Cycle detected
+        }
+      }
+      
+      visiting.delete(nodeId);
+      visited.add(nodeId);
+      return true;
+    };
+    
+    // Run DFS from all sources
+    for (const sourceId of this._sources.keys()) {
+      if (!dfs(sourceId)) {
+        return false; // Cycle detected
+      }
+    }
+    
+    // Check if all sinks are reachable from sources
+    for (const sinkId of this._sinks.keys()) {
+      if (!visited.has(sinkId)) {
+        return false; // Sink not reachable
+      }
+    }
+    
+    return true; // No cycles and all sinks reachable
+  }
+
+  /**
+   * Get all nodes in the graph
+   * @returns Array of all nodes
+   */
+  getNodes(): GraphNode[] {
+    return Array.from(this._nodes.values());
+  }
+
+  /**
+   * Get all source nodes in the graph
+   * @returns Array of source nodes
+   */
+  getSources(): GraphNode[] {
+    return Array.from(this._sources.values());
+  }
+
+  /**
+   * Get all sink nodes in the graph
+   * @returns Array of sink nodes
+   */
+  getSinks(): GraphNode[] {
+    return Array.from(this._sinks.values());
+  }
+
+  /**
+   * Update the source/sink status of a node
+   * @param node The node to update
+   */
+  private _refreshNodeSinkSourceStatus(node: GraphNode): void {
+    const id = node.id;
+    
+    // Check if node is a source (no inputs)
+    if (node.prev === null) {
+      this._sources.set(id, node);
+    } else {
+      this._sources.delete(id);
+    }
+    
+    // Check if node is a sink (no outputs)
+    if (node instanceof BranchOp) {
+      // BranchOp is a sink if it has no nexts or all nexts are null
+      const hasOutputs = node.nexts.some(Boolean);
+      if (!hasOutputs) {
+        this._sinks.set(id, node);
+      } else {
+        this._sinks.delete(id);
+      }
+    } else {
+      // Other nodes are sinks if next is null
+      if (node.next === null) {
+        this._sinks.set(id, node);
+      } else {
+        this._sinks.delete(id);
+      }
+    }
+  }
 }
 
 

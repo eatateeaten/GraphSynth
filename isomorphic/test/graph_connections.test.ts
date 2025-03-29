@@ -193,6 +193,34 @@ describe('GraphNode Connections', () => {
             expect(nextOp.prev).toBeNull();
             expect(mergeOp.next).toBeNull();
         });
+
+        it('should disconnect specific inputs from MergeOp with index', () => {
+            const shapes = [[3, 3], [3, 3], [3, 3]];
+            const t1 = new Tensor(generateId(), shapes[0], 'tensor1');
+            const t2 = new Tensor(generateId(), shapes[1], 'tensor2');
+            const t3 = new Tensor(generateId(), shapes[2], 'tensor3');
+            const concat = new Concat(generateId(), shapes, 'torch', { dim: 1 });
+            const output = new Tensor(generateId(), [3, 9], 'output');
+
+            // Connect all inputs
+            t1.connectSink(concat, 0);
+            t2.connectSink(concat, 1);
+            t3.connectSink(concat, 2);
+            concat.connectSink(output);
+
+            // Disconnect the second input specifically
+            concat.disconnectSource(1);
+
+            // Check connections
+            expect(t1.next).toBe(concat);
+            expect(t2.next).toBeNull();
+            expect(t3.next).toBe(concat);
+            expect(concat._prevs[0]).toBe(t1);
+            expect(concat._prevs[1]).toBeNull();
+            expect(concat._prevs[2]).toBe(t3);
+            expect(concat.next).toBe(output);
+            expect(output.prev).toBe(concat);
+        });
     });
 
     describe('BranchOp connections', () => {
@@ -273,6 +301,35 @@ describe('GraphNode Connections', () => {
             expect(splitOp.next).toBeNull();
             expect(nextOp1.prev).toBeNull();
             expect(nextOp2.prev).toBeNull();
+        });
+
+        it('should disconnect specific outputs from BranchOp with index', () => {
+            const inputShape = [6, 6];
+            const outputShapes = [[6, 2], [6, 2], [6, 2]];
+            const input = new Tensor(generateId(), inputShape, 'input');
+            const split = new Split(generateId(), inputShape, 'torch', { sections: [2, 2, 2], dim: 1 });
+            const t1 = new Tensor(generateId(), outputShapes[0], 'output1');
+            const t2 = new Tensor(generateId(), outputShapes[1], 'output2');
+            const t3 = new Tensor(generateId(), outputShapes[2], 'output3');
+
+            // Connect all outputs
+            input.connectSink(split);
+            split.connectSink(t1, 0);
+            split.connectSink(t2, 1);
+            split.connectSink(t3, 2);
+
+            // Disconnect the second output specifically
+            split.disconnectSink(1);
+
+            // Check connections
+            expect(input.next).toBe(split);
+            expect(split.prev).toBe(input);
+            expect(split._nexts[0]).toBe(t1);
+            expect(split._nexts[1]).toBeNull();
+            expect(split._nexts[2]).toBe(t3);
+            expect(t1.prev).toBe(split);
+            expect(t2.prev).toBeNull();
+            expect(t3.prev).toBe(split);
         });
     });
 
