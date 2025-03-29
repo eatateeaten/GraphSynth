@@ -1339,10 +1339,21 @@ export class Graph {
     const id = node.id;
     
     // Check if node is a source (no inputs)
-    if (node.prev === null) {
-      this._sources.set(id, node);
+    if (node instanceof MergeOp) {
+      // MergeOp is a source if all inputs are null
+      const hasInputs = node._prevs.some(Boolean);
+      if (!hasInputs) {
+        this._sources.set(id, node);
+      } else {
+        this._sources.delete(id);
+      }
     } else {
-      this._sources.delete(id);
+      // Other nodes are sources if prev is null
+      if (node.prev === null) {
+        this._sources.set(id, node);
+      } else {
+        this._sources.delete(id);
+      }
     }
     
     // Check if node is a sink (no outputs)
