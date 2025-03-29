@@ -1,4 +1,4 @@
-import { Tensor, Op, GraphNode, Concat, Split } from '../front/graph';
+import { Tensor, Op, GraphNode, Concat, Split } from '../isomorphic/graph';
 import { describe, test, expect, beforeEach } from '@jest/globals';
 
 // Helper function to generate IDs

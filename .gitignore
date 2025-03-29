@@ -20,6 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 .cursorrules
+node_modules/
 
 # Virtual Environment
 venv/
