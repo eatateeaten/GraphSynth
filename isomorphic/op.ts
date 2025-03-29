@@ -35,7 +35,7 @@ export class Op extends GraphNode {
         if (this._target !== "torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
-        return `${inputs[0]} = torch.${this._opType.toLowerCase()}(${inputs[0]})`;
+        return `${inputs[0]} = torch.${this._opType}(${inputs[0]})`;
     }
 
     // Getters and setters
