@@ -432,6 +432,13 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         required_params: ["dim", "unflattened_size"],
         optional_params: [],
         code_generator: (params) => `nn.Unflatten(dim=${params['dim']}, unflattened_size=${params['unflattened_size']})`
+    },
+
+    // Identity operation (simply passes input through unchanged)
+    "Identity": {
+        required_params: [],
+        optional_params: [],
+        code_generator: (_) => `nn.Identity()`
     }
 };
 
@@ -503,6 +510,8 @@ export function getElementwiseOpCode(opType: string, input?: string): string {
             return 'torch.gt';
         case 'ge':
             return 'torch.ge';
+        case 'identity':
+            return input ? input : 'x => x'; // Return input unchanged
         default:
             throw new Error(`Unknown elementwise operation type: ${opType}`);
     }

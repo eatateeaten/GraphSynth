@@ -46,9 +46,7 @@ export abstract class MergeOp extends GraphNode {
         
         let prevOutShape: number[];
         
-        if (prev instanceof Tensor || prev instanceof Op) {
-            prevOutShape = prev.outShape as number[];
-        } else if (prev instanceof BranchOp) {
+        if (prev instanceof BranchOp) {
             if (indexPrev !== undefined) {
                 const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "MergeOp.connectSource (BranchOp output)");
                 prevOutShape = prev.outShape[validatedPrevIndex] as number[];
@@ -56,8 +54,8 @@ export abstract class MergeOp extends GraphNode {
             } else {
                 throw new Error("When connecting from a BranchOp, an output index must be specified");
             }
-        } else if (prev instanceof MergeOp) {
-            prevOutShape = prev.outShape;
+        } else if (prev instanceof Tensor || prev instanceof Op || prev instanceof MergeOp) {
+            prevOutShape = prev.outShape as number[];
         } else {
             throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
         }
@@ -69,7 +67,7 @@ export abstract class MergeOp extends GraphNode {
         this._prevs[validatedIndex] = prev;
         
         if (prev instanceof BranchOp && indexPrev !== undefined) {
-            (prev as BranchOp)._nexts[indexPrev] = this;
+            prev._nexts[indexPrev] = this;
         } else {
             prev.next = this;
         }
@@ -81,16 +79,15 @@ export abstract class MergeOp extends GraphNode {
         }
         
         let nextInShape: number[];
-        if (next instanceof Tensor || next instanceof Op) {
-            nextInShape = next.inShape as number[];
-        } else if (next instanceof MergeOp) {
+        
+        if (next instanceof MergeOp) {
             if (indexNext === undefined) {
                 throw new Error("When connecting to a MergeOp, an input index must be specified");
             }
             const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "MergeOp.connectSink (MergeOp input)");
             nextInShape = next.inShape[validatedNextIndex] as number[];
             indexNext = validatedNextIndex;
-        } else if (next instanceof BranchOp) {
+        } else if (next instanceof Tensor || next instanceof Op || next instanceof BranchOp) {
             nextInShape = next.inShape as number[];
         } else {
             throw new Error(`Cannot connect to node of type ${next.constructor.name}`);
@@ -197,61 +194,6 @@ export class Concat extends MergeOp {
     }
 }
 
-export class ElementwiseOp extends MergeOp {
-    constructor(id: string, inShapes: number[][], target: string, opType: string) {
-        super(id, inShapes, target, opType, {});
-    }
-
-    protected computeOutShape(): number[] {
-        if (this._inShapes.length < 2) {
-            throw new Error("ElementwiseOp requires at least 2 input tensors");
-        }
-
-        let resultShape = [...this._inShapes[0]];
-
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const currentShape = this._inShapes[i];
-            
-            if (currentShape.length !== resultShape.length) {
-                throw new Error(`Input shapes must have the same rank. Shape at index ${i} has rank ${currentShape.length}, expected ${resultShape.length}`);
-            }
-            
-            resultShape = resultShape.map((dim, j) => {
-                const otherDim = currentShape[j];
-                
-                if (dim === otherDim) {
-                    return dim;
-                }
-                if (dim === 1) {
-                    return otherDim;
-                }
-                if (otherDim === 1) {
-                    return dim;
-                }
-                throw new Error(
-                    `Incompatible shapes for broadcasting at dimension ${j}: ` +
-                    `${dim} and ${otherDim}. Dimensions must be equal or one must be 1.`
-                );
-            });
-        }
-
-        return resultShape;
-    }
-
-    to_torch_functional(inputs: string[]): string {
-        if (inputs.length < 2) {
-            throw new Error("ElementwiseOp requires at least 2 inputs");
-        }
-        const opCode = getElementwiseOpCode(this._opType);
-        
-        const result = inputs.reduce((acc, curr) => 
-            acc ? `${opCode}(${acc}, ${curr})` : curr
-        );
-        
-        return `${inputs[0]} = ${result}`;
-    }
-}
-
 export class ReduceOp extends MergeOp {
     constructor(
         id: string,
@@ -311,6 +253,61 @@ export class ReduceOp extends MergeOp {
         }
         
         super.connectSource(prev, indexSelf, indexPrev);
+    }
+}
+
+export class PointwiseReduce extends ReduceOp {
+    constructor(id: string, inShapes: number[][], target: string, opType: string) {
+        super(id, inShapes, target, opType, {});
+    }
+
+    protected computeOutShape(): number[] {
+        if (this._inShapes.length < 2) {
+            throw new Error("PointwiseReduce requires at least 2 input tensors");
+        }
+
+        let resultShape = [...this._inShapes[0]];
+
+        for (let i = 1; i < this._inShapes.length; i++) {
+            const currentShape = this._inShapes[i];
+            
+            if (currentShape.length !== resultShape.length) {
+                throw new Error(`Input shapes must have the same rank. Shape at index ${i} has rank ${currentShape.length}, expected ${resultShape.length}`);
+            }
+            
+            resultShape = resultShape.map((dim, j) => {
+                const otherDim = currentShape[j];
+                
+                if (dim === otherDim) {
+                    return dim;
+                }
+                if (dim === 1) {
+                    return otherDim;
+                }
+                if (otherDim === 1) {
+                    return dim;
+                }
+                throw new Error(
+                    `Incompatible shapes for broadcasting at dimension ${j}: ` +
+                    `${dim} and ${otherDim}. Dimensions must be equal or one must be 1.`
+                );
+            });
+        }
+
+        return resultShape;
+    }
+
+    to_torch_functional(inputs: string[]): string {
+        if (inputs.length < 2) {
+            throw new Error("PointwiseReduce requires at least 2 inputs");
+        }
+        const opCode = getElementwiseOpCode(this._opType);
+        
+        const result = inputs.reduce((acc, curr) => 
+            acc ? `${opCode}(${acc}, ${curr})` : curr
+        );
+        
+        return `${inputs[0]} = ${result}`;
     }
 }
 
