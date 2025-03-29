@@ -146,6 +146,218 @@ export class Graph {
         return new Set(this._sinks);
     }
 
+    to_torch(): string {
+        // Validate graph before generating code
+        this.validate_torch();
+        
+        // Dictionary to track processed nodes and their output variable names
+        const processedNodes = new Map<string, string>();
+        const varCounter = { value: 0 };
+        
+        let code = "";
+        
+        // Process all source nodes first
+        for (const sourceNode of this._sources) {
+            code += this._processNode(sourceNode, processedNodes, varCounter);
+        }
+        
+        return code;
+    }
+    
+    validate_torch(): void {
+        if (this._sources.size === 0) {
+            throw new Error("Graph has no source nodes");
+        }
+        
+        if (this._sinks.size === 0) {
+            throw new Error("Graph has no sink nodes");
+        }
+        
+        // Check that all sinks are reachable from sources
+        const visited = new Set<string>();
+        const queue: GraphNode[] = Array.from(this._sources);
+        
+        // BFS traversal from source nodes
+        while (queue.length > 0) {
+            const node = queue.shift()!;
+            
+            if (visited.has(node.id)) {
+                continue;
+            }
+            
+            visited.add(node.id);
+            
+            // Add next nodes to the queue
+            if (node instanceof Tensor || node instanceof Op) {
+                if (node.next) {
+                    queue.push(node.next);
+                }
+            } else if (node instanceof BranchOp) {
+                for (const nextNode of (node as BranchOp)._nexts) {
+                    if (nextNode) {
+                        queue.push(nextNode);
+                    }
+                }
+            } else if (node instanceof MergeOp) {
+                if (node.next) {
+                    queue.push(node.next);
+                }
+            }
+        }
+        
+        // Check if any nodes are unreachable
+        if (visited.size !== this._nodes.size) {
+            const unreachable = Array.from(this._nodes.keys())
+                .filter(id => !visited.has(id))
+                .map(id => this._nodes.get(id)!.id);
+            
+            throw new Error(`Graph contains unreachable nodes: ${unreachable.join(', ')}`);
+        }
+        
+        // Check if all sinks are reachable
+        for (const sink of this._sinks) {
+            if (!visited.has(sink.id)) {
+                throw new Error(`Sink node ${sink.id} is not reachable from any source`);
+            }
+        }
+        
+        // Check for cycles
+        this._checkForCycles();
+    }
+    
+    private _checkForCycles(): void {
+        // Track nodes being processed in the current DFS path
+        const visiting = new Set<string>();
+        // Track nodes already fully processed
+        const visited = new Set<string>();
+        
+        // Start DFS from each source node
+        for (const source of this._sources) {
+            this._dfsCheckCycle(source, visiting, visited);
+        }
+    }
+    
+    private _dfsCheckCycle(node: GraphNode, visiting: Set<string>, visited: Set<string>): void {
+        // If already fully processed, no need to check again
+        if (visited.has(node.id)) {
+            return;
+        }
+        
+        // If we're visiting this node in the current path, we found a cycle
+        if (visiting.has(node.id)) {
+            throw new Error(`Graph contains a cycle involving node ${node.id}`);
+        }
+        
+        // Mark node as being visited in current path
+        visiting.add(node.id);
+        
+        // Visit all next nodes
+        if (node instanceof Tensor || node instanceof Op) {
+            if (node.next) {
+                this._dfsCheckCycle(node.next, visiting, visited);
+            }
+        } else if (node instanceof BranchOp) {
+            for (const nextNode of (node as BranchOp)._nexts) {
+                if (nextNode) {
+                    this._dfsCheckCycle(nextNode, visiting, visited);
+                }
+            }
+        } else if (node instanceof MergeOp) {
+            if (node.next) {
+                this._dfsCheckCycle(node.next, visiting, visited);
+            }
+        }
+        
+        // Mark node as fully processed
+        visiting.delete(node.id);
+        visited.add(node.id);
+    }
+    
+    private _processNode(node: GraphNode, processedNodes: Map<string, string>, varCounter: { value: number }): string {
+        // If already processed, return empty string
+        if (processedNodes.has(node.id)) {
+            return "";
+        }
+        
+        let code = "";
+        let inputVars: string[] = [];
+        
+        // Process input nodes first and collect their output variable names
+        if (node instanceof Tensor) {
+            // For tensor, no dependencies to process
+            if (node.prev) {
+                const prevVar = this._ensureNodeProcessed(node.prev, processedNodes, varCounter);
+                inputVars.push(prevVar);
+            } else {
+                // Source tensor gets its own variable
+                inputVars = [];
+            }
+        } else if (node instanceof Op) {
+            if (node.prev) {
+                const prevVar = this._ensureNodeProcessed(node.prev, processedNodes, varCounter);
+                inputVars.push(prevVar);
+            }
+        } else if (node instanceof BranchOp) {
+            if (node.prev) {
+                const prevVar = this._ensureNodeProcessed(node.prev, processedNodes, varCounter);
+                inputVars.push(prevVar);
+            }
+        } else if (node instanceof MergeOp) {
+            // Process all inputs for MergeOp
+            for (const prevNode of (node as MergeOp)._prevs) {
+                if (prevNode) {
+                    const prevVar = this._ensureNodeProcessed(prevNode, processedNodes, varCounter);
+                    inputVars.push(prevVar);
+                }
+            }
+        }
+        
+        // Generate variable name for this node
+        const outputVar = `var_${varCounter.value++}`;
+        processedNodes.set(node.id, outputVar);
+        
+        // Generate code for this node
+        let nodeFunctionalCode = node.to_torch_functional(inputVars).trim();
+        
+        // If the code doesn't assign to our output variable, wrap it
+        if (!nodeFunctionalCode.startsWith(`${outputVar} =`)) {
+            // For tensor inputs, use their ID as variable
+            if (node instanceof Tensor && inputVars.length === 0) {
+                nodeFunctionalCode = `${outputVar} = ${node.id}  # Input tensor`;
+            } else {
+                nodeFunctionalCode = `${outputVar} = ${nodeFunctionalCode}`;
+            }
+        }
+        
+        code += nodeFunctionalCode + "\n";
+        
+        // Process next nodes
+        if (node instanceof Tensor || node instanceof Op) {
+            if (node.next && !processedNodes.has(node.next.id)) {
+                code += this._processNode(node.next, processedNodes, varCounter);
+            }
+        } else if (node instanceof BranchOp) {
+            for (const nextNode of (node as BranchOp)._nexts) {
+                if (nextNode && !processedNodes.has(nextNode.id)) {
+                    code += this._processNode(nextNode, processedNodes, varCounter);
+                }
+            }
+        } else if (node instanceof MergeOp) {
+            if (node.next && !processedNodes.has(node.next.id)) {
+                code += this._processNode(node.next, processedNodes, varCounter);
+            }
+        }
+        
+        return code;
+    }
+    
+    private _ensureNodeProcessed(node: GraphNode, processedNodes: Map<string, string>, varCounter: { value: number }): string {
+        if (!processedNodes.has(node.id)) {
+            this._processNode(node, processedNodes, varCounter);
+        }
+        return processedNodes.get(node.id)!;
+    }
+
     private _refreshNodeSinkSourceStatus(node: GraphNode): void {
         // Check if node is a source (no incoming connections)
         if (node instanceof Tensor || node instanceof Op || node instanceof BranchOp) {
@@ -184,6 +396,7 @@ export class Graph {
         }
     }
 }
+
 
 
 

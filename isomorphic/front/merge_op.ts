@@ -38,6 +38,10 @@ export abstract class MergeOp extends GraphNode {
     get params(): Record<string, any> { return { ...this._params }; }
 
     connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+        if (indexSelf === undefined) {
+            throw new Error("MergeOp requires an input index for connection");
+        }
+        
         const validatedIndex = GraphNode.validateIndex(indexSelf, this._inShapes.length, "MergeOp.connectSource");
         
         let prevOutShape: number[];

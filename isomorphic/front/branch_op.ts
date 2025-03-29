@@ -1,11 +1,7 @@
 import { GraphNode } from './graph';
-import { getElementwiseOpCode } from './torch_nn_module_op';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { MergeOp } from './merge_op';
-
-// Ensure getElementwiseOpCode is used
-const _ensureImportUsed = () => { getElementwiseOpCode('add'); };
 
 export abstract class BranchOp extends GraphNode {
     protected _inShape: number[];
