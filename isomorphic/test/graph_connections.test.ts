@@ -87,7 +87,7 @@ describe('GraphNode Connections', () => {
 
         it('Tensor to MergeOp connection', () => {
             // Test connection - connect to first input
-            mergeOp.connectSource(tensorA, 0);
+            tensorA.connectSink(mergeOp, undefined, 0);
             expect(mergeOp.prev).toBe(tensorA);
             expect(tensorA.next).toBe(mergeOp);
             
@@ -146,12 +146,12 @@ describe('GraphNode Connections', () => {
             const tensorC = new Tensor(generateId(), shape1, "torch");
             
             // Connect first source
-            mergeOp.connectSource(tensorA, 0);
+            tensorA.connectSink(mergeOp, undefined, 0);
             expect(mergeOp.prev).toBe(tensorA);
             expect(tensorA.next).toBe(mergeOp);
             
             // Connect second source
-            mergeOp.connectSource(tensorC, 1);
+            tensorC.connectSink(mergeOp, undefined, 1);
             expect(tensorC.next).toBe(mergeOp);
             
             // Test disconnection
@@ -203,9 +203,9 @@ describe('GraphNode Connections', () => {
             const output = new Tensor(generateId(), [3, 9], 'output');
 
             // Connect all inputs
-            t1.connectSink(concat, 0);
-            t2.connectSink(concat, 1);
-            t3.connectSink(concat, 2);
+            t1.connectSink(concat, undefined, 0);
+            t2.connectSink(concat, undefined, 1);
+            t3.connectSink(concat, undefined, 2);
             concat.connectSink(output);
 
             // Disconnect the second input specifically
@@ -374,18 +374,18 @@ describe('GraphNode Connections', () => {
             // Connect first path
             op1.connectSource(tensor1);
             tensor2.connectSource(op1);
-            mergeOp2.connectSource(tensor2, 0);
+            tensor2.connectSink(mergeOp2, undefined, 0);
             
             // Connect second path
-            mergeOp2.connectSource(tensor3, 1);
+            tensor3.connectSink(mergeOp2, undefined, 1);
             
             // Connect merged paths
             tensor4.connectSource(mergeOp2);
             splitOp2.connectSource(tensor4);
             
             // Connect split paths
-            splitOp2.connectSink(tensor5, 0);
-            splitOp2.connectSink(tensor6, 1);
+            tensor5.connectSource(splitOp2, undefined, 0);
+            tensor6.connectSource(splitOp2, undefined, 1);
             
             // Verify connections
             expect(op1.prev).toBe(tensor1);
@@ -414,13 +414,28 @@ describe('GraphNode Connections', () => {
             }).toThrow(/Shape mismatch/);
             
             expect(() => {
-                mergeOp.connectSource(incompatibleTensor, 0);
+                incompatibleTensor.connectSink(mergeOp, undefined, 0);
             }).toThrow(/Shape mismatch/);
             
             const wrongInputForSplit = new Tensor(generateId(), [1, 32, 28, 28], "torch");
             expect(() => {
                 splitOp.connectSource(wrongInputForSplit);
             }).toThrow(/Shape mismatch/);
+        });
+
+        it('Should throw error when connecting without required indices', () => {
+            const tensor = new Tensor(generateId(), shape1, "torch");
+            
+            // MergeOp requires index
+            expect(() => {
+                tensor.connectSink(mergeOp);
+            }).toThrow(/When connecting to a MergeOp, an input index must be specified/);
+            
+            // BranchOp requires index
+            const branchTensor = new Tensor(generateId(), [1, 128, 56, 56], "torch");
+            expect(() => {
+                branchTensor.connectSource(splitOp);
+            }).toThrow(/When connecting from a BranchOp, an output index must be specified/);
         });
     });
 }); 

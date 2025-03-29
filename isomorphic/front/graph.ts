@@ -117,6 +117,9 @@ export class Tensor extends GraphNode {
         if (prev instanceof Tensor) {
             this.connectTensor(prev);
         } else if (prev instanceof BranchOp) {
+            if (indexPrev === undefined) { 
+                throw new Error("When connecting from a BranchOp, an output index must be specified");
+            }
             prev.connectSink(this, indexPrev, undefined);
         } else if (prev instanceof Op || prev instanceof MergeOp) {
             // Now TypeScript knows prev.outShape is number[]
@@ -132,6 +135,9 @@ export class Tensor extends GraphNode {
         if (next instanceof Tensor) {
             next.connectTensor(this);
         } else if (next instanceof MergeOp) {
+            if (indexNext === undefined) { //Change this for ReduceOp
+                throw new Error("When connecting to a MergeOp, an input index must be specified");
+            }
             next.connectSource(this, indexNext, undefined);
         } else if (next instanceof Op || next instanceof BranchOp) {
             // Now TypeScript knows next.inShape is number[]
@@ -244,6 +250,9 @@ export class Op extends GraphNode {
 
     connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (prev instanceof BranchOp) {
+            if (indexPrev === undefined) {
+                throw new Error("When connecting from a BranchOp, an output index must be specified");
+            }
             prev.connectSink(this, indexPrev, undefined);
         } else {
             // At this point, prev can be either MergeOp, Tensor, or Op
@@ -258,6 +267,9 @@ export class Op extends GraphNode {
 
     connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (next instanceof MergeOp) {
+            if (indexNext === undefined) { //TODO change this for ReduceOp
+                throw new Error("When connecting to a MergeOp, an input index must be specified");
+            }
             next.connectSource(this, indexNext, undefined);
         } else {
             // At this point, next can be either BranchOp, Tensor, or Op
@@ -361,9 +373,8 @@ export abstract class MergeOp extends GraphNode {
                 prevOutShape = prev.outShape[validatedPrevIndex];
                 indexPrev = validatedPrevIndex;
             } else {
-                // Default to first output if not specified
-                prevOutShape = prev.outShape[0]; //THIS LOOKS SLIGHTLY WEIRD
-                indexPrev = 0;
+                // Require explicit index for BranchOp outputs
+                throw new Error("When connecting from a BranchOp, an output index must be specified");
             }
         } else if (prev instanceof MergeOp) {
             prevOutShape = prev.outShape;
@@ -400,13 +411,13 @@ export abstract class MergeOp extends GraphNode {
             nextInShape = next.inShape as number[];
         } else if (next instanceof MergeOp) {
             // For MergeOp, we need to connect to a specific input
-            if (indexNext === undefined) {
-                indexNext = 0; // Default to first input if not specified
+            if (indexNext === undefined) { //TODO change this for ReduceOp 
+                throw new Error("When connecting to a MergeOp, an input index must be specified");
             }
-            if (indexNext < 0 || indexNext >= next.inShape.length) {
-                throw new Error(`Invalid source index ${indexNext} for MergeOp with ${next.inShape.length} inputs`);
-            }
-            nextInShape = next.inShape[indexNext];
+            // Validate MergeOp input index
+            const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "MergeOp.connectSink (MergeOp input)");
+            nextInShape = next.inShape[validatedNextIndex];
+            indexNext = validatedNextIndex;
         } else if (next instanceof BranchOp) {
             nextInShape = next.inShape;
         } else {
@@ -699,6 +710,8 @@ export abstract class BranchOp extends GraphNode {
         let prevOutShape: number[];
         if (prev instanceof Tensor || prev instanceof Op) {
             prevOutShape = prev.outShape as number[];
+        } else if (prev instanceof MergeOp) {
+            prevOutShape = prev.outShape;
         } else if (prev instanceof BranchOp) {
             // If a specific output of BranchOp is specified
             if (indexPrev !== undefined) {
@@ -707,12 +720,9 @@ export abstract class BranchOp extends GraphNode {
                 prevOutShape = prev.outShape[validatedPrevIndex];
                 indexPrev = validatedPrevIndex;
             } else {
-                // Default to first output if not specified
-                prevOutShape = prev.outShape[0];
-                indexPrev = 0;
+                // Require explicit index for BranchOp outputs // Change for MapOp
+                throw new Error("When connecting from a BranchOp, an output index must be specified");
             }
-        } else if (prev instanceof MergeOp) {
-            prevOutShape = prev.outShape;
         } else {
             throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
         }
@@ -742,21 +752,21 @@ export abstract class BranchOp extends GraphNode {
         // Validate index using the static method
         const validatedIndex = GraphNode.validateIndex(indexSelf, this._outShapes.length, "BranchOp.connectSink");
         
-        // Check shape compatibility
+        // Get next's inShape 
         let nextInShape: number[];
         if (next instanceof Tensor || next instanceof Op) {
             nextInShape = next.inShape as number[];
+        } else if (next instanceof BranchOp) {
+            nextInShape = next.inShape;
         } else if (next instanceof MergeOp) {
             // For MergeOp, we need to connect to a specific input
             if (indexNext === undefined) {
-                indexNext = 0; // Default to first input if not specified
+                throw new Error("When connecting to a MergeOp, an input index must be specified");
             }
             // Validate MergeOp input index
             const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "BranchOp.connectSink (MergeOp input)");
             nextInShape = next.inShape[validatedNextIndex];
             indexNext = validatedNextIndex;
-        } else if (next instanceof BranchOp) {
-            nextInShape = next.inShape;
         } else {
             throw new Error(`Cannot connect to node of type ${next.constructor.name}`);
         }
@@ -766,7 +776,7 @@ export abstract class BranchOp extends GraphNode {
             throw new Error(`Shape mismatch at index ${validatedIndex}: Cannot connect BranchOp with output shape [${this._outShapes[validatedIndex]}] to next node with input shape [${nextInShape}]`);
         }
         
-        // Store the connection
+        // Create the connection
         this._nexts[validatedIndex] = next;
         
         // Create the reciprocal connection
