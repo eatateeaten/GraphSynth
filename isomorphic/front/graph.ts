@@ -340,11 +340,11 @@ export abstract class MergeOp extends GraphNode {
             prevOutShape = prev.outShape as number[];
         } else if (prev instanceof BranchOp) {
             // If a specific output of BranchOp is specified
-            if (indexPrev !== undefined && indexPrev >= 0) {
-                if (indexPrev >= prev.outShape.length) {
-                    throw new Error(`Invalid sink index ${indexPrev} for BranchOp with ${prev.outShape.length} outputs`);
-                }
-                prevOutShape = prev.outShape[indexPrev];
+            if (indexPrev !== undefined) {
+                // Validate BranchOp output index
+                const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "MergeOp.connectSource (BranchOp output)");
+                prevOutShape = prev.outShape[validatedPrevIndex];
+                indexPrev = validatedPrevIndex;
             } else {
                 // Default to first output if not specified
                 prevOutShape = prev.outShape[0];
@@ -673,11 +673,11 @@ export abstract class BranchOp extends GraphNode {
             prevOutShape = prev.outShape as number[];
         } else if (prev instanceof BranchOp) {
             // If a specific output of BranchOp is specified
-            if (indexPrev !== undefined && indexPrev >= 0) {
-                if (indexPrev >= prev.outShape.length) {
-                    throw new Error(`Invalid sink index ${indexPrev} for BranchOp with ${prev.outShape.length} outputs`);
-                }
-                prevOutShape = prev.outShape[indexPrev];
+            if (indexPrev !== undefined) {
+                // Validate BranchOp output index
+                const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "BranchOp.connectSource (BranchOp output)");
+                prevOutShape = prev.outShape[validatedPrevIndex];
+                indexPrev = validatedPrevIndex;
             } else {
                 // Default to first output if not specified
                 prevOutShape = prev.outShape[0];
@@ -723,10 +723,10 @@ export abstract class BranchOp extends GraphNode {
             if (indexNext === undefined) {
                 indexNext = 0; // Default to first input if not specified
             }
-            if (indexNext < 0 || indexNext >= next.inShape.length) {
-                throw new Error(`Invalid source index ${indexNext} for MergeOp with ${next.inShape.length} inputs`);
-            }
-            nextInShape = next.inShape[indexNext];
+            // Validate MergeOp input index
+            const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "BranchOp.connectSink (MergeOp input)");
+            nextInShape = next.inShape[validatedNextIndex];
+            indexNext = validatedNextIndex;
         } else if (next instanceof BranchOp) {
             nextInShape = next.inShape;
         } else {
@@ -801,20 +801,14 @@ export abstract class BranchOp extends GraphNode {
 
     // Add a method to set a specific connection at index for MergeOp to use
     setConnectionAt(index: number, node: GraphNode): void {
-        if (index >= 0 && index < this._outShapes.length) {
-            this._nexts[index] = node;
-        } else {
-            throw new Error(`Invalid index ${index} for BranchOp with ${this._outShapes.length} outputs`);
-        }
+        const validatedIndex = GraphNode.validateIndex(index, this._outShapes.length, "BranchOp.setConnectionAt");
+        this._nexts[validatedIndex] = node;
     }
 
     // Add a method to directly set a connection at a specific index
     setNextAt(index: number, node: GraphNode): void {
-        if (index >= 0 && index < this._outShapes.length) {
-            this._nexts[index] = node;
-        } else {
-            throw new Error(`Invalid index ${index} for BranchOp with ${this._outShapes.length} outputs`);
-        }
+        const validatedIndex = GraphNode.validateIndex(index, this._outShapes.length, "BranchOp.setNextAt");
+        this._nexts[validatedIndex] = node;
     }
 }
 
