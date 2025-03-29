@@ -45,7 +45,7 @@ export abstract class GraphNode {
         if (shape1.length <= 4) {
             return shape1.every((dim, i) => dim === shape2[i]);
         }
-       
+        
         // For larger arrays, 
         // Using a for loop instead of every() for better performance
         for (let i = 0; i < shape1.length; i++) {
@@ -448,7 +448,7 @@ export abstract class MergeOp extends GraphNode {
             this._disconnectSourceAtIndex(validatedIndex);
         } else {
             // Disconnect all inputs
-            for (let i = 0; i < this._prevs.length; i++) {
+        for (let i = 0; i < this._prevs.length; i++) {
                 if (this._prevs[i]) {
                     this._disconnectSourceAtIndex(i);
                 }
@@ -458,17 +458,17 @@ export abstract class MergeOp extends GraphNode {
 
     private _disconnectSourceAtIndex(index: number): void {
         const prev = this._prevs[index];
-        if (prev) {
-            if (prev instanceof BranchOp) {
-                // Find our connection in BranchOp's nexts array and remove it
+            if (prev) {
+                if (prev instanceof BranchOp) {
+                    // Find our connection in BranchOp's nexts array and remove it
                 const branchIndex = prev._nexts.indexOf(this);
                 if (branchIndex >= 0) {
                     prev._nexts[branchIndex] = null as unknown as GraphNode;
+                    }
+                } else {
+                    prev.next = null;
                 }
-            } else {
-                prev.next = null;
-            }
-            // Clear the reference with a cast to avoid type error
+                // Clear the reference with a cast to avoid type error
             this._prevs[index] = null as unknown as GraphNode;
         }
     }
@@ -811,7 +811,7 @@ export abstract class BranchOp extends GraphNode {
             this._disconnectSinkAtIndex(validatedIndex);
         } else {
             // Disconnect all outputs
-            for (let i = 0; i < this._nexts.length; i++) {
+        for (let i = 0; i < this._nexts.length; i++) {
                 if (this._nexts[i]) {
                     this._disconnectSinkAtIndex(i);
                 }
@@ -821,17 +821,17 @@ export abstract class BranchOp extends GraphNode {
 
     private _disconnectSinkAtIndex(index: number): void {
         const next = this._nexts[index];
-        if (next) {
-            if (next instanceof MergeOp) {
-                // Find our connection in MergeOp's prevs array and remove it
+            if (next) {
+                if (next instanceof MergeOp) {
+                    // Find our connection in MergeOp's prevs array and remove it
                 const mergeIndex = next._prevs.indexOf(this);
                 if (mergeIndex >= 0) {
                     next._prevs[mergeIndex] = null as unknown as GraphNode;
+                    }
+                } else {
+                    next.prev = null;
                 }
-            } else {
-                next.prev = null;
-            }
-            // Clear the reference with a cast to avoid type error
+                // Clear the reference with a cast to avoid type error
             this._nexts[index] = null as unknown as GraphNode;
         }
     }
@@ -902,7 +902,201 @@ export class Copy extends BranchOp {
     }
 }
 
+export class ReduceOp extends MergeOp {
+    constructor(
+        id: string,
+        inShapes: number[][],
+        target: string,
+        opType: string,
+        params: Record<string, any>
+    ) {
+        super(id, inShapes, target, opType, params);
+    }
 
+    protected computeOutShape(): number[] {
+        if (this._inShapes.length < 1) {
+            throw new Error("ReduceOp requires at least 1 input tensor");
+        }
+
+        // For reduction operations, output shape matches the first input shape
+        // as all inputs must have the same shape for proper reduction
+        const referenceShape = [...this._inShapes[0]];
+        
+        // Validate all shapes have the same dimensions
+        for (let i = 1; i < this._inShapes.length; i++) {
+            const shape = this._inShapes[i];
+            if (!GraphNode.shapeMatch(referenceShape, shape)) {
+                throw new Error(`For reduction operations, all input shapes must match. Shape at index ${i} [${shape}] doesn't match reference shape [${referenceShape}]`);
+            }
+        }
+
+        return referenceShape;
+    }
+
+    to_torch_functional(inputs: string[]): string {
+        if (inputs.length < 1) {
+            throw new Error("ReduceOp requires at least 1 input");
+        }
+
+        // Use reduction operation from parameters (e.g., 'add', 'mul')
+        const op = this._opType.toLowerCase();
+        
+        // For most associative operations, we start with the first input and fold in the rest
+        if (inputs.length === 1) {
+            return `${inputs[0]} = ${inputs[0]}`; // Just return the single input
+        }
+        
+        // Apply the operation sequentially (order matters for non-commutative operations)
+        let code = inputs[0];
+        for (let i = 1; i < inputs.length; i++) {
+            code = `torch.${op}(${code}, ${inputs[i]})`;
+        }
+        
+        return `${inputs[0]} = ${code}`;
+    }
+
+    // Override the connectSource method to not require explicit index
+    connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+        // ReduceOp allows automatic indexing for convenience
+        if (indexSelf === undefined) {
+            // Find the first available slot
+            indexSelf = this._prevs.findIndex(p => !p);
+            if (indexSelf === -1) {
+                // If no empty slots, add at the end
+                indexSelf = this._prevs.length;
+                // Expand inShapes array if needed
+                if (indexSelf >= this._inShapes.length) {
+                    // Clone the first shape to expand
+                    this._inShapes.push([...this._inShapes[0]]);
+                }
+            }
+        }
+        
+        // Call the parent implementation with the determined index
+        super.connectSource(prev, indexSelf, indexPrev);
+    }
+}
+
+export class AllReduceOp extends ReduceOp {
+    constructor(
+        id: string,
+        inShapes: number[][],
+        target: string,
+        opType: string,
+        params: Record<string, any>
+    ) {
+        super(id, inShapes, target, opType, params);
+    }
+
+    to_torch_functional(inputs: string[]): string {
+        if (inputs.length < 1) {
+            throw new Error("AllReduceOp requires at least 1 input");
+        }
+
+        // Use commutative operation from parameters (e.g., 'max', 'min')
+        const op = this._opType.toLowerCase();
+        
+        if (inputs.length === 1) {
+            return `${inputs[0]} = ${inputs[0]}`; // Just return the single input
+        }
+        
+        // For commutative operations, we can use a more concise approach
+        return `${inputs[0]} = torch.${op}(torch.stack([${inputs.join(", ")}], 0), 0)[0]`;
+    }
+}
+
+export class MapOp extends BranchOp {
+    constructor(
+        id: string,
+        inShape: number[],
+        target: string,
+        opType: string,
+        params: { outputShapes: number[][] }
+    ) {
+        super(id, inShape, target, opType, params);
+    }
+
+    protected computeOutShapes(): number[][] {
+        // MapOp has predefined output shapes
+        return this._params.outputShapes;
+    }
+
+    to_torch_functional(input: string): string[] {
+        // Apply the mapping operation to each output
+        const operation = this._opType.toLowerCase();
+        const outputs = this._outShapes.map((_, i) => `out${i}`);
+        
+        // Generate different code based on the mapping operation
+        if (operation === "split") {
+            const splitSizes = this._outShapes.map(shape => shape[this._params.dim]);
+            return [`${outputs.join(", ")} = torch.split(${input}, [${splitSizes.join(", ")}], dim=${this._params.dim})`];
+        } else if (operation === "chunk") {
+            return [`${outputs.join(", ")} = torch.chunk(${input}, ${this._outShapes.length}, dim=${this._params.dim})`];
+        } else {
+            // Default mapping behavior
+            return outputs.map((out, i) => `${out} = torch.index_select(${input}, ${this._params.dim}, torch.tensor(${i}))`);
+        }
+    }
+
+    // Override the connectSink method to not require explicit index
+    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+        // MapOp allows automatic indexing for BranchOp outputs
+        if (indexSelf === undefined) {
+            // Find the first available slot
+            indexSelf = this._nexts.findIndex(n => !n);
+            if (indexSelf === -1) {
+                // If no empty slots, we cannot automatically connect
+                throw new Error("Cannot automatically determine output index for MapOp. Please specify indexSelf.");
+            }
+        }
+        
+        // Call the parent implementation with the determined index
+        super.connectSink(next, indexSelf, indexNext);
+    }
+}
+
+export class Broadcast extends BranchOp {
+    constructor(
+        id: string,
+        inShape: number[],
+        target: string,
+        params: { copies: number }
+    ) {
+        super(id, inShape, target, "Broadcast", params);
+    }
+
+    protected computeOutShapes(): number[][] {
+        // All output shapes are identical to input shape
+        return Array(this._params.copies).fill(0).map(() => [...this._inShape]);
+    }
+
+    to_torch_functional(input: string): string[] {
+        // For broadcast, simply assign the same input to all outputs
+        return Array(this._params.copies).fill(0).map((_, i) => `out${i} = ${input}`);
+    }
+
+    // Override connectSink to be more flexible
+    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+        // For Broadcast, if indexSelf is undefined, we can dynamically add new outputs
+        if (indexSelf === undefined) {
+            // Use the next available index or add a new one
+            indexSelf = this._nexts.findIndex(n => !n);
+            if (indexSelf === -1) {
+                // If all slots are filled, add a new output
+                indexSelf = this._nexts.length;
+                this._params.copies += 1;
+                this._outShapes = this.computeOutShapes();
+            }
+        } else if (indexSelf >= this._params.copies) {
+            // If the specified index is beyond the current size, expand
+            this._params.copies = indexSelf + 1;
+            this._outShapes = this.computeOutShapes();
+        }
+        
+        // Call the parent implementation with the determined index
+        super.connectSink(next, indexSelf, indexNext);
+    }
+}
 
 export class Graph {
   // Efficient storage for all nodes by their ID
