@@ -995,18 +995,33 @@ export class Graph {
   disconnectNodeFromPrev(nodeId: string, indexSelf?: number): void { 
     const node = this.getNode(nodeId);
     
-    // Store prev reference before disconnecting
-    const prev = node.prev;
+    // Store prev reference(s) before disconnecting
+    let prevs: GraphNode[] = [];
+    
+    if (node instanceof MergeOp) {
+      if (indexSelf !== undefined) {
+        // If we're disconnecting a specific input, only track that one
+        const prev = node._prevs[indexSelf];
+        if (prev) prevs = [prev];
+      } else {
+        // Otherwise, track all inputs
+        prevs = node._prevs.filter(Boolean);
+      }
+    } else if (node.prev) {
+      prevs = [node.prev];
+    }
     
     node.disconnectSource(indexSelf);
     
     // Update node status
     this._refreshNodeSinkSourceStatus(node);
     
-    // Update prev node status if it exists
-    if (prev) {
-      this._refreshNodeSinkSourceStatus(prev);
-    }
+    // Update prev node statuses
+    prevs.forEach(prev => {
+      if (prev) {
+        this._refreshNodeSinkSourceStatus(prev);
+      }
+    });
   }
 
   /**
