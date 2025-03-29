@@ -16,7 +16,7 @@
     "rootDir": "."
   },
   "include": [
-    "isomorphic/**/*.ts"
+    "**/*.ts"
   ],
   "exclude": [
     "node_modules"
