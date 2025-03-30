@@ -22,19 +22,24 @@
 
 import { create } from 'zustand';
 import type { FlowNode, FlowEdge } from './types';
-import { createCheckerNode, CheckerNodeConfig, CheckerGraph } from './checker';
-import { InputError, OutputError } from './checker/node';
 import { GRID_SIZE } from './config';
+
+import { Graph as ZophGraph,
+    GraphNode as ZophNode,
+    Tensor as ZophTensor,
+    Op as ZophOp,
+    BranchOp as ZophBranch,
+    MergeOp as ZophMerge } from '../isomorphic/graph';
 
 interface GraphState {
     nodes: FlowNode[];
     edges: FlowEdge[];
     selectedId: string | null;
-    checkerGraph: CheckerGraph;
+    checkerGraph: ZophGraph;
 }
 
 interface GraphActions {
-    addNode: (id: string, config: CheckerNodeConfig) => void;
+    addNode: (id: string, node: ZophNode) => void;
     deleteNode: (id: string) => void;
     setSelectedId: (id: string | null) => void;
     updateNodes: (nodes: FlowNode[]) => void;

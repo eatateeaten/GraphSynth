@@ -99,10 +99,10 @@ export abstract class GraphNode {
  * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 
  * It delegates all GraphNode methods to the wrapped node.
  */
-export class PendingNode<T extends GraphNode> extends GraphNode {
-    private _wrappedNode: T;
+export class PendingNode extends GraphNode {
+    private _wrappedNode: GraphNode;
 
-    constructor(node: T) {
+    constructor(node: GraphNode) {
         super(node.id, node.target);
         this._wrappedNode = node;
     }
@@ -118,14 +118,14 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
     deleteNext(indexSelf?: number): void { this._wrappedNode.deleteNext(indexSelf); }
     to_torch_functional(inputs: string[]): string { return this._wrappedNode.to_torch_functional(inputs); }
     // Accessor for the wrapped node
-    unwrap(): T { return this._wrappedNode; }
+    unwrap(): GraphNode { return this._wrappedNode; }
 }
 
 export class Graph {
     private _nodes: Map<string, GraphNode>;
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
-    private _pendingNodes: Map<string, PendingNode<GraphNode>>;  // Changed to Map for O(1) lookups by ID
+    private _pendingNodes: Map<string, PendingNode>;  // Changed to Map for O(1) lookups by ID
 
     constructor() {
         this._nodes = new Map();
@@ -137,13 +137,13 @@ export class Graph {
     /**
      * Adds a node to the pending collection
      */
-    addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
+    addPendingNode(node: GraphNode): PendingNode {
         // Check if the node already exists in pending nodes or main graph
         if (this._pendingNodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in pending nodes`);}
         if (this._nodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in the graph`);}
         // Wrap and add node to pending nodes
-        const pendingNode = new PendingNode<T>(node);
-        this._pendingNodes.set(node.id, pendingNode as PendingNode<GraphNode>);
+        const pendingNode = new PendingNode(node);
+        this._pendingNodes.set(node.id, pendingNode);
         return pendingNode;
     }
 
@@ -182,7 +182,7 @@ export class Graph {
     /**
      * Connects two nodes. The source must be in the main graph, but the sink can be pending.
      */
-    connect(source: GraphNode, sink: GraphNode | PendingNode<GraphNode>, sourceIndex?: number, sinkIndex?: number): void {
+    connect(source: GraphNode, sink: GraphNode | PendingNode, sourceIndex?: number, sinkIndex?: number): void {
         const actualSink: GraphNode = sink instanceof PendingNode ? sink.unwrap() : sink;
         
         // Source node must exist in the main graph
@@ -234,6 +234,7 @@ export class Graph {
         }
         return sourceIndex;
     }
+
     private getSourceOutShape(source: GraphNode, sourceIndex?: number): number[] {
         // Get source's output shape
         let sourceOutShape: number[];
@@ -277,7 +278,6 @@ export class Graph {
             throw new Error(`Unknown sink node of type ${sink.constructor.name}`);
         }
     }
-
 
     disconnect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
         if (!this._nodes.has(source.id)) {
