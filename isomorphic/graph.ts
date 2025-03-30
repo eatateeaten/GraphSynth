@@ -260,20 +260,30 @@ export class Graph {
 
     /**
      * Connects two nodes. The source must be in the main graph, but the sink can be pending.
+     * @param sourceId ID of the source node
+     * @param sinkId ID of the sink node
+     * @param sourceIndex Index for the source node output (required for BranchOp)
+     * @param sinkIndex Index for the sink node input (required for MergeOp)
      */
-    connect(source: GraphNode, sink: GraphNode | PendingNode<GraphNode>, sourceIndex?: number, sinkIndex?: number): void {
+    connect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
+        // Get source node from main graph
+        const source = this._nodes.get(sourceId);
+        if (!source) {
+            throw new Error(`Source node with id ${sourceId} does not exist in graph`);
+        }
+        
+        // Get sink node from either main graph or pending nodes
+        let sink: GraphNode | PendingNode<GraphNode> | undefined = this._nodes.get(sinkId);
+        if (!sink) {
+            sink = this._pendingNodes.get(sinkId);
+            if (!sink) {
+                throw new Error(`Sink node with id ${sinkId} does not exist in graph or pending nodes`);
+            }
+        }
+        
+        // Use the existing connection logic
         const actualSink: GraphNode = sink instanceof PendingNode ? sink.unwrap() : sink;
         
-        // Source node must exist in the main graph
-        if (!this._nodes.has(source.id)) {
-            throw new Error(`Source node with id ${source.id} does not exist in graph`);
-        }
-        
-        // If sink is not pending, check if it exists in the main graph
-        if (!(sink instanceof PendingNode) && !this._nodes.has(actualSink.id)) {
-            throw new Error(`Sink node with id ${actualSink.id} does not exist in graph or pending nodes`);
-        }
-
         // Validate connection endpoints
         sourceIndex = this._checkConnectionSource(source, sourceIndex);
         sinkIndex = this._checkConnectionSink(actualSink, sinkIndex);
@@ -357,12 +367,23 @@ export class Graph {
         }
     }
 
-    disconnect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
-        if (!this._nodes.has(source.id)) {
-            throw new Error(`Source node with id ${source.id} does not exist in graph`);
+    /**
+     * Disconnects two nodes.
+     * @param sourceId ID of the source node
+     * @param sinkId ID of the sink node
+     * @param sourceIndex Index for the source node output (required for BranchOp)
+     * @param sinkIndex Index for the sink node input (required for MergeOp)
+     */
+    disconnect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
+        // Get source and sink nodes from the main graph
+        const source = this._nodes.get(sourceId);
+        if (!source) {
+            throw new Error(`Source node with id ${sourceId} does not exist in graph`);
         }
-        if (!this._nodes.has(sink.id)) {
-            throw new Error(`Sink node with id ${sink.id} does not exist in graph`);
+        
+        const sink = this._nodes.get(sinkId);
+        if (!sink) {
+            throw new Error(`Sink node with id ${sinkId} does not exist in graph`);
         }
 
         // Step 1: Validate indices for special node types
