@@ -37,115 +37,43 @@ export abstract class MergeOp extends GraphNode {
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
 
-    connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
-            throw new Error("MergeOp requires an input index for connection");
+            throw new Error("MergeOp.addPrev requires an input index");
         }
         
-        const validatedIndex = GraphNode.validateIndex(indexSelf, this._inShapes.length, "MergeOp.connectSource");
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev");
         
-        let prevOutShape: number[];
-        
-        if (prev instanceof BranchOp) {
-            if (indexPrev !== undefined) {
-                const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "MergeOp.connectSource (BranchOp output)");
-                prevOutShape = prev.outShape[validatedPrevIndex] as number[];
-                indexPrev = validatedPrevIndex;
-            } else {
-                throw new Error("When connecting from a BranchOp, an output index must be specified");
-            }
-        } else if (prev instanceof Tensor || prev instanceof Op || prev instanceof MergeOp) {
-            prevOutShape = prev.outShape as number[];
-        } else {
-            throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
-        }
-        
-        if (!GraphNode.shapeMatch(this._inShapes[validatedIndex], prevOutShape)) {
-            throw new Error(`Shape mismatch at index ${validatedIndex}: Cannot connect MergeOp with input shape [${this._inShapes[validatedIndex]}] to previous node with output shape [${prevOutShape}]`);
+        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
+            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`);
         }
         
         this._prevs[validatedIndex] = prev;
-        
-        if (prev instanceof BranchOp && indexPrev !== undefined) {
-            prev._nexts[indexPrev] = this;
-        } else {
-            prev.next = this;
-        }
     }
 
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (this._next !== null) {
             throw new Error("MergeOp already has a sink connection");
         }
         
-        let nextInShape: number[];
-        
-        if (next instanceof MergeOp) {
-            if (indexNext === undefined) {
-                throw new Error("When connecting to a MergeOp, an input index must be specified");
-            }
-            const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "MergeOp.connectSink (MergeOp input)");
-            nextInShape = next.inShape[validatedNextIndex] as number[];
-            indexNext = validatedNextIndex;
-        } else if (next instanceof Tensor || next instanceof Op || next instanceof BranchOp) {
-            nextInShape = next.inShape as number[];
-        } else {
-            throw new Error(`Cannot connect to node of type ${next.constructor.name}`);
-        }
-        
-        if (!GraphNode.shapeMatch(this._outShape, nextInShape)) {
-            throw new Error(`Shape mismatch: Cannot connect MergeOp with output shape [${this._outShape}] to next node with input shape [${nextInShape}]`);
-        }
-        
+        // Just set our next reference - Graph handles all validation and connections
         this._next = next;
+    }
+
+    deletePrev(indexSelf?: number): void {
+        if (indexSelf === undefined) {
+            this._prevs.fill(null as unknown as GraphNode);
+            return;
+        }
         
-        if (next instanceof MergeOp && indexNext !== undefined) {
-            next._prevs[indexNext] = this;
-        } else {
-            next.prev = this;
-        }
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.deletePrev");
+        
+        this._prevs[validatedIndex] = null as unknown as GraphNode;
     }
 
-    disconnectSource(indexSelf?: number): void {
-        if (indexSelf !== undefined) {
-            const validatedIndex = GraphNode.validateIndex(indexSelf, this._inShapes.length, "MergeOp.disconnectSource");
-            this._disconnectSourceAtIndex(validatedIndex);
-        } else {
-            for (let i = 0; i < this._prevs.length; i++) {
-                if (this._prevs[i]) {
-                    this._disconnectSourceAtIndex(i);
-                }
-            }
-        }
-    }
-
-    private _disconnectSourceAtIndex(index: number): void {
-        const prev = this._prevs[index];
-        if (prev) {
-            if (prev instanceof BranchOp) {
-                const branchIndex = prev._nexts.indexOf(this);
-                if (branchIndex >= 0) {
-                    prev._nexts[branchIndex] = null as unknown as GraphNode;
-                }
-            } else {
-                prev.next = null;
-            }
-            this._prevs[index] = null as unknown as GraphNode;
-        }
-    }
-
-    disconnectSink(indexSelf?: number): void {
-        if (this._next) {
-            if (this._next instanceof MergeOp) {
-                const index = this._next._prevs.indexOf(this);
-                if (index >= 0) {
-                    this._next._prevs[index] = null as unknown as GraphNode;
-                }
-            } else {
-                this._next.prev = null;
-            }
-            this._next = null;
-        }
+    deleteNext(indexSelf?: number): void {
+        // Just clear our next reference
+        this._next = null;
     }
 
     get prev(): GraphNode | null {
@@ -241,7 +169,7 @@ export class ReduceOp extends MergeOp {
         return `${inputs[0]} = ${code}`;
     }
 
-    connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
             indexSelf = this._prevs.findIndex(p => !p);
             if (indexSelf === -1) {
@@ -252,7 +180,7 @@ export class ReduceOp extends MergeOp {
             }
         }
         
-        super.connectSource(prev, indexSelf, indexPrev);
+        super.addPrev(prev, indexSelf, indexPrev);
     }
 }
 

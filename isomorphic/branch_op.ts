@@ -39,127 +39,49 @@ export abstract class BranchOp extends GraphNode {
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
 
-    connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
             throw new Error("BranchOp already has a source connection");
         }
-
-        let prevOutShape: number[];
-        
-        // Handle BranchOp specially
-        if (prev instanceof BranchOp) {
-            if (indexPrev !== undefined) {
-                const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "BranchOp.connectSource (BranchOp output)");
-                prevOutShape = prev.outShape[validatedPrevIndex] as number[];
-                indexPrev = validatedPrevIndex;
-            } else {
-                throw new Error("When connecting from a BranchOp, an output index must be specified");
-            }
-        } 
-        // Handle all other types (Tensor, Op, MergeOp)
-        else if (prev instanceof Tensor || prev instanceof Op || prev instanceof MergeOp) {
-            prevOutShape = prev.outShape as number[];
-        } 
-        else {
-            throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
-        }
-
-        // Check shape compatibility
-        if (!GraphNode.shapeMatch(this._inShape, prevOutShape)) {
-            throw new Error(`Shape mismatch: Cannot connect BranchOp with input shape [${this._inShape}] to previous node with output shape [${prevOutShape}]`);
-        }
-
-        // Make the connection
+        // Just set our prev reference - Graph handles all validation and connections
         this._prev = prev;
-
-        if (prev instanceof BranchOp && indexPrev !== undefined) {
-            prev._nexts[indexPrev] = this;
-        } else {
-            prev.next = this;
-        }
     }
 
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+        // For BranchOp, indexSelf (output index) is required
         if (indexSelf === undefined) {
-            throw new Error("BranchOp requires an output index for connection");
+            throw new Error("BranchOp.addNext requires an output index");
         }
         
-        const validatedIndex = GraphNode.validateIndex(indexSelf, this._outShapes.length, "BranchOp.connectSink");
-
-        let nextInShape: number[];
+        // Validate and normalize index
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._outShapes.length, "BranchOp.addNext");
         
-        // Handle MergeOp specially
-        if (next instanceof MergeOp) {
-            if (indexNext === undefined) {
-                throw new Error("When connecting to a MergeOp, an input index must be specified");
-            }
-            const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "BranchOp.connectSink (MergeOp input)");
-            nextInShape = next.inShape[validatedNextIndex] as number[];
-            indexNext = validatedNextIndex;
-        } 
-        // Handle all other types (Tensor, Op, BranchOp)
-        else if (next instanceof Tensor || next instanceof Op || next instanceof BranchOp) {
-            nextInShape = next.inShape as number[];
-        } 
-        else {
-            throw new Error(`Cannot connect to node of type ${next.constructor.name}`);
+        // Check if a connection already exists at this output
+        if (this._nexts[validatedIndex] !== null && this._nexts[validatedIndex] !== undefined) {
+            throw new Error(`BranchOp already has a connection at output ${validatedIndex}`);
         }
-
-        // Check shape compatibility
-        if (!GraphNode.shapeMatch(this._outShapes[validatedIndex], nextInShape)) {
-            throw new Error(`Shape mismatch at index ${validatedIndex}: Cannot connect BranchOp with output shape [${this._outShapes[validatedIndex]}] to next node with input shape [${nextInShape}]`);
-        }
-
-        // Make the connection
+        
+        // Set the connection
         this._nexts[validatedIndex] = next;
-
-        if (next instanceof MergeOp && indexNext !== undefined) {
-            (next as MergeOp)._prevs[indexNext] = this;
-        } else {
-            next.prev = this;
-        }
     }
 
-    disconnectSource(indexSelf?: number): void {
-        if (this._prev) {
-            if (this._prev instanceof BranchOp) {
-                const branchIndex = this._prev._nexts.indexOf(this);
-                if (branchIndex >= 0) {
-                    this._prev._nexts[branchIndex] = null as unknown as GraphNode;
-                }
-            } else {
-                this._prev.next = null;
-            }
-            this._prev = null;
-        }
+    deletePrev(indexSelf?: number): void {
+        // Just clear our reference
+        this._prev = null;
     }
 
-    disconnectSink(indexSelf?: number): void {
-        if (indexSelf !== undefined) {
-            const validatedIndex = GraphNode.validateIndex(indexSelf, this._outShapes.length, "BranchOp.disconnectSink");
-            this._disconnectSinkAtIndex(validatedIndex);
-        } else {
-            for (let i = 0; i < this._nexts.length; i++) {
-                if (this._nexts[i]) {
-                    this._disconnectSinkAtIndex(i);
-                }
-            }
+    deleteNext(indexSelf?: number): void {
+        if (indexSelf === undefined) {
+            // Clear all next connections
+            this._nexts.fill(null as unknown as GraphNode);
+            return;
         }
-    }
-
-    private _disconnectSinkAtIndex(index: number): void {
-        const next = this._nexts[index];
-        if (next) {
-            if (next instanceof MergeOp) {
-                const mergeIndex = (next as MergeOp)._prevs.indexOf(this);
-                if (mergeIndex >= 0) {
-                    (next as MergeOp)._prevs[mergeIndex] = null as unknown as GraphNode;
-                }
-            } else {
-                next.prev = null;
-            }
-            this._nexts[index] = null as unknown as GraphNode;
-        }
+        
+        // Validate index
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._outShapes.length, "BranchOp.deleteNext");
+        
+        // Clear the specific connection
+        this._nexts[validatedIndex] = null as unknown as GraphNode;
     }
 }
 
@@ -197,20 +119,6 @@ export class MapOp extends BranchOp {
         const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
         
         return assignments;
-    }
-
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (indexSelf === undefined) {
-            indexSelf = this._nexts.findIndex(n => !n);
-            if (indexSelf === -1) {
-                indexSelf = this._nexts.length;
-                if (indexSelf >= this._outShapes.length) {
-                    this._outShapes.push([...this._inShape]);
-                }
-            }
-        }
-        
-        super.connectSink(next, indexSelf, indexNext);
     }
 
     get next(): GraphNode | null {
@@ -257,20 +165,6 @@ export class Broadcast extends BranchOp {
         const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
         
         return assignments;
-    }
-
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (indexSelf === undefined) {
-            indexSelf = this._nexts.findIndex(n => !n);
-            if (indexSelf === -1) {
-                indexSelf = this._nexts.length;
-                if (indexSelf >= this._outShapes.length) {
-                    this._outShapes.push([...this._inShape]);
-                }
-            }
-        }
-        
-        super.connectSink(next, indexSelf, indexNext);
     }
 
     get next(): GraphNode | null {
@@ -335,7 +229,7 @@ export class Split extends BranchOp {
         return this._nexts;
     }
 
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (indexSelf === undefined) {
             indexSelf = this._nexts.findIndex(n => !n);
             if (indexSelf === -1) {
@@ -352,6 +246,6 @@ export class Split extends BranchOp {
             }
         }
         
-        super.connectSink(next, indexSelf, indexNext);
+        super.addNext(next, indexSelf, indexNext);
     }
 } 

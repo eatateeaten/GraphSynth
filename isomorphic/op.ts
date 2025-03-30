@@ -67,38 +67,33 @@ export class Op extends GraphNode {
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
 
-    connectSource(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
             throw new Error("Op already has a source connection");
         }
+
+        // Get the output shape from the source node
+        let sourceOutShape: number[];
         
-        // Get Prev's outShape 
-        let prevOutShape: number[];
-        if (prev instanceof Tensor || prev instanceof Op || prev instanceof MergeOp) {
-            if (prev.outShape === null) {
+        // Extract shape from prev node based on its type
+        if (prev instanceof BranchOp && indexPrev !== undefined) {
+            const branchOutShape = prev.outShape[indexPrev];
+            if (branchOutShape === null || branchOutShape === undefined) {
+                throw new Error(`Cannot connect to BranchOp with id ${prev.id} at output ${indexPrev}: output shape is undefined`);
+            }
+            sourceOutShape = branchOutShape;
+        } else {
+            // For Tensor, Op, MergeOp
+            const outShape = (prev as any).outShape;
+            if (outShape === null || outShape === undefined) {
                 throw new Error(`Cannot connect to ${prev.constructor.name} with id ${prev.id}: output shape is undefined`);
             }
-            prevOutShape = prev.outShape as number[];
-        } else if (prev instanceof BranchOp) {
-            if (indexPrev !== undefined) {
-                const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "Op.connectSource (BranchOp output)");
-                const branchOutShape = prev.outShape[validatedPrevIndex];
-                if (branchOutShape === null) {
-                    throw new Error(`Cannot connect to BranchOp with id ${prev.id} at output ${validatedPrevIndex}: output shape is undefined`);
-                }
-                prevOutShape = branchOutShape;
-                indexPrev = validatedPrevIndex;
-            } else {
-                throw new Error("When connecting from a BranchOp, an output index must be specified");
-            }
-        } else {
-            throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
+            sourceOutShape = outShape;
         }
         
-        // Set inShape based on the previous node's outShape
-        this._inShape = [...prevOutShape];
+        // Set inShape and compute outShape
+        this._inShape = [...sourceOutShape];
         
-        // Compute outShape based on the new inShape
         try {
             this._outShape = this.computeOutShape();
         } catch (err: any) {
@@ -107,79 +102,29 @@ export class Op extends GraphNode {
             throw err;
         }
         
-        // Make the bidirectional connection
+        // Set our prev reference
         this._prev = prev;
-        if (prev instanceof BranchOp && indexPrev !== undefined) {
-            (prev as BranchOp)._nexts[indexPrev] = this;
-        } else {
-            prev.next = this;
-        }
     }
 
-    connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (this._next !== null) {
             throw new Error("Op already has a sink connection");
         }
-        
-        // Get Next's inShape 
-        let nextInShape: number[];
-        if (next instanceof Tensor || next instanceof Op || next instanceof BranchOp) {
-            nextInShape = next.inShape as number[];
-        } else if (next instanceof MergeOp) {
-            if (indexNext === undefined) {
-                throw new Error("When connecting to a MergeOp, an input index must be specified");
-            }
-            const validatedNextIndex = GraphNode.validateIndex(indexNext, next.inShape.length, "Op.connectSink (MergeOp input)");
-            nextInShape = next.inShape[validatedNextIndex] as number[];
-            indexNext = validatedNextIndex;
-        } else {
-            throw new Error(`Cannot connect to node of type ${next.constructor.name}`);
-        }
-        
-        // Ensure we have output shape
-        if (this._outShape === null) {
-            throw new Error("Cannot connect sink: Op has no input connection to determine output shape");
-        }
-        
-        // Do a shape match check 
-        if (!GraphNode.shapeMatch(this._outShape as number[], nextInShape)) {
-            throw new Error(`Shape mismatch: Cannot connect Op with output shape [${this._outShape}] to next node with input shape [${nextInShape}]`);
-        }
-        
-        // Make the bidirectional connection 
+        // Just set our next reference - Graph will handle the rest
         this._next = next;
-        if (next instanceof MergeOp && indexNext !== undefined) {
-            (next as MergeOp)._prevs[indexNext] = this;
-        } else {
-            next.prev = this;
-        }
     }
 
-    disconnectSource(indexSelf?: number): void {
+    deletePrev(indexSelf?: number): void {
         if (this._prev) {
-            if (this._prev instanceof BranchOp) {  //find itself's reference and disconnect 
-                const branchIndex = (this._prev as BranchOp)._nexts.indexOf(this);
-                if (branchIndex >= 0) {
-                    (this._prev as BranchOp)._nexts[branchIndex] = null as unknown as GraphNode;
-                }
-            } else {
-                this._prev.next = null;
-            }
+            // Just clear our reference and reset shapes
             this._prev = null;
+            this._inShape = null;
+            this._outShape = null;
         }
     }
 
-    disconnectSink(indexSelf?: number): void {
-        if (this._next) {
-            if (this._next instanceof MergeOp) {   //find itself's reference and disconnect 
-                const mergeIndex = (this._next as MergeOp)._prevs.indexOf(this);
-                if (mergeIndex >= 0) {
-                    (this._next as MergeOp)._prevs[mergeIndex] = null as unknown as GraphNode;
-                }
-            } else {
-                this._next.prev = null;
-            }
-            this._next = null;
-        }
+    deleteNext(indexSelf?: number): void {
+        // Just clear our next reference
+        this._next = null;
     }
 } 
