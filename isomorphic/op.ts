@@ -1,4 +1,4 @@
-import { GraphNode } from './graph';
+import { GraphNode } from './types';
 import { getElementwiseOpCode, forwardShapeInference } from './torch_nn_module_op';
 import { Tensor } from './tensor';
 import { BranchOp } from './branch_op';

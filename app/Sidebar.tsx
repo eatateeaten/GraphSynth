@@ -1,42 +1,47 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text } from '@mantine/core';
-import { CheckerNodes, CheckerNodeType, CheckerNodeConfig, CheckerNodeParams } from './checker';
 import { useGraphStore } from './store';
-import { ParamFieldMetadata } from './checker/node';
-import { Shape } from './checker/shape';
+import { NodeType, ParamFieldMetadata, Shape } from './registry/types';
+import { ModuleRegistry, getMeta, validateParams } from './registry/index';
 
-/* Rearrange CheckerNodes into a format that can be used by the Select component */
-const LAYER_TYPE_OPTIONS = Object.entries(CheckerNodes).reduce((groups, [type, node]) => {
-    const meta = node.getMeta();
-    const category = meta.category;
-    const item = { value: type, label: meta.label };
-    
-    const existingGroup = groups.find(g => g.group === category);
-    if (existingGroup) {
+/* Build layer type options from available modules */
+const LAYER_TYPE_OPTIONS = (() => {
+    // Create a list of all operation types
+    const opTypes = Object.keys(ModuleRegistry.op);
+
+    return opTypes.reduce((groups, type) => {
+        // Get metadata for this operation
+        const metadata = getMeta('op', type);
+        const category = metadata.category;
+        const item = { value: type, label: metadata.label };
+        
+        const existingGroup = groups.find(g => g.group === category);
+        if (existingGroup) {
         existingGroup.items.push(item);
-    } else {
+        } else {
         groups.push({ group: category, items: [item] });
-    }
-    
-    return groups;
-}, [] as Array<{ group: string; items: Array<{ value: string; label: string }> }>);
+        }
+
+        return groups;
+    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }> }>);
+})();
 
 export function Sidebar() {
-    const [type, setType] = useState<CheckerNodeType | null>(null);
-    const [params, setParams] = useState<Partial<CheckerNodeParams>>({});
+    const [opType, setOpType] = useState<string | null>(null);
+    const [params, setParams] = useState<Record<string, any>>({});
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
     const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
     const addNode = useGraphStore(state => state.addNode);
     const selectedId = useGraphStore(state => state.selectedId);
     const updateNodeParams = useGraphStore(state => state.updateNodeParams);
-    const checkerNode = useGraphStore(state => selectedId ? state.checkerGraph.getNode(selectedId) : null);
+    const nodes = useGraphStore(state => state.nodes);
+    const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
 
     // Get default params for a node type
-    const getDefaultParams = useCallback((nodeType: CheckerNodeType) => {
-        const NodeClass = CheckerNodes[nodeType];
-        const metadata = NodeClass.getMeta();
-        const defaults: Partial<CheckerNodeParams> = {};
+    const getDefaultParams = useCallback((opType: string) => {
+        const metadata = getMeta('op', opType);
+        const defaults: Record<string, any> = {};
         
         Object.entries(metadata.paramFields).forEach(([name, field]) => {
             if (field.default !== undefined) {
@@ -48,19 +53,21 @@ export function Sidebar() {
     }, []);
 
     // Initialize raw inputs from params
-    const paramsToRawInputs = useCallback((params: Partial<CheckerNodeParams>) => {
+    const paramsToRawInputs = useCallback((params: Record<string, any>) => {
         const rawValues: Record<string, string> = {};
         Object.entries(params).forEach(([key, value]) => {
-            rawValues[key] = value.toString();
+            if (value !== undefined && value !== null) {
+                rawValues[key] = value.toString();
+            }
         });
         return rawValues;
     }, []);
 
     // Reset raw inputs when type changes
     const handleTypeChange = (v: string | null) => {
-        setType(v as CheckerNodeType);
+        setOpType(v);
         if (v) {
-            const defaults = getDefaultParams(v as CheckerNodeType);
+            const defaults = getDefaultParams(v);
             setParams(defaults);
             setRawInputs(paramsToRawInputs(defaults));
         } else {
@@ -71,9 +78,8 @@ export function Sidebar() {
         setError(null);
     };
 
-    const validateParams = useCallback((params: Partial<CheckerNodeParams>, type: CheckerNodeType): string | null => {
-        const NodeClass = CheckerNodes[type];
-        return NodeClass.validateParams(params);
+    const validateModuleParams = useCallback((params: Record<string, any>, opType: string): string | null => {
+        return validateParams(opType, params);
     }, []);
 
     const handleParamChange = useCallback((name: string, newValue: any) => {
@@ -105,7 +111,7 @@ export function Sidebar() {
         const value = params[name];
         const rawValue = rawInputs[name] ?? '';
         const showError = touchedFields.has(name);
-        const error = showError && type ? validateParams(params, type) : undefined;
+        const validationError = showError && opType ? validateModuleParams(params, opType) : undefined;
 
         switch (field.type) {
             case 'shape':
@@ -124,7 +130,7 @@ export function Sidebar() {
                             const shape = parseDimensions(val, field.allowNegativeOne);
                             handleParamChange(name, shape || undefined);
                         }}
-                        error={error}
+                        error={validationError}
                         onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
                     />
                 );
@@ -140,7 +146,7 @@ export function Sidebar() {
                             const num = parseInt(e.target.value, 10);
                             handleParamChange(name, !isNaN(num) && num > 0 ? num : undefined);
                         }}
-                        error={error}
+                        error={validationError}
                         onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
                     />
                 );
@@ -153,7 +159,7 @@ export function Sidebar() {
                         data={field.options || []}
                         value={typeof value === 'string' ? value : null}
                         onChange={(val) => handleParamChange(name, val)}
-                        error={error}
+                        error={validationError}
                         onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
                     />
                 );
@@ -161,50 +167,50 @@ export function Sidebar() {
     };
 
     const handleAdd = useCallback(() => {
-        if (!type || !params) return;
+        if (!opType) return;
         
-        const NodeClass = CheckerNodes[type];
-        if (!NodeClass) return;
-
-        const error = NodeClass.validateParams(params);
-        if (error) {
-            setError(error);
+        // Validate parameters
+        const validationError = validateModuleParams(params, opType);
+        if (validationError) {
+            setError(validationError);
             return;
         }
 
-        const config: CheckerNodeConfig = {
-            type,
-            params: params as CheckerNodeParams[typeof type]
-        };
-
         try {
             const id = crypto.randomUUID();
-            addNode(id, config);
-            setType(null);
+            
+            addNode({
+                id,
+                type: 'op' as NodeType,
+                opType,
+                params
+            });
+            
+            setOpType(null);
             setParams({});
             setRawInputs({});
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to create node');
         }
-    }, [type, params, addNode]);
+    }, [opType, params, addNode, validateModuleParams]);
 
-    const selectedNode = type && CheckerNodes[type];
-    const metadata = selectedNode?.getMeta();
+    const metadata = opType ? getMeta('op', opType) : null;
 
     useEffect(() => {
-        if (selectedId && checkerNode) {
-            setType(checkerNode.type as CheckerNodeType);
-            setParams(checkerNode.params);
-            setRawInputs(paramsToRawInputs(checkerNode.params));
+        if (selectedId && selectedNodeData) {
+            // Get data from the store's nodes array
+            setOpType(selectedNodeData.data.opType || null);
+            setParams(selectedNodeData.data.params || {});
+            setRawInputs(paramsToRawInputs(selectedNodeData.data.params || {}));
             setError(null);
         } else if (!selectedId) {
-            setType(null);
+            setOpType(null);
             setParams({});
             setRawInputs({});
             setError(null);
         }
-    }, [selectedId, checkerNode, paramsToRawInputs]);
+    }, [selectedId, selectedNodeData, paramsToRawInputs]);
 
     return (
         <Box p="md" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -212,7 +218,7 @@ export function Sidebar() {
                 label="Layer Type"
                 placeholder="Choose Layer..."
                 data={LAYER_TYPE_OPTIONS}
-                value={type}
+                value={opType}
                 onChange={handleTypeChange}
                 searchable
                 clearable
@@ -239,7 +245,7 @@ export function Sidebar() {
             {!selectedId && (
                 <Button 
                     onClick={handleAdd} 
-                    disabled={!type || !metadata || validateParams(params, type) !== null}
+                    disabled={!opType || !metadata || validateModuleParams(params, opType) !== null}
                     variant="filled"
                 >
                     Add Layer

@@ -1,18 +1,4 @@
-// torch.abs(input)       # Absolute value
-// torch.sqrt(input)      # Square root
-// torch.square(input)    # Square
-// torch.exp(input)       # Exponential
-// torch.log(input)       # Natural logarithm
-// torch.sin(input)
-// torch.cos(input)
-// torch.tan(input)
-// torch.asin(input)
-// torch.acos(input)
-// torch.atan(inpu
-
-//The Graph  
-//Merge Node 
-//Shape check for Merge and Branch 
+import { GraphNode } from './types';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
@@ -20,79 +6,6 @@ import { MergeOp, Concat } from './merge_op';
 import { Split } from './branch_op';
 
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp };
-
-export abstract class GraphNode {
-    protected readonly _id: string;
-    protected readonly _target: string;
-    constructor(id: string, target: string) {
-        // Validate UUID format
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(id)) {
-            throw new Error(`Invalid UUID format: ${id}`);
-        }
-        this._id = id;
-        this._target = target;
-    }
-
-    get id(): string { return this._id; }
-    get target(): string { return this._target; }
-
-    abstract get prev(): GraphNode | null;
-    abstract set prev(node: GraphNode | null);
-    abstract get next(): GraphNode | null;
-    abstract set next(node: GraphNode | null);
-
-    abstract addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void;
-    abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
-    abstract deletePrev(indexSelf?: number): void;
-    abstract deleteNext(indexSelf?: number): void;
-    abstract to_torch_functional(inputs: string[]): string;
-
-    static checkIndexInBound(index: number, length: number, context: string): number {
-        if (index < 0 || index >= length) {throw new Error(`${context}: Index ${index} is out of bounds for length ${length}`);}
-        return index;
-    }
-
-    static shapeMatch(shape1: number[], shape2: number[]): boolean {
-        if (shape1.length !== shape2.length) {
-            return false;
-        }
-        for (let i = 0; i < shape1.length; i++) {
-            if (shape1[i] !== shape2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /* 
-    // Future enhancement: Support for shape matching with broadcasting rules
-    static smartShapeMatch(shape1: number[], shape2: number[]): boolean {
-        // Simple exact matching first
-        if (shape1.length === shape2.length && shape1.every((dim, i) => dim === shape2[i])) {
-            return true;
-        }
-        
-        // Broadcasting support (compatible with NumPy/PyTorch rules)
-        const len1 = shape1.length;
-        const len2 = shape2.length;
-        const maxLen = Math.max(len1, len2);
-        
-        // Check dimensions from right to left
-        for (let i = 1; i <= maxLen; i++) {
-            const dim1 = i <= len1 ? shape1[len1 - i] : 1;
-            const dim2 = i <= len2 ? shape2[len2 - i] : 1;
-            
-            // Dimensions must be equal or one of them must be 1
-            if (dim1 !== dim2 && dim1 !== 1 && dim2 !== 1) {
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    */
-}
 
 /**
  * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 

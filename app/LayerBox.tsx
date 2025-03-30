@@ -1,12 +1,11 @@
 import { Position, type NodeProps } from 'reactflow';
 import { Card, Text, Group } from '@mantine/core';
-import type { CheckerNodeType } from './checker';
 import { LayerHandle } from './LayerHandle';
 import { useGraphStore } from './store';
 
 interface LayerBoxProps extends NodeProps {
     data: {
-        type: CheckerNodeType;
+        type: string;
         inputError?: string;
         outputError?: string;
     };
@@ -15,8 +14,8 @@ interface LayerBoxProps extends NodeProps {
 export function LayerBox({ data, id }: LayerBoxProps) {
     const { type, inputError, outputError } = data;
     const checkerNode = useGraphStore(state => state.checkerGraph.getNode(id));
-    const inShape = checkerNode?.in_shape || undefined;
-    const outShape = checkerNode?.out_shape || undefined;
+    const inShape = checkerNode?.inShape || undefined;
+    const outShape = checkerNode?.outShape || undefined;
 
     const card = (
         <Card shadow="sm" radius="md" withBorder style={{ width: 180, minHeight: 100 }}>

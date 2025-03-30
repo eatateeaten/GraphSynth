@@ -1,7 +1,4 @@
-import { GraphNode } from './graph';
-import { Tensor } from './tensor';
-import { Op } from './op';
-import { MergeOp } from './merge_op';
+import { GraphNode } from './types';
 
 export abstract class BranchOp extends GraphNode {
     protected _inShape: number[];

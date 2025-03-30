@@ -1,8 +1,5 @@
-import { GraphNode } from './graph';
+import { GraphNode } from './types';
 import { getElementwiseOpCode } from './torch_nn_module_op';
-import { Tensor } from './tensor';
-import { Op } from './op';
-import { BranchOp } from './branch_op';
 
 export abstract class MergeOp extends GraphNode {
     protected _inShapes: number[][];
