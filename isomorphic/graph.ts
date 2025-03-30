@@ -13,7 +13,6 @@
 //The Graph  
 //Merge Node 
 //Shape check for Merge and Branch 
-
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
@@ -68,112 +67,184 @@ export abstract class GraphNode {
         }
         return true;
     }
+
+    /* 
+    // Future enhancement: Support for shape matching with broadcasting rules
+    static smartShapeMatch(shape1: number[], shape2: number[]): boolean {
+        // Simple exact matching first
+        if (shape1.length === shape2.length && shape1.every((dim, i) => dim === shape2[i])) {
+            return true;
+        }
+        
+        // Broadcasting support (compatible with NumPy/PyTorch rules)
+        const len1 = shape1.length;
+        const len2 = shape2.length;
+        const maxLen = Math.max(len1, len2);
+        
+        // Check dimensions from right to left
+        for (let i = 1; i <= maxLen; i++) {
+            const dim1 = i <= len1 ? shape1[len1 - i] : 1;
+            const dim2 = i <= len2 ? shape2[len2 - i] : 1;
+            
+            // Dimensions must be equal or one of them must be 1
+            if (dim1 !== dim2 && dim1 !== 1 && dim2 !== 1) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    */
+}
+
+/**
+ * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 
+ * It delegates all GraphNode methods to the wrapped node.
+ */
+export class PendingNode<T extends GraphNode> extends GraphNode {
+    private _wrappedNode: T;
+
+    constructor(node: T) {
+        super(node.id, node.target);
+        this._wrappedNode = node;
+    }
+    // Delegating properties
+    get prev(): GraphNode | null { return this._wrappedNode.prev; }
+    set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
+    get next(): GraphNode | null { return this._wrappedNode.next; }
+    set next(node: GraphNode | null) { this._wrappedNode.next = node; }
+    // Delegating methods
+    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, indexSelf, indexPrev); }
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void { this._wrappedNode.addNext(next, indexSelf, indexNext); }
+    deletePrev(indexSelf?: number): void { this._wrappedNode.deletePrev(indexSelf); }
+    deleteNext(indexSelf?: number): void { this._wrappedNode.deleteNext(indexSelf); }
+    to_torch_functional(inputs: string[]): string { return this._wrappedNode.to_torch_functional(inputs); }
+    // Accessor for the wrapped node
+    unwrap(): T { return this._wrappedNode; }
 }
 
 export class Graph {
     private _nodes: Map<string, GraphNode>;
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
+    private _pendingNodes: Map<string, PendingNode<GraphNode>>;  // Changed to Map for O(1) lookups by ID
 
     constructor() {
         this._nodes = new Map();
         this._sources = new Set();
         this._sinks = new Set();
+        this._pendingNodes = new Map(); 
     }
 
-    addNode(node: GraphNode): void {
+    /**
+     * Adds a node to the pending collection
+     */
+    addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
+        // Check if the node already exists in pending nodes or main graph
+        if (this._pendingNodes.has(node.id)) {
+            throw new Error(`Node with id ${node.id} already exists in pending nodes`);
+        }
         if (this._nodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} already exists in graph`);
+            throw new Error(`Node with id ${node.id} already exists in the graph`);
         }
         
-        // Add node to the graph
-        this._nodes.set(node.id, node);
-        
-        // When a node is first added, it's both a source and a sink
-        // since it has no connections yet
-        this._sources.add(node);
-        this._sinks.add(node);
+        // Wrap and add node to pending nodes
+        const pendingNode = new PendingNode<T>(node);
+        this._pendingNodes.set(node.id, pendingNode as PendingNode<GraphNode>);
+        return pendingNode;
     }
 
-    removeNode(node: GraphNode): void {
-        if (!this._nodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} does not exist in graph`);
+    
+    /**
+     * Removes a node from the pending collection
+     */
+    removePendingNode(nodeId: string): void {
+        if (!this._pendingNodes.has(nodeId)) {
+            throw new Error(`Node with id ${nodeId} is not a pending node`);
         }
+        
+        this._pendingNodes.delete(nodeId);
+    }
 
-        // Disconnect all connections
-        if (node instanceof Tensor || node instanceof Op) {
-            // Disconnect input
-            if (node.prev) {
-                this.disconnect(node.prev, node);
-            }
-            
-            // Disconnect output
-            if (node.next) {
-                this.disconnect(node, node.next);
-            }
-        } else if (node instanceof BranchOp) {
-            // Disconnect input
-            if (node.prev) {
-                this.disconnect(node.prev, node);
-            }
-            
-            // Disconnect all outputs
-            for (let i = 0; i < node._nexts.length; i++) {
-                if (node._nexts[i]) {
-                    this.disconnect(node, node._nexts[i], i);
-                }
-            }
-        } else if (node instanceof MergeOp) {
-            // Disconnect all inputs
-            for (let i = 0; i < node._prevs.length; i++) {
-                if (node._prevs[i]) {
-                    this.disconnect(node._prevs[i], node, undefined, i);
-                }
-            }
-            
-            // Disconnect output
-            if (node.next) {
-                this.disconnect(node, node.next);
-            }
-        }
-
+    /**
+     * Removes a node from the main graph.
+     * Note: The node must not have any active connections.
+     */
+    removeNode(nodeId: string): void {
+        const node = this._nodes.get(nodeId);
+        if (!node) {throw new Error(`Node with id ${nodeId} does not exist in graph`);}
+        // Check if the node has any connections using a helper function
+        const hasConnections = this.nodeHasConnections(node);
+        if (hasConnections) {throw new Error(`Cannot remove node ${nodeId}: node has active connections`);}
         // Remove from collections
-        this._nodes.delete(node.id);
+        this._nodes.delete(nodeId);
         this._sources.delete(node);
         this._sinks.delete(node);
     }
+    
+    private nodeHasConnections(node: GraphNode): boolean {
+        if (node instanceof Tensor || node instanceof Op || node instanceof BranchOp) {if (node.prev !== null) return true;}
+        if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {if (node.next !== null) return true; }
+        if (node instanceof BranchOp && node._nexts.some(n => n !== null)) return true;
+        if (node instanceof MergeOp && node._prevs.some(p => p !== null)) return true;
+        return false;
+    }
 
-    connect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
+    /**
+     * Connects two nodes. The source must be in the main graph, but the sink can be pending.
+     */
+    connect(source: GraphNode, sink: GraphNode | PendingNode<GraphNode>, sourceIndex?: number, sinkIndex?: number): void {
+        const actualSink: GraphNode = sink instanceof PendingNode ? sink.unwrap() : sink;
+        
+        // Source node must exist in the main graph
         if (!this._nodes.has(source.id)) {
             throw new Error(`Source node with id ${source.id} does not exist in graph`);
         }
-        if (!this._nodes.has(sink.id)) {
-            throw new Error(`Sink node with id ${sink.id} does not exist in graph`);
+        
+        // If sink is not pending, check if it exists in the main graph
+        if (!(sink instanceof PendingNode) && !this._nodes.has(actualSink.id)) {
+            throw new Error(`Sink node with id ${actualSink.id} does not exist in graph or pending nodes`);
         }
 
         // Validate connection endpoints
         sourceIndex = this.checkConnectionSource(source, sourceIndex);
-        sinkIndex = this.checkConnectionSink(sink, sinkIndex);
+        sinkIndex = this.checkConnectionSink(actualSink, sinkIndex);
        
         // Validate shape compatibility
         const sourceOutShape = this.getSourceOutShape(source, sourceIndex);
-        const sinkInShape = this.getSinkInShape(sink, sinkIndex);
+        const sinkInShape = this.getSinkInShape(actualSink, sinkIndex);
 
         // Check shape compatibility
         if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
-            throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
+            throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${actualSink.constructor.name} with input shape [${sinkInShape}]`);
         }
 
         // Establish bidirectional connections
         // Let each node handle its own connection logic
-        sink.addPrev(source, sinkIndex, sourceIndex);
-        source.addNext(sink, sourceIndex, sinkIndex);
+        actualSink.addPrev(source, sinkIndex, sourceIndex);
+        source.addNext(actualSink, sourceIndex, sinkIndex);
 
-        // Step 4: Update graph status
+        // Only if the connection was successful and sink was pending, move it to the main graph
+        if (sink instanceof PendingNode) {
+            this._pendingNodes.delete(actualSink.id);
+            this._nodes.set(actualSink.id, actualSink);
+        }
+
+        // Update graph status
         this._refreshNodeSinkSourceStatus(source);
-        this._refreshNodeSinkSourceStatus(sink);
+        this._refreshNodeSinkSourceStatus(actualSink);
     }
-
+    
+    private checkConnectionSource(source: GraphNode, sourceIndex?: number): number | undefined {
+        // For BranchOp, validate the index
+        if (source instanceof BranchOp) {
+            if (sourceIndex === undefined) {
+                throw new Error("When connecting from a BranchOp, an output index must be specified");
+            }
+            return GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "connect (BranchOp output)");
+        }
+        return sourceIndex;
+    }
     private getSourceOutShape(source: GraphNode, sourceIndex?: number): number[] {
         // Get source's output shape
         let sourceOutShape: number[];
@@ -196,17 +267,6 @@ export class Graph {
         return sourceOutShape;
     }
 
-    private getSinkInShape(sink: GraphNode, sinkIndex?: number): number[] {
-        // Get sink's input shape
-        if (sink instanceof Tensor || sink instanceof Op || sink instanceof BranchOp) {
-            return sink.inShape as number[];
-        } else if (sink instanceof MergeOp) {
-            return sink.inShape[sinkIndex!];
-        } else {
-            throw new Error(`Unknown sink node of type ${sink.constructor.name}`);
-        }
-    }
-
     private checkConnectionSink(sink: GraphNode, sinkIndex?: number): number | undefined {
         // For MergeOp, validate the index
         if (sink instanceof MergeOp) {
@@ -218,16 +278,17 @@ export class Graph {
         return sinkIndex;
     }
 
-    private checkConnectionSource(source: GraphNode, sourceIndex?: number): number | undefined {
-        // For BranchOp, validate the index
-        if (source instanceof BranchOp) {
-            if (sourceIndex === undefined) {
-                throw new Error("When connecting from a BranchOp, an output index must be specified");
-            }
-            return GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "connect (BranchOp output)");
+    private getSinkInShape(sink: GraphNode, sinkIndex?: number): number[] {
+        // Get sink's input shape
+        if (sink instanceof Tensor || sink instanceof Op || sink instanceof BranchOp) {
+            return sink.inShape as number[];
+        } else if (sink instanceof MergeOp) {
+            return sink.inShape[sinkIndex!];
+        } else {
+            throw new Error(`Unknown sink node of type ${sink.constructor.name}`);
         }
-        return sourceIndex;
     }
+
 
     disconnect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
         if (!this._nodes.has(source.id)) {
