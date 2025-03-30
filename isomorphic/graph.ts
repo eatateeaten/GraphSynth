@@ -24,7 +24,6 @@ export { Tensor, Op, Concat, Split, BranchOp, MergeOp };
 export abstract class GraphNode {
     protected readonly _id: string;
     protected readonly _target: string;
-
     constructor(id: string, target: string) {
         // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -99,13 +98,67 @@ export abstract class GraphNode {
  * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 
  * It delegates all GraphNode methods to the wrapped node.
  */
-export class PendingNode extends GraphNode {
-    private _wrappedNode: GraphNode;
+export class PendingNode<T extends GraphNode> extends GraphNode {
+    private _wrappedNode: T;
 
-    constructor(node: GraphNode) {
+    constructor(node: T) {
         super(node.id, node.target);
         this._wrappedNode = node;
     }
+    
+    /**
+     * Factory method to create a PendingNode with a new GraphNode of the specified type
+     * @param type Type of GraphNode to create ("Tensor", "Op", "Split", "Concat", etc.)
+     * @param id UUID for the node
+     * @param target Target framework ("torch", "jax", etc.)
+     * @param params Additional parameters required for node construction
+     * @returns A PendingNode wrapping the created GraphNode
+     */
+    static create(type: string, id: string, target: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
+        let node: GraphNode;
+
+        switch (type) {
+            case "Tensor":
+                if (!params.shape) {
+                    throw new Error("Shape parameter is required for Tensor");
+                }
+                node = new Tensor(id, params.shape, target);
+                break;
+                
+            case "Op":
+                if (!params.opType) {
+                    throw new Error("opType parameter is required for Op");
+                }
+                node = new Op(id, target, params.opType, params.opParams || {});
+                break;
+                
+            case "Split":
+                if (!params.inShape) {
+                    throw new Error("inShape parameter is required for Split");
+                }
+                if (!params.splitParams || !params.splitParams.dim || !params.splitParams.sections) {
+                    throw new Error("splitParams with dim and sections is required for Split");
+                }
+                node = new Split(id, params.inShape, target, params.splitParams);
+                break;
+                
+            case "Concat":
+                if (!params.inShapes) {
+                    throw new Error("inShapes parameter is required for Concat");
+                }
+                if (!params.concatParams || params.concatParams.dim === undefined) {
+                    throw new Error("concatParams with dim is required for Concat");
+                }
+                node = new Concat(id, params.inShapes, target, params.concatParams);
+                break;
+                
+            default:
+                throw new Error(`Unknown GraphNode type: ${type}`);
+        }
+        
+        return new PendingNode(node);
+    }
+
     // Delegating properties
     get prev(): GraphNode | null { return this._wrappedNode.prev; }
     set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
@@ -118,14 +171,14 @@ export class PendingNode extends GraphNode {
     deleteNext(indexSelf?: number): void { this._wrappedNode.deleteNext(indexSelf); }
     to_torch_functional(inputs: string[]): string { return this._wrappedNode.to_torch_functional(inputs); }
     // Accessor for the wrapped node
-    unwrap(): GraphNode { return this._wrappedNode; }
+    unwrap(): T { return this._wrappedNode; }
 }
 
 export class Graph {
     private _nodes: Map<string, GraphNode>;
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
-    private _pendingNodes: Map<string, PendingNode>;  // Changed to Map for O(1) lookups by ID
+    private _pendingNodes: Map<string, PendingNode<GraphNode>>;  // Changed to Map for O(1) lookups by ID
 
     constructor() {
         this._nodes = new Map();
@@ -137,13 +190,36 @@ export class Graph {
     /**
      * Adds a node to the pending collection
      */
-    addPendingNode(node: GraphNode): PendingNode {
+    addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
         // Check if the node already exists in pending nodes or main graph
-        if (this._pendingNodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in pending nodes`);}
-        if (this._nodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in the graph`);}
+        if (this._pendingNodes.has(node.id)) {
+            throw new Error(`Node with id ${node.id} already exists in pending nodes`);
+        }
+        if (this._nodes.has(node.id)) {
+            throw new Error(`Node with id ${node.id} already exists in the graph`);
+        }
+        
         // Wrap and add node to pending nodes
-        const pendingNode = new PendingNode(node);
-        this._pendingNodes.set(node.id, pendingNode);
+        const pendingNode = new PendingNode<T>(node);
+        this._pendingNodes.set(node.id, pendingNode as PendingNode<GraphNode>);
+        return pendingNode;
+    }
+
+    /**
+     * Creates and adds a node to the pending collection using the specified type and parameters
+     */
+    createPendingNode(type: string, id: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
+        // Check if the node already exists in pending nodes or main graph
+        if (this._pendingNodes.has(id)) {
+            throw new Error(`Node with id ${id} already exists in pending nodes`);
+        }
+        if (this._nodes.has(id)) {
+            throw new Error(`Node with id ${id} already exists in the graph`);
+        }
+        
+        // Create a pending node of the specified type
+        const pendingNode = PendingNode.create(type, id, params.target || "torch", params);
+        this._pendingNodes.set(id, pendingNode);
         return pendingNode;
     }
 
@@ -151,7 +227,10 @@ export class Graph {
      * Removes a node from the pending collection
      */
     removePendingNode(nodeId: string): void {
-        if (!this._pendingNodes.has(nodeId)) {throw new Error(`Node with id ${nodeId} is not a pending node`);}
+        if (!this._pendingNodes.has(nodeId)) {
+            throw new Error(`Node with id ${nodeId} is not a pending node`);
+        }
+        
         this._pendingNodes.delete(nodeId);
     }
 
@@ -182,7 +261,7 @@ export class Graph {
     /**
      * Connects two nodes. The source must be in the main graph, but the sink can be pending.
      */
-    connect(source: GraphNode, sink: GraphNode | PendingNode, sourceIndex?: number, sinkIndex?: number): void {
+    connect(source: GraphNode, sink: GraphNode | PendingNode<GraphNode>, sourceIndex?: number, sinkIndex?: number): void {
         const actualSink: GraphNode = sink instanceof PendingNode ? sink.unwrap() : sink;
         
         // Source node must exist in the main graph
@@ -234,7 +313,6 @@ export class Graph {
         }
         return sourceIndex;
     }
-
     private getSourceOutShape(source: GraphNode, sourceIndex?: number): number[] {
         // Get source's output shape
         let sourceOutShape: number[];
@@ -278,6 +356,7 @@ export class Graph {
             throw new Error(`Unknown sink node of type ${sink.constructor.name}`);
         }
     }
+
 
     disconnect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
         if (!this._nodes.has(source.id)) {
