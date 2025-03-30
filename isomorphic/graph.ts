@@ -50,9 +50,7 @@ export abstract class GraphNode {
     abstract to_torch_functional(inputs: string[]): string;
 
     static checkIndexInBound(index: number, length: number, context: string): number {
-        if (index < 0 || index >= length) {
-            throw new Error(`${context}: Index ${index} is out of bounds for length ${length}`);
-        }
+        if (index < 0 || index >= length) {throw new Error(`${context}: Index ${index} is out of bounds for length ${length}`);}
         return index;
     }
 
@@ -141,28 +139,19 @@ export class Graph {
      */
     addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
         // Check if the node already exists in pending nodes or main graph
-        if (this._pendingNodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} already exists in pending nodes`);
-        }
-        if (this._nodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} already exists in the graph`);
-        }
-        
+        if (this._pendingNodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in pending nodes`);}
+        if (this._nodes.has(node.id)) {throw new Error(`Node with id ${node.id} already exists in the graph`);}
         // Wrap and add node to pending nodes
         const pendingNode = new PendingNode<T>(node);
         this._pendingNodes.set(node.id, pendingNode as PendingNode<GraphNode>);
         return pendingNode;
     }
 
-    
     /**
      * Removes a node from the pending collection
      */
     removePendingNode(nodeId: string): void {
-        if (!this._pendingNodes.has(nodeId)) {
-            throw new Error(`Node with id ${nodeId} is not a pending node`);
-        }
-        
+        if (!this._pendingNodes.has(nodeId)) {throw new Error(`Node with id ${nodeId} is not a pending node`);}
         this._pendingNodes.delete(nodeId);
     }
 
