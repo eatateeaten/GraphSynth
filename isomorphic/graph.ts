@@ -71,7 +71,6 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
         
         return new PendingNode(node);
     }
-
     // Delegating properties
     get prev(): GraphNode | null { return this._wrappedNode.prev; }
     set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
@@ -243,49 +242,45 @@ export class Graph {
     connect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
         // Get source node from main graph
         const source = this._nodes.get(sourceId);
-        if (!source) {
-            throw new Error(`Source node with id ${sourceId} does not exist in graph`);
-        }
-        
+        if (!source) {throw new Error(`Source node with id ${sourceId} does not exist in graph`);}
+
         // Get sink node from either main graph or pending nodes
-        let sink: GraphNode | PendingNode<GraphNode> | undefined = this._nodes.get(sinkId);
-        if (!sink) {
-            sink = this._pendingNodes.get(sinkId);
-            if (!sink) {
-                throw new Error(`Sink node with id ${sinkId} does not exist in graph or pending nodes`);
-            }
-        }
+        let sink = this._nodes.get(sinkId) || this._pendingNodes.get(sinkId);
+        if (!sink) {throw new Error(`Sink node with id ${sinkId} does not exist in graph or pending nodes`);}
         
-        // Use the existing connection logic
-        const actualSink: GraphNode = sink instanceof PendingNode ? sink.unwrap() : sink;
+        // Determine if sink is pending and unwrap it if needed
+        const sinkIsPending = sink instanceof PendingNode;
+        if (sinkIsPending) {
+            sink = (sink as PendingNode<GraphNode>).unwrap();
+        }
         
         // Validate connection endpoints
         sourceIndex = this._checkConnectionSource(source, sourceIndex);
-        sinkIndex = this._checkConnectionSink(actualSink, sinkIndex);
+        sinkIndex = this._checkConnectionSink(sink, sinkIndex);
        
-        // Validate shape compatibility
+        // Get Shape 
         const sourceOutShape = this._getSourceOutShape(source, sourceIndex);
-        const sinkInShape = this._getSinkInShape(actualSink, sinkIndex);
+        const sinkInShape = this._getSinkInShape(sink, sinkIndex);
 
         // Check shape compatibility
         if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
-            throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${actualSink.constructor.name} with input shape [${sinkInShape}]`);
+            throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
         }
 
         // Establish bidirectional connections
         // Let each node handle its own connection logic
-        actualSink.addPrev(source, sinkIndex, sourceIndex);
-        source.addNext(actualSink, sourceIndex, sinkIndex);
+        sink.addPrev(source, sinkIndex, sourceIndex);
+        source.addNext(sink, sourceIndex, sinkIndex);
 
         // Only if the connection was successful and sink was pending, move it to the main graph
-        if (sink instanceof PendingNode) {
-            this._pendingNodes.delete(actualSink.id);
-            this._nodes.set(actualSink.id, actualSink);
+        if (sinkIsPending) {
+            this._pendingNodes.delete(sink.id);
+            this._nodes.set(sink.id, sink);
         }
 
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
-        this._refreshNodeSinkSourceStatus(actualSink);
+        this._refreshNodeSinkSourceStatus(sink);
     }
     
     private _checkConnectionSource(source: GraphNode, sourceIndex?: number): number | undefined {
