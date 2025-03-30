@@ -100,8 +100,14 @@ export class TestGraph {
         if (this._nodes.has(node.id)) {
             throw new Error(`Node with id ${node.id} already exists in graph`);
         }
+        
+        // Add node to the graph
         this._nodes.set(node.id, node);
-        this._refreshNodeSinkSourceStatus(node);
+        
+        // When a node is first added, it's both a source and a sink
+        // since it has no connections yet
+        this._sources.add(node);
+        this._sinks.add(node);
     }
 
     removeNode(node: GraphNode): void {
