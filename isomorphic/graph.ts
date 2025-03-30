@@ -189,8 +189,9 @@ export class Graph {
 
     /**
      * Adds a node to the pending collection
+     * @private
      */
-    addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
+    private _addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
         // Check if the node already exists in pending nodes or main graph
         if (this._pendingNodes.has(node.id)) {
             throw new Error(`Node with id ${node.id} already exists in pending nodes`);
@@ -206,7 +207,32 @@ export class Graph {
     }
 
     /**
-     * Creates and adds a node to the pending collection using the specified type and parameters
+     * Creates a new node and adds it to the pending collection.
+     * 
+     * Pending nodes exist outside the main graph until they're connected to a node in the graph.
+     * This is the recommended way to create nodes for later use in the graph.
+     * 
+     * @param type - Type of node to create ("Tensor", "Op", "Split", "Concat")
+     * @param id - UUID for the node (must be in valid UUID v4 format)
+     * @param params - Parameters required for node construction:
+     *   - For "Tensor": { shape: number[], target?: string }
+     *   - For "Op": { opType: string, opParams?: Record<string, any>, target?: string }
+     *   - For "Split": { inShape: number[], splitParams: { dim: number, sections: number[] }, target?: string }
+     *   - For "Concat": { inShapes: number[][], concatParams: { dim: number }, target?: string }
+     * @returns A PendingNode wrapping the created node
+     * 
+     * @example
+     * // Create a pending tensor
+     * const pendingTensor = graph.createPendingNode("Tensor", "550e8400-e29b-41d4-a716-446655440000", {
+     *   shape: [1, 3, 224, 224],
+     *   target: "torch"
+     * });
+     * 
+     * // Create a pending operation
+     * const pendingOp = graph.createPendingNode("Op", "550e8400-e29b-41d4-a716-446655440001", {
+     *   opType: "relu",
+     *   target: "torch"
+     * });
      */
     createPendingNode(type: string, id: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
         // Check if the node already exists in pending nodes or main graph
@@ -222,9 +248,19 @@ export class Graph {
         this._pendingNodes.set(id, pendingNode);
         return pendingNode;
     }
-
+    
     /**
-     * Removes a node from the pending collection
+     * Removes a node from the pending collection.
+     * 
+     * This is useful for cleaning up pending nodes that are no longer needed.
+     * Only applies to nodes in the pending state; connected nodes are part of the main graph.
+     * 
+     * @param nodeId - ID of the pending node to remove
+     * @throws Error if the node doesn't exist in the pending collection
+     * 
+     * @example
+     * // Remove a pending node that's no longer needed
+     * graph.removePendingNode("550e8400-e29b-41d4-a716-446655440000");
      */
     removePendingNode(nodeId: string): void {
         if (!this._pendingNodes.has(nodeId)) {
@@ -236,7 +272,19 @@ export class Graph {
 
     /**
      * Removes a node from the main graph.
-     * Note: The node must not have any active connections.
+     * 
+     * This method only works for nodes that have no active connections.
+     * To remove a connected node, you must first disconnect all its connections.
+     * 
+     * @param nodeId - ID of the node to remove from the graph
+     * @throws Error if the node doesn't exist or has active connections
+     * 
+     * @example
+     * // Disconnect a node's connections first
+     * graph.disconnect("sourceNodeId", "nodeToRemoveId");
+     * 
+     * // Then remove the node
+     * graph.removeNode("nodeToRemoveId");
      */
     removeNode(nodeId: string): void {
         const node = this._nodes.get(nodeId);
@@ -259,11 +307,25 @@ export class Graph {
     }
 
     /**
-     * Connects two nodes. The source must be in the main graph, but the sink can be pending.
-     * @param sourceId ID of the source node
-     * @param sinkId ID of the sink node
-     * @param sourceIndex Index for the source node output (required for BranchOp)
-     * @param sinkIndex Index for the sink node input (required for MergeOp)
+     * Connects two nodes in the graph.
+     * 
+     * The source node must be in the main graph, but the sink can be either in the main graph
+     * or in the pending collection. If the sink is a pending node, it will be promoted to
+     * the main graph after a successful connection.
+     * 
+     * @param sourceId - ID of the source node
+     * @param sinkId - ID of the sink node
+     * @param sourceIndex - Index for the source node output (required for BranchOp)
+     * @param sinkIndex - Index for the sink node input (required for MergeOp)
+     * @throws Error if nodes don't exist, indices are invalid, or shapes don't match
+     * 
+     * @example
+     * // Connect a tensor to an operation
+     * graph.connect("tensorId", "opId");
+     * 
+     * // Connect with specific indices (for branch/merge operations)
+     * graph.connect("splitId", "opId", 0); // Connect to first output of split
+     * graph.connect("opId", "concatId", undefined, 1); // Connect to second input of concat
      */
     connect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
         // Get source node from main graph
@@ -369,10 +431,24 @@ export class Graph {
 
     /**
      * Disconnects two nodes.
-     * @param sourceId ID of the source node
-     * @param sinkId ID of the sink node
-     * @param sourceIndex Index for the source node output (required for BranchOp)
-     * @param sinkIndex Index for the sink node input (required for MergeOp)
+     * 
+     * This method breaks the connection between two nodes in the main graph.
+     * Both nodes must exist in the main graph (not in pending nodes).
+     * After disconnection, shape validation may need to be performed again when reconnecting.
+     * 
+     * @param sourceId - ID of the source node
+     * @param sinkId - ID of the sink node
+     * @param sourceIndex - Index for the source node output (required for BranchOp)
+     * @param sinkIndex - Index for the sink node input (required for MergeOp)
+     * @throws Error if nodes don't exist or are not properly connected
+     * 
+     * @example
+     * // Disconnect two nodes
+     * graph.disconnect("opId", "tensorId");
+     * 
+     * // Disconnect with specific indices (for branch/merge operations)
+     * graph.disconnect("splitId", "opId", 0); // Disconnect from first output of split
+     * graph.disconnect("opId", "concatId", undefined, 1); // Disconnect from second input of concat
      */
     disconnect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
         // Get source and sink nodes from the main graph
