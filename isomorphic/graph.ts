@@ -242,7 +242,7 @@ export class Graph {
         const node = this._nodes.get(nodeId);
         if (!node) {throw new Error(`Node with id ${nodeId} does not exist in graph`);}
         // Check if the node has any connections using a helper function
-        const hasConnections = this.nodeHasConnections(node);
+        const hasConnections = this._nodeHasConnections(node);
         if (hasConnections) {throw new Error(`Cannot remove node ${nodeId}: node has active connections`);}
         // Remove from collections
         this._nodes.delete(nodeId);
@@ -250,7 +250,7 @@ export class Graph {
         this._sinks.delete(node);
     }
     
-    private nodeHasConnections(node: GraphNode): boolean {
+    private _nodeHasConnections(node: GraphNode): boolean {
         if (node instanceof Tensor || node instanceof Op || node instanceof BranchOp) {if (node.prev !== null) return true;}
         if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {if (node.next !== null) return true; }
         if (node instanceof BranchOp && node._nexts.some(n => n !== null)) return true;
@@ -275,12 +275,12 @@ export class Graph {
         }
 
         // Validate connection endpoints
-        sourceIndex = this.checkConnectionSource(source, sourceIndex);
-        sinkIndex = this.checkConnectionSink(actualSink, sinkIndex);
+        sourceIndex = this._checkConnectionSource(source, sourceIndex);
+        sinkIndex = this._checkConnectionSink(actualSink, sinkIndex);
        
         // Validate shape compatibility
-        const sourceOutShape = this.getSourceOutShape(source, sourceIndex);
-        const sinkInShape = this.getSinkInShape(actualSink, sinkIndex);
+        const sourceOutShape = this._getSourceOutShape(source, sourceIndex);
+        const sinkInShape = this._getSinkInShape(actualSink, sinkIndex);
 
         // Check shape compatibility
         if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
@@ -303,7 +303,7 @@ export class Graph {
         this._refreshNodeSinkSourceStatus(actualSink);
     }
     
-    private checkConnectionSource(source: GraphNode, sourceIndex?: number): number | undefined {
+    private _checkConnectionSource(source: GraphNode, sourceIndex?: number): number | undefined {
         // For BranchOp, validate the index
         if (source instanceof BranchOp) {
             if (sourceIndex === undefined) {
@@ -313,7 +313,7 @@ export class Graph {
         }
         return sourceIndex;
     }
-    private getSourceOutShape(source: GraphNode, sourceIndex?: number): number[] {
+    private _getSourceOutShape(source: GraphNode, sourceIndex?: number): number[] {
         // Get source's output shape
         let sourceOutShape: number[];
 
@@ -335,7 +335,7 @@ export class Graph {
         return sourceOutShape;
     }
 
-    private checkConnectionSink(sink: GraphNode, sinkIndex?: number): number | undefined {
+    private _checkConnectionSink(sink: GraphNode, sinkIndex?: number): number | undefined {
         // For MergeOp, validate the index
         if (sink instanceof MergeOp) {
             if (sinkIndex === undefined) {
@@ -346,7 +346,7 @@ export class Graph {
         return sinkIndex;
     }
 
-    private getSinkInShape(sink: GraphNode, sinkIndex?: number): number[] {
+    private _getSinkInShape(sink: GraphNode, sinkIndex?: number): number[] {
         // Get sink's input shape
         if (sink instanceof Tensor || sink instanceof Op || sink instanceof BranchOp) {
             return sink.inShape as number[];
@@ -357,7 +357,6 @@ export class Graph {
         }
     }
 
-
     disconnect(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
         if (!this._nodes.has(source.id)) {
             throw new Error(`Source node with id ${source.id} does not exist in graph`);
@@ -367,11 +366,11 @@ export class Graph {
         }
 
         // Step 1: Validate indices for special node types
-        sourceIndex = this.validateDisconnectionIndices(source, sink, sourceIndex, sinkIndex);
-        sinkIndex = this.validateDisconnectionIndices(sink, source, sinkIndex, sourceIndex);
+        sourceIndex = this._validateDisconnectionIndices(source, sink, sourceIndex, sinkIndex);
+        sinkIndex = this._validateDisconnectionIndices(sink, source, sinkIndex, sourceIndex);
 
         // Step 2: Verify connections exist
-        this.verifyConnectionExists(source, sink, sourceIndex, sinkIndex);
+        this._verifyConnectionExists(source, sink, sourceIndex, sinkIndex);
 
         // Step 3: Break connections using node methods
         sink.deletePrev(sinkIndex);
@@ -382,7 +381,7 @@ export class Graph {
         this._refreshNodeSinkSourceStatus(sink);
     }
 
-    private validateDisconnectionIndices(node: GraphNode, otherNode: GraphNode, index?: number, otherIndex?: number): number | undefined {
+    private _validateDisconnectionIndices(node: GraphNode, otherNode: GraphNode, index?: number, otherIndex?: number): number | undefined {
         if (node instanceof BranchOp && index !== undefined) {
             return GraphNode.checkIndexInBound(index, node.outShape.length, "disconnect (BranchOp output)");
         }
@@ -392,7 +391,7 @@ export class Graph {
         return index;
     }
 
-    private verifyConnectionExists(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
+    private _verifyConnectionExists(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
         // Check source to sink connection
         let sourceHasConnection = false;
         if (source instanceof Tensor || source instanceof Op || source instanceof MergeOp) {
