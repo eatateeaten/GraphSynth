@@ -1,4 +1,4 @@
-import { GraphNode } from './types';
+import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
@@ -35,7 +35,7 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.shape) {
                     throw new Error("Shape parameter is required for Tensor");
                 }
-                node = new Tensor(id, params.shape, target);
+                node = new Tensor(id, params.shape, target, params.variableName || null);
                 break;
                 
             case "Op":
@@ -76,6 +76,12 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
     set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
     get next(): GraphNode | null { return this._wrappedNode.next; }
     set next(node: GraphNode | null) { this._wrappedNode.next = node; }
+    
+    // Implement shape and parameter accessors
+    get inShape(): number[] | numbernull { return this._wrappedNode.inShape; }
+    get outShape(): number[] | null { return this._wrappedNode.outShape; }
+    get params(): Record<string, any> { return this._wrappedNode.params; }
+    
     // Delegating methods
     addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, indexSelf, indexPrev); }
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void { this._wrappedNode.addNext(next, indexSelf, indexNext); }
@@ -127,7 +133,7 @@ export class Graph {
      * @param type - Type of node to create ("Tensor", "Op", "Split", "Concat")
      * @param id - UUID for the node (must be in valid UUID v4 format)
      * @param params - Parameters required for node construction:
-     *   - For "Tensor": { shape: number[], target?: string }
+     *   - For "Tensor": { shape: number[], target?: string, variableName?: string }
      *   - For "Op": { opType: string, opParams?: Record<string, any>, target?: string }
      *   - For "Split": { inShape: number[], splitParams: { dim: number, sections: number[] }, target?: string }
      *   - For "Concat": { inShapes: number[][], concatParams: { dim: number }, target?: string }
@@ -137,7 +143,8 @@ export class Graph {
      * // Create a pending tensor
      * const pendingTensor = graph.createPendingNode("Tensor", "550e8400-e29b-41d4-a716-446655440000", {
      *   shape: [1, 3, 224, 224],
-     *   target: "torch"
+     *   target: "torch",
+     *   variableName: "input_image"  // Optional name to use in generated code
      * });
      * 
      * // Create a pending operation
@@ -209,7 +216,7 @@ export class Graph {
         this._sources.delete(node);
         this._sinks.delete(node);
     }
-    
+
     private _nodeHasConnections(node: GraphNode): boolean {
         if (node instanceof Tensor || node instanceof Op || node instanceof BranchOp) {if (node.prev !== null) return true;}
         if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {if (node.next !== null) return true; }
@@ -278,7 +285,7 @@ export class Graph {
         this._refreshNodeSinkSourceStatus(source);
         this._refreshNodeSinkSourceStatus(sink);
     }
-    
+
     /**
      * Validates the source node's connection point and returns its output shape
      */
@@ -651,9 +658,10 @@ export class Graph {
         
         // If the code doesn't assign to our output variable, wrap it
         if (!nodeFunctionalCode.startsWith(`${outputVar} =`)) {
-            // For tensor inputs, use their ID as variable
+            // For tensor inputs, use their variable name or ID
             if (node instanceof Tensor && inputVars.length === 0) {
-                nodeFunctionalCode = `${outputVar} = ${node.id}  # Input tensor`;
+                const variableName = node.variableName || node.id;
+                nodeFunctionalCode = `${outputVar} = ${variableName}  # Input tensor`;
             } else {
                 nodeFunctionalCode = `${outputVar} = ${nodeFunctionalCode}`;
             }

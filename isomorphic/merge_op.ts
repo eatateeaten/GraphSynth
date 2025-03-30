@@ -1,4 +1,4 @@
-import { GraphNode } from './types';
+import { GraphNode } from './graph_node';
 import { getElementwiseOpCode } from './torch_nn_module_op';
 
 export abstract class MergeOp extends GraphNode {
@@ -33,6 +33,18 @@ export abstract class MergeOp extends GraphNode {
     set next(node: GraphNode | null) { this._next = node; }
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
+    set params(params: Record<string, any>) {
+        // Make a deep copy to avoid modifying the original object
+        (this._params as Record<string, any>) = { ...params };
+        
+        // Recalculate output shape
+        try {
+            this._outShape = this.computeOutShape();
+        } catch (err: any) {
+            // If shape inference fails, we keep the existing output shape
+            console.warn(`Failed to update output shape after params change: ${err.message}`);
+        }
+    }
 
     addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {

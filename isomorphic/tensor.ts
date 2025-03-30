@@ -1,24 +1,55 @@
-import { GraphNode } from './types';
+import { GraphNode } from './graph_node';
 
 export class Tensor extends GraphNode {
     protected _inShape: number[];
     protected _outShape: number[];
     protected _prev: GraphNode | null = null;
     protected _next: GraphNode | null = null;
+    protected _variableName: string | null = null;
 
-    constructor(id: string, shape: number[], target: string) {
+    constructor(id: string, shape: number[], target: string, variableName: string | null = null) {
         super(id, target);
         this._inShape = shape;
         this._outShape = shape;
+        this._variableName = variableName;
     }
 
     // Getters and setters
     get inShape(): number[] { return this._inShape; }
+    set inShape(shape: number[]) { 
+        this._inShape = [...shape]; 
+        // Since Tensor input and output shapes are always the same
+        this._outShape = [...shape];
+    }
     get outShape(): number[] { return this._outShape; }
+    set outShape(shape: number[]) { 
+        this._outShape = [...shape]; 
+        // Since Tensor input and output shapes are always the same
+        this._inShape = [...shape];
+    }
     get prev(): GraphNode | null { return this._prev; }
     set prev(node: GraphNode | null) { this._prev = node; }
     get next(): GraphNode | null { return this._next; }
     set next(node: GraphNode | null) { this._next = node; }
+    get variableName(): string | null { return this._variableName; }
+    set variableName(name: string | null) { this._variableName = name; }
+    
+    // Implement params accessors
+    get params(): Record<string, any> { 
+        return { 
+            shape: [...this._inShape],
+            variableName: this._variableName
+        }; 
+    }
+    set params(params: Record<string, any>) {
+        if (params.shape) {
+            this._inShape = [...params.shape];
+            this._outShape = [...params.shape];
+        }
+        if ('variableName' in params) {
+            this._variableName = params.variableName;
+        }
+    }
 
     addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
@@ -47,6 +78,10 @@ export class Tensor extends GraphNode {
     }
 
     to_torch_functional(inputs: string[]): string {
+        if (inputs.length === 0) {
+            // This is a source tensor - use variableName if available, otherwise ID
+            return this._variableName || this.id;
+        }
         return `${inputs[0]} = ${inputs[0]}`;
     }
 } 

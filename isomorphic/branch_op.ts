@@ -1,4 +1,4 @@
-import { GraphNode } from './types';
+import { GraphNode } from './graph_node';
 
 export abstract class BranchOp extends GraphNode {
     protected _inShape: number[];
@@ -35,6 +35,18 @@ export abstract class BranchOp extends GraphNode {
     get nexts(): GraphNode[] { return this._nexts; }
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
+    set params(params: Record<string, any>) {
+        // Make a deep copy to avoid modifying the original object
+        (this._params as Record<string, any>) = { ...params };
+        
+        // Recalculate output shapes
+        try {
+            this._outShapes = this.computeOutShapes();
+        } catch (err: any) {
+            // If shape inference fails, we keep the existing output shapes
+            console.warn(`Failed to update output shapes after params change: ${err.message}`);
+        }
+    }
 
     addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
