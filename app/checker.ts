@@ -1,10 +1,10 @@
 import { assert } from 'console';
-import { Graph as ZophGraph,
-        GraphNode as ZophNode,
-        Tensor as ZophTensor,
-        Op as ZophOp,
-        BranchOp as ZophBranch,
-        MergeOp as ZophMerge } from '../isomorphic/graph';
+import { Graph as xGraph,
+        GraphNode as xNode,
+        Tensor as xTensor,
+        Op as xOp,
+        BranchOp as xBranch,
+        MergeOp as xMerge } from '../isomorphic/graph';
 import { v4 as uuidv4 } from 'uuid';
 
 /* track edge information */
@@ -17,10 +17,10 @@ interface EdgeInfo {
 
 /**
  * information about a pending node
- * AI: talk about ZophGraph limitations here
+
  * */
 interface PendingNode {
-  id: string; /* node ID. this is shared between CheckerGraph, ZophGraph and FlowGraph */
+  id: string; /* node ID. this is shared between CheckerGraph, xGraph and FlowGraph */
   type: string; /* is it a Tensor, Op, Merge, or Branch? */
   opType?: string; /* sub-type inside op, merge or branch */
   params?: Record<string, any>; /* parameters for the node */
@@ -34,9 +34,9 @@ interface NodeConfig {
   params?: Record<string, any>; /* parameters for the node */
 }
 
-// Zoph Graph wrapper
+// x Graph wrapper
 export class CheckerGraph {
-  private graph: ZophGraph = new ZophGraph();
+  private graph: xGraph = new xGraph();
 
   // Track nodes with unknown shapes separately
   private pendingNodes: Map<string, PendingNode> = new Map();
@@ -45,28 +45,26 @@ export class CheckerGraph {
   private edgeMap: Map<string, EdgeInfo> = new Map();
 
   // Track node ID to node instance
-  private nodeMap: Map<string, ZophNode> = new Map();
+  private nodeMap: Map<string, xNode> = new Map();
   
   /** Add a node to the graph */
   addNode(nodeConfig: NodeConfig): string {
     const nodeId = uuidv4();
 
-    // Only ZophTensors can be directly added to the graph without connections
+    // Only xTensors can be directly added to the graph without connections
     if (nodeConfig.type === 'tensor') {
-        // Create a ZophTensor
+        // Create a xTensor
         assert(nodeConfig.params !== undefined, "Shape is required for tensors");
         assert(nodeConfig.params?.shape !== undefined, "Shape is required for tensors");
 
         try {
-            const node = new ZophTensor(nodeId, nodeConfig.params.shape, "torch");
+            const node = new xTensor(nodeId, nodeConfig.params!.shape, "torch");
+            this.graph.addNode(node);
+            // Add to graph
+            this.nodeMap.set(nodeId, node);
         } catch (error) {
             return Error("Failed to create tensor");
         }
-
-        this.graph.addNode(node);
-        // Add to graph
-        this.nodeMap.set(nodeId, node);
-      }
     } else {
       // Store non-tensor nodes as pending until all inputs are connected
       const inputPorts = this.determineInputPorts(nodeConfig);
@@ -90,7 +88,7 @@ export class CheckerGraph {
   connect(sourceId: string, targetId: string, sourceIndex?: number, targetIndex?: number): string {
     const edgeId = uuidv4();
     
-    // Store edge info regardless of whether we can connect in ZophGraph yet
+    // Store edge info regardless of whether we can connect in xGraph yet
     this.edgeMap.set(edgeId, {
       sourceId,
       targetId,
@@ -105,12 +103,12 @@ export class CheckerGraph {
       
       // Check if all inputs are now connected
       if (targetPending.inputConnections.size >= targetPending.inputPorts) {
-        // All inputs are connected, try to add to ZophGraph
-        this.tryAddPendingToZophGraph(targetId);
+        // All inputs are connected, try to add to xGraph
+        this.tryAddPendingToXGraph(targetId);
       }
     }
     
-    // Try to connect in ZophGraph if both nodes exist there
+    // Try to connect in xGraph if both nodes exist there
     const sourceNode = this.nodeMap.get(sourceId);
     const targetNode = this.nodeMap.get(targetId);
     
@@ -118,8 +116,8 @@ export class CheckerGraph {
       try {
         this.graph.connect(sourceNode, targetNode, sourceIndex, targetIndex);
       } catch (error) {
-        // Connection failed in ZophGraph, but we still return the edge ID
-        console.error("Failed to connect in ZophGraph:", error);
+        // Connection failed in xGraph, but we still return the edge ID
+        console.error("Failed to connect in xGraph:", error);
       }
     }
     
@@ -127,22 +125,22 @@ export class CheckerGraph {
   }
   
   /**
-   * Try to add a pending node to ZophGraph if all inputs are connected to nodes in ZophGraph
+   * Try to add a pending node to xGraph if all inputs are connected to nodes in xGraph
    */
-  private tryAddPendingToZophGraph(nodeId: string): void {
+  private tryAddPendingToXGraph(nodeId: string): void {
     const pendingNode = this.pendingNodes.get(nodeId);
     if (!pendingNode) return;
     
-    // Check if all input connections are to nodes in ZophGraph
-    const allInputsInZoph = Array.from(pendingNode.inputConnections).every(
+    // Check if all input connections are to nodes in xGraph
+    const allInputsInX = Array.from(pendingNode.inputConnections).every(
       inputId => this.nodeMap.has(inputId)
     );
     
-    if (!allInputsInZoph) return;
+    if (!allInputsInX) return;
     
-    // Attempt to create the ZophNode
+    // Attempt to create the xNode
     try {
-      let node: ZophNode;
+      let node: xNode;
       
       if (pendingNode.type === 'op') {
         // We would need to get the actual input shape here from connected nodes
@@ -153,7 +151,7 @@ export class CheckerGraph {
         const inputShape = this.getOutputShape(sourceNode);
         if (!inputShape) return;
         
-        node = new ZophOp(
+        node = new xOp(
           nodeId,
           inputShape,
           pendingNode.target || 'torch',
@@ -166,11 +164,11 @@ export class CheckerGraph {
         return;
       }
       
-      // Add to ZophGraph
+      // Add to xGraph
       this.graph.addNode(node);
       this.nodeMap.set(nodeId, node);
       
-      // Connect to all input nodes in ZophGraph
+      // Connect to all input nodes in xGraph
       for (const inputId of pendingNode.inputConnections) {
         const inputNode = this.nodeMap.get(inputId);
         if (inputNode) {
@@ -179,7 +177,7 @@ export class CheckerGraph {
           try {
             this.graph.connect(inputNode, node);
           } catch (error) {
-            console.error("Failed to connect in ZophGraph during pending node addition:", error);
+            console.error("Failed to connect in xGraph during pending node addition:", error);
           }
         }
       }
@@ -188,7 +186,7 @@ export class CheckerGraph {
       this.pendingNodes.delete(nodeId);
       
     } catch (error) {
-      console.error("Failed to add pending node to ZophGraph:", error);
+      console.error("Failed to add pending node to xGraph:", error);
     }
   }
   
@@ -207,16 +205,16 @@ export class CheckerGraph {
   }
   
   /**
-   * Get the output shape of a ZophNode
+   * Get the output shape of a xNode
    */
-  private getOutputShape(node: ZophNode): number[] | undefined {
-    if (node instanceof ZophTensor) {
+  private getOutputShape(node: xNode): number[] | undefined {
+    if (node instanceof xTensor) {
       return node.outShape;
-    } else if (node instanceof ZophOp) {
+    } else if (node instanceof xOp) {
       return node.outShape;
-    } else if (node instanceof ZophMerge) {
+    } else if (node instanceof xMerge) {
       return node.outShape;
-    } else if (node instanceof ZophBranch) {
+    } else if (node instanceof xBranch) {
       // Branch ops have multiple outputs, this would need specific handling
       return undefined;
     }
@@ -227,16 +225,20 @@ export class CheckerGraph {
    * Edit node parameters
    */
   editNodeParams(nodeId: string, params: Record<string, any>): void {
-    // If node is in ZophGraph, we need to disconnect it first
+    // If node is in xGraph, we need to disconnect it first
     const node = this.nodeMap.get(nodeId);
     
     if (node) {
       // Disconnect from all connections
-      node.disconnectSource();
-      node.disconnectSink();
+      if (node.prev) {
+        this.graph.disconnect(node.prev, node);
+      }
+      if (node.next) {
+        this.graph.disconnect(node, node.next);
+      }
       
       // If it's an Op with parameters, we need special handling
-      if (node instanceof ZophOp) {
+      if (node instanceof xOp) {
         // In a real implementation, we'd update the Op's parameters here
         // For now, we'll just remove the node and add it to pending
         this.graph.removeNode(node);
@@ -267,7 +269,7 @@ export class CheckerGraph {
    * Delete a node by ID
    */
   deleteNode(nodeId: string): void {
-    // Remove from ZophGraph if it exists there
+    // Remove from xGraph if it exists there
     const node = this.nodeMap.get(nodeId);
     if (node) {
       this.graph.removeNode(node);
@@ -307,7 +309,7 @@ export class CheckerGraph {
       targetPending.inputConnections.delete(edgeInfo.sourceId);
     }
     
-    // Try to disconnect in ZophGraph if both nodes exist there
+    // Try to disconnect in xGraph if both nodes exist there
     const sourceNode = this.nodeMap.get(edgeInfo.sourceId);
     const targetNode = this.nodeMap.get(edgeInfo.targetId);
     
@@ -315,7 +317,7 @@ export class CheckerGraph {
       try {
         this.graph.disconnect(sourceNode, targetNode, edgeInfo.sourceIndex, edgeInfo.targetIndex);
       } catch (error) {
-        console.error("Failed to disconnect in ZophGraph:", error);
+        console.error("Failed to disconnect in xGraph:", error);
       }
     }
     
@@ -326,7 +328,7 @@ export class CheckerGraph {
   /**
    * Get a node by ID
    */
-  getNode(nodeId: string): ZophNode | undefined {
+  getNode(nodeId: string): xNode | undefined {
     return this.nodeMap.get(nodeId);
   }
 }
