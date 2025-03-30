@@ -78,8 +78,8 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
     set next(node: GraphNode | null) { this._wrappedNode.next = node; }
     
     // Implement shape and parameter accessors
-    get inShape(): number[] | numbernull { return this._wrappedNode.inShape; }
-    get outShape(): number[] | null { return this._wrappedNode.outShape; }
+    get inShape(): number[] | null | number[][] { return this._wrappedNode.inShape; }
+    get outShape(): number[] | null | number[][] { return this._wrappedNode.outShape; }
     get params(): Record<string, any> { return this._wrappedNode.params; }
     
     // Delegating methods

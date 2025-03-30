@@ -16,17 +16,7 @@ export class Tensor extends GraphNode {
 
     // Getters and setters
     get inShape(): number[] { return this._inShape; }
-    set inShape(shape: number[]) { 
-        this._inShape = [...shape]; 
-        // Since Tensor input and output shapes are always the same
-        this._outShape = [...shape];
-    }
     get outShape(): number[] { return this._outShape; }
-    set outShape(shape: number[]) { 
-        this._outShape = [...shape]; 
-        // Since Tensor input and output shapes are always the same
-        this._inShape = [...shape];
-    }
     get prev(): GraphNode | null { return this._prev; }
     set prev(node: GraphNode | null) { this._prev = node; }
     get next(): GraphNode | null { return this._next; }

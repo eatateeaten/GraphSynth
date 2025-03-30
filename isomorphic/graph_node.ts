@@ -2,7 +2,6 @@
  * Base types for the graph implementation.
  * This file is used to prevent circular imports.
  */
-
 export abstract class GraphNode {
     protected readonly _id: string;
     protected readonly _target: string;
@@ -25,9 +24,10 @@ export abstract class GraphNode {
     abstract set next(node: GraphNode | null);
 
     // Abstract shape and parameter accessors
-    abstract get inShape(): number[] | null;
-    abstract get outShape(): number[] | null;
+    abstract get inShape(): number[] | number[][] | null;
+    abstract get outShape(): number[] | number[][] | null;
     abstract get params(): Record<string, any>;
+    abstract set params(params: Record<string, any>);
 
     abstract addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void;
     abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
