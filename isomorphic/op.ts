@@ -5,8 +5,8 @@ import { BranchOp } from './branch_op';
 import { MergeOp } from './merge_op';
 
 export class Op extends GraphNode {
-    protected _inShape: number[] | null;
-    protected _outShape: number[] | null;
+    protected _inShape: number[] | null = null;
+    protected _outShape: number[] | null = null;
     protected _prev: GraphNode | null = null;
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
@@ -14,16 +14,13 @@ export class Op extends GraphNode {
 
     constructor(
         id: string,
-        inShape: number[] | null,
         target: string,
         opType: string,
         params: Record<string, any> = {}
     ) {
         super(id, target);
-        this._inShape = inShape;
         this._opType = opType;
         this._params = params;
-        this._outShape = inShape ? this.computeOutShape() : null;
     }
 
     protected computeOutShape(): number[] {
@@ -59,12 +56,8 @@ export class Op extends GraphNode {
     // Getters and setters
     get inShape(): number[] | null { return this._inShape; }
     set inShape(shape: number[] | null) { 
-        this._inShape = shape;
-        if (shape) {
-            this._outShape = this.computeOutShape();
-        } else {
-            this._outShape = null;
-        }
+        // inShape can only be set during connection
+        throw new Error("Cannot directly set inShape for Op. Connect a source node instead.");
     }
     get outShape(): number[] | null { return this._outShape; }
     get prev(): GraphNode | null { return this._prev; }
@@ -82,11 +75,18 @@ export class Op extends GraphNode {
         // Get Prev's outShape 
         let prevOutShape: number[];
         if (prev instanceof Tensor || prev instanceof Op || prev instanceof MergeOp) {
+            if (prev.outShape === null) {
+                throw new Error(`Cannot connect to ${prev.constructor.name} with id ${prev.id}: output shape is undefined`);
+            }
             prevOutShape = prev.outShape as number[];
         } else if (prev instanceof BranchOp) {
             if (indexPrev !== undefined) {
                 const validatedPrevIndex = GraphNode.validateIndex(indexPrev, prev.outShape.length, "Op.connectSource (BranchOp output)");
-                prevOutShape = prev.outShape[validatedPrevIndex] as number[];
+                const branchOutShape = prev.outShape[validatedPrevIndex];
+                if (branchOutShape === null) {
+                    throw new Error(`Cannot connect to BranchOp with id ${prev.id} at output ${validatedPrevIndex}: output shape is undefined`);
+                }
+                prevOutShape = branchOutShape;
                 indexPrev = validatedPrevIndex;
             } else {
                 throw new Error("When connecting from a BranchOp, an output index must be specified");
@@ -95,14 +95,16 @@ export class Op extends GraphNode {
             throw new Error(`Cannot connect to node of type ${prev.constructor.name}`);
         }
         
-        // If inShape is null, set it based on the previous node's outShape
-        if (this._inShape === null) {
-            this._inShape = [...prevOutShape];
+        // Set inShape based on the previous node's outShape
+        this._inShape = [...prevOutShape];
+        
+        // Compute outShape based on the new inShape
+        try {
             this._outShape = this.computeOutShape();
-        }
-        // Otherwise, do a shape match check
-        else if (!GraphNode.shapeMatch(this._inShape as number[], prevOutShape)) {
-            throw new Error(`Shape mismatch: Cannot connect Op with input shape [${this._inShape}] to previous node with output shape [${prevOutShape}]`);
+        } catch (err: any) {
+            // Reset inShape if shape inference fails
+            this._inShape = null;
+            throw err;
         }
         
         // Make the bidirectional connection
@@ -116,7 +118,7 @@ export class Op extends GraphNode {
 
     connectSink(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (this._next !== null) {
-            throw new Error("Op already has a sink connection. Please disconnect it first");
+            throw new Error("Op already has a sink connection");
         }
         
         // Get Next's inShape 
@@ -136,10 +138,7 @@ export class Op extends GraphNode {
         
         // Ensure we have output shape
         if (this._outShape === null) {
-            if (this._inShape === null) {
-                throw new Error("Cannot connect sink: Op has no input shape or output shape defined");
-            }
-            this._outShape = this.computeOutShape();
+            throw new Error("Cannot connect sink: Op has no input connection to determine output shape");
         }
         
         // Do a shape match check 
