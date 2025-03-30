@@ -1,5 +1,5 @@
 import { GraphNode } from './graph';
-import { getElementwiseOpCode } from './torch_nn_module_op';
+import { getElementwiseOpCode, forwardShapeInference } from './torch_nn_module_op';
 import { Tensor } from './tensor';
 import { BranchOp } from './branch_op';
 import { MergeOp } from './merge_op';
@@ -27,8 +27,17 @@ export class Op extends GraphNode {
     }
 
     protected computeOutShape(): number[] {
-        // Most unary ops preserve shape
-        return [...this._inShape];
+        // Use forwardShapeInference for torch operations
+        if (this._target === "torch") {
+            try {
+                return forwardShapeInference(this._opType, this._inShape, this._params);
+            } catch (err: any) {
+                throw new Error(`Shape inference error for ${this._opType}: ${err.message}. Consider using a different set of parameters.`);
+            }
+        }
+        
+        // For non-torch operations, throw an error
+        throw new Error(`No shape inference implementation available for target '${this._target}' and operation '${this._opType}'`);
     }
 
     to_torch_functional(inputs: string[]): string {

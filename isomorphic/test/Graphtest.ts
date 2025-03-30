@@ -163,7 +163,7 @@ export class TestGraph {
 
     to_torch(): string {
         // Validate graph before generating code
-        this.validate_torch();
+        this.validate_graph();
         
         // Dictionary to track processed nodes and their output variable names
         const processedNodes = new Map<string, string>();
@@ -180,13 +180,29 @@ export class TestGraph {
         return code;
     }
     
-    validate_torch(): void {
+    validate_graph(): void {
         if (this._sources.size === 0) {
             throw new Error("Graph has no source nodes");
         }
         
         if (this._sinks.size === 0) {
             throw new Error("Graph has no sink nodes");
+        }
+        
+        // Check that all source nodes are Tensors
+        const sourceNodes = Array.from(this._sources);
+        for (const source of sourceNodes) {
+            if (!(source instanceof Tensor)) {
+                throw new Error(`Source node ${source.id} is not a Tensor (found ${source.constructor.name} instead)`);
+            }
+        }
+        
+        // Check that all sink nodes are Tensors
+        const sinkNodes = Array.from(this._sinks);
+        for (const sink of sinkNodes) {
+            if (!(sink instanceof Tensor)) {
+                throw new Error(`Sink node ${sink.id} is not a Tensor (found ${sink.constructor.name} instead)`);
+            }
         }
         
         // Check that all sinks are reachable from sources
@@ -231,7 +247,6 @@ export class TestGraph {
         }
         
         // Check if all sinks are reachable
-        const sinkNodes = Array.from(this._sinks);
         for (const sink of sinkNodes) {
             if (!visited.has(sink.id)) {
                 throw new Error(`Sink node ${sink.id} is not reachable from any source`);

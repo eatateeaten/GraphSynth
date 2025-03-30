@@ -147,8 +147,8 @@ export class Graph {
     }
 
     to_torch(): string {
-        // Validate graph before generating code
-        this.validate_torch();
+        // Validate the graph before generating code
+        this.validate_graph();
         
         // Dictionary to track processed nodes and their output variable names
         const processedNodes = new Map<string, string>();
@@ -165,16 +165,34 @@ export class Graph {
         return code;
     }
     
-    validate_torch(): void {
+    validate_graph(): void {
+        // Check that the graph has source nodes
         if (this._sources.size === 0) {
             throw new Error("Graph has no source nodes");
         }
         
+        // Check that the graph has sink nodes
         if (this._sinks.size === 0) {
             throw new Error("Graph has no sink nodes");
         }
         
-        // Check that all sinks are reachable from sources
+        // Check that all source nodes are Tensors
+        const sourceNodes = Array.from(this._sources);
+        for (const source of sourceNodes) {
+            if (!(source instanceof Tensor)) {
+                throw new Error(`Source node ${source.id} is not a Tensor (found ${source.constructor.name} instead)`);
+            }
+        }
+        
+        // Check that all sink nodes are Tensors
+        const sinkNodes = Array.from(this._sinks);
+        for (const sink of sinkNodes) {
+            if (!(sink instanceof Tensor)) {
+                throw new Error(`Sink node ${sink.id} is not a Tensor (found ${sink.constructor.name} instead)`);
+            }
+        }
+        
+        // Check that all sinks are reachable from sources using BFS
         const visited = new Set<string>();
         const queue: GraphNode[] = Array.from(this._sources);
         
@@ -216,7 +234,6 @@ export class Graph {
         }
         
         // Check if all sinks are reachable
-        const sinkNodes = Array.from(this._sinks);
         for (const sink of sinkNodes) {
             if (!visited.has(sink.id)) {
                 throw new Error(`Sink node ${sink.id} is not reachable from any source`);
