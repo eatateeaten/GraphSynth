@@ -104,23 +104,37 @@ export abstract class MergeOp extends GraphNode {
 export abstract class PointwiseOp extends MergeOp {
     constructor(
         id: string,
-        inShapes: number[][],
         target: string,
         opType: string,
         params: Record<string, any> = {}
     ) {
-        if (inShapes.length !== 2) {
-            throw new Error("PointwiseOp requires exactly 2 input shapes");
-        }
-        if (!GraphNode.shapeMatch(inShapes[0], inShapes[1])) {
-            throw new Error("PointwiseOp requires input shapes to match");
-        }
-        super(id, inShapes, target, opType, params);
+        super(id, [], target, opType, params);
     }
 
     protected computeOutShape(): number[] {
-        // For pointwise operations, output shape matches input shapes
-        return [...this._inShapes[0]];
+        if (this._prevs.length !== 2) {
+            throw new Error("PointwiseOp requires exactly 2 inputs");
+        }
+        if (!this._prevs[0] || !this._prevs[1]) {
+            throw new Error("PointwiseOp requires both inputs");
+        }
+        
+        const shape0 = this._prevs[0].outShape;
+        const shape1 = this._prevs[1].outShape;
+        
+        if (!shape0 || !shape1) {
+            throw new Error("PointwiseOp requires both inputs to have defined shapes");
+        }
+        
+        // Convert to number[] if needed
+        const shape0Array = (Array.isArray(shape0) ? shape0 : [shape0]) as number[];
+        const shape1Array = (Array.isArray(shape1) ? shape1 : [shape1]) as number[];
+        
+        if (!GraphNode.shapeMatch(shape0Array, shape1Array)) {
+            throw new Error("PointwiseOp requires input shapes to match");
+        }
+        
+        return [...shape0Array];
     }
 
     addPrev(prev: GraphNode, indexSelf: number, indexPrev?: number): void {
@@ -133,9 +147,14 @@ export abstract class PointwiseOp extends MergeOp {
         }
         
         if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
-            throw new Error(`PointwiseOp already has a connection at input ${indexSelf}`);
+            throw new Error(`PointwiseOp already has a connection at input ${indexSelf}, disconnect first`);
         }
-        
+
+        // Initialize _prevs array if needed
+        if (this._prevs.length < 2) {
+            this._prevs = new Array(2).fill(null);
+        }
+
         this._prevs[indexSelf] = prev;
     }
 }
