@@ -1,5 +1,4 @@
 import { GraphNode } from './graph_node';
-import { getElementwiseOpCode } from './torch_nn_module_op';
 
 export abstract class MergeOp extends GraphNode {
     protected _inShapes: number[][];
@@ -8,6 +7,7 @@ export abstract class MergeOp extends GraphNode {
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
     protected readonly _params: Record<string, any>;
+    
 
     constructor(
         id: string,
@@ -97,179 +97,45 @@ export abstract class MergeOp extends GraphNode {
     }
 }
 
-export class Concat extends MergeOp {
-    constructor(id: string, inShapes: number[][], target: string, params: { dim: number }) {
-        super(id, inShapes, target, "Concat", params);
-    }
-
-    protected computeOutShape(): number[] {
-        const dim = this._params.dim;
-        if (dim < 0 || dim >= this._inShapes[0].length) {
-            throw new Error(`Invalid concatenation dimension ${dim} for input shape of length ${this._inShapes[0].length}`);
-        }
-
-        const referenceShape = this._inShapes[0];
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const shape = this._inShapes[i];
-            if (shape.length !== referenceShape.length) {
-                throw new Error(`For concatenation, all input shapes must have the same rank. Shape at index ${i} has rank ${shape.length}, expected ${referenceShape.length}`);
-            }
-            for (let j = 0; j < shape.length; j++) {
-                if (j !== dim && shape[j] !== referenceShape[j]) {
-                    throw new Error(`For concatenation, input shapes must match on all dimensions except the concatenation dimension. Mismatch at shape index ${i}, dimension ${j}: got ${shape[j]}, expected ${referenceShape[j]}`);
-                }
-            }
-        }
-
-        const outShape = [...referenceShape];
-        outShape[dim] = this._inShapes.reduce((sum, shape) => sum + shape[dim], 0);
-        return outShape;
-    }
-
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
-        return `${inputs[0]} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
-    }
-}
-
-export class ReduceOp extends MergeOp {
+/**
+ * PointwiseOp represents operations that take exactly two inputs with matching shapes
+ * and perform element-wise operations between them.
+ */
+export abstract class PointwiseOp extends MergeOp {
     constructor(
         id: string,
         inShapes: number[][],
         target: string,
         opType: string,
-        params: Record<string, any>
+        params: Record<string, any> = {}
     ) {
+        if (inShapes.length !== 2) {
+            throw new Error("PointwiseOp requires exactly 2 input shapes");
+        }
+        if (!GraphNode.shapeMatch(inShapes[0], inShapes[1])) {
+            throw new Error("PointwiseOp requires input shapes to match");
+        }
         super(id, inShapes, target, opType, params);
     }
 
     protected computeOutShape(): number[] {
-        if (this._inShapes.length < 1) {
-            throw new Error("ReduceOp requires at least 1 input tensor");
-        }
-
-        const referenceShape = [...this._inShapes[0]];
-        
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const shape = this._inShapes[i];
-            if (!GraphNode.shapeMatch(referenceShape, shape)) {
-                throw new Error(`For reduction operations, all input shapes must match. Shape at index ${i} [${shape}] doesn't match reference shape [${referenceShape}]`);
-            }
-        }
-
-        return referenceShape;
+        // For pointwise operations, output shape matches input shapes
+        return [...this._inShapes[0]];
     }
 
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
-        if (inputs.length < 1) {
-            throw new Error("ReduceOp requires at least 1 input");
-        }
-
-        const op = this._opType.toLowerCase();
-        
-        if (inputs.length === 1) {
-            return `${inputs[0]} = ${inputs[0]}`;
-        }
-        
-        let code = inputs[0];
-        for (let i = 1; i < inputs.length; i++) {
-            code = `torch.${op}(${code}, ${inputs[i]})`;
-        }
-        
-        return `${inputs[0]} = ${code}`;
-    }
-
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, indexSelf: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
-            indexSelf = this._prevs.findIndex(p => !p);
-            if (indexSelf === -1) {
-                indexSelf = this._prevs.length;
-                if (indexSelf >= this._inShapes.length) {
-                    this._inShapes.push([...this._inShapes[0]]);
-                }
-            }
+            throw new Error("PointwiseOp.addPrev requires an input index");
         }
         
-        super.addPrev(prev, indexSelf, indexPrev);
+        if (indexSelf < 0 || indexSelf >= 2) {
+            throw new Error(`PointwiseOp can only have 2 inputs. Invalid index: ${indexSelf}`);
+        }
+        
+        if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
+            throw new Error(`PointwiseOp already has a connection at input ${indexSelf}`);
+        }
+        
+        this._prevs[indexSelf] = prev;
     }
 }
-
-export class PointwiseReduce extends ReduceOp {
-    constructor(id: string, inShapes: number[][], target: string, opType: string) {
-        super(id, inShapes, target, opType, {});
-    }
-
-    protected computeOutShape(): number[] {
-        if (this._inShapes.length < 2) {
-            throw new Error("PointwiseReduce requires at least 2 input tensors");
-        }
-
-        let resultShape = [...this._inShapes[0]];
-
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const currentShape = this._inShapes[i];
-            
-            if (currentShape.length !== resultShape.length) {
-                throw new Error(`Input shapes must have the same rank. Shape at index ${i} has rank ${currentShape.length}, expected ${resultShape.length}`);
-            }
-            
-            resultShape = resultShape.map((dim, j) => {
-                const otherDim = currentShape[j];
-                
-                if (dim === otherDim) {
-                    return dim;
-                }
-                if (dim === 1) {
-                    return otherDim;
-                }
-                if (otherDim === 1) {
-                    return dim;
-                }
-                throw new Error(
-                    `Incompatible shapes for broadcasting at dimension ${j}: ` +
-                    `${dim} and ${otherDim}. Dimensions must be equal or one must be 1.`
-                );
-            });
-        }
-
-        return resultShape;
-    }
-
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
-        if (inputs.length < 2) {
-            throw new Error("PointwiseReduce requires at least 2 inputs");
-        }
-        const opCode = getElementwiseOpCode(this._opType);
-        
-        const result = inputs.reduce((acc, curr) => 
-            acc ? `${opCode}(${acc}, ${curr})` : curr
-        );
-        
-        return `${inputs[0]} = ${result}`;
-    }
-}
-
-export class AllReduceOp extends ReduceOp {
-    constructor(
-        id: string,
-        inShapes: number[][],
-        target: string,
-        opType: string,
-        params: Record<string, any>
-    ) {
-        super(id, inShapes, target, opType, params);
-    }
-
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
-        if (inputs.length < 1) {
-            throw new Error("AllReduceOp requires at least 1 input");
-        }
-
-        const op = this._opType.toLowerCase();
-        
-        if (inputs.length === 1) {
-            return `${inputs[0]} = ${inputs[0]}`;
-        }
-        
-        return `${inputs[0]} = torch.${op}(torch.stack([${inputs.join(", ")}], 0), 0)[0]`;
-    }
-} 

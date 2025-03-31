@@ -305,7 +305,7 @@ export class Graph {
         if (sinkIsPending) {
             sink = (sink as PendingNode<GraphNode>).unwrap();
         }
-          
+        
         // Validate connection endpoints and get shapes
         const sourceOutShape = this._validateSourceAndGetOutShape(source, sourceIndex);
         const sinkInShape = this._validateSinkAndGetInShape(sink, sinkIndex);
@@ -317,6 +317,7 @@ export class Graph {
         } else if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
             throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
         }
+
         // Establish bidirectional connections
         // Let each node handle its own connection logic
         sink.addPrev(source, sinkIndex, sourceIndex);
@@ -327,6 +328,7 @@ export class Graph {
             this._pendingNodes.delete(sink.id);
             this._nodes.set(sink.id, sink);
         }
+
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
         this._refreshNodeSinkSourceStatus(sink);
@@ -643,7 +645,7 @@ export class Graph {
         visiting.delete(node.id);
         visited.add(node.id);
     }
-
+    
     
     /**
      * Generates functional PyTorch code from the graph.
@@ -683,7 +685,7 @@ export class Graph {
                     while (usedVarNames.has(varName)) {
                         varName = `${sourceNode.variableName}_${counter++}`;
                     }
-                } else {
+            } else {
                     // Generate a unique variable name
                     do {
                         varName = `var_${varCounter.value++}`;
@@ -713,8 +715,8 @@ export class Graph {
                 outputVar = `var_${varCounter.value++}`;
             } while (usedVarNames.has(outputVar));
             usedVarNames.add(outputVar);
-            
-            // Generate code for this node
+        
+        // Generate code for this node
             if (node instanceof BranchOp) {
                 // Branch operations need output variables for each output
                 const outputs: string[] = [];
