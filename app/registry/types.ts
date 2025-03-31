@@ -3,7 +3,7 @@ export type { NodeType } from '../types';
 export interface ParamFieldMetadata {
     label: string;
     description: string;
-    type: 'number' | 'shape' | 'option';
+    type: 'number' | 'shape' | 'option' | 'boolean';
     default?: any;
     options?: string[];
     allowNegativeOne?: boolean;

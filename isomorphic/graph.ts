@@ -76,12 +76,12 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
     set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
     get next(): GraphNode | null { return this._wrappedNode.next; }
     set next(node: GraphNode | null) { this._wrappedNode.next = node; }
-    
+
     // Implement shape and parameter accessors
     get inShape(): number[] | null | number[][] { return this._wrappedNode.inShape; }
     get outShape(): number[] | null | number[][] { return this._wrappedNode.outShape; }
     get params(): Record<string, any> { return this._wrappedNode.params; }
-    
+
     // Delegating methods
     addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, indexSelf, indexPrev); }
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void { this._wrappedNode.addNext(next, indexSelf, indexNext); }
@@ -498,6 +498,10 @@ export class Graph {
 
     getNode(id: string): GraphNode | undefined {
         return this._nodes.get(id);
+    }
+
+    getPendingNode(id: string): PendingNode<GraphNode> | undefined {
+        return this._pendingNodes.get(id) as PendingNode<GraphNode> | undefined;
     }
 
     getSources(): Set<GraphNode> {

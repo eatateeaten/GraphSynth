@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Select, Button, TextInput, Box, Text } from '@mantine/core';
+import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
 import { useGraphStore } from './store';
 import { NodeType, ParamFieldMetadata, Shape } from './registry/types';
 import { ModuleRegistry, getMeta, validateParams } from './registry/index';
@@ -7,9 +7,13 @@ import { ModuleRegistry, getMeta, validateParams } from './registry/index';
 /* Build layer type options from available modules */
 const LAYER_TYPE_OPTIONS = (() => {
     // Create a list of all operation types
-    const opTypes = Object.keys(ModuleRegistry.op);
+    const opTypes = Object.keys(ModuleRegistry.op)
+        .filter(key => key.startsWith('op:'))
+        .map(key => key.slice(3));
 
-    return opTypes.reduce((groups, type) => {
+    let out = [{ group: 'Tensor', items: [{ value: 'Tensor', label: 'Tensor' }] }];
+
+    out.push(...opTypes.reduce((groups, type) => {
         // Get metadata for this operation
         const metadata = getMeta('op', type);
         const category = metadata.category;
@@ -17,13 +21,15 @@ const LAYER_TYPE_OPTIONS = (() => {
         
         const existingGroup = groups.find(g => g.group === category);
         if (existingGroup) {
-        existingGroup.items.push(item);
+            existingGroup.items.push(item);
         } else {
-        groups.push({ group: category, items: [item] });
+            groups.push({ group: category, items: [item] });
         }
 
         return groups;
-    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }> }>);
+    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
+
+    return out;
 })();
 
 export function Sidebar() {
@@ -37,10 +43,11 @@ export function Sidebar() {
     const updateNodeParams = useGraphStore(state => state.updateNodeParams);
     const nodes = useGraphStore(state => state.nodes);
     const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
+    const makeTensorSource = useGraphStore(state => state.makeTensorSource);
 
     // Get default params for a node type
     const getDefaultParams = useCallback((opType: string) => {
-        const metadata = getMeta('op', opType);
+        const metadata = getMeta(opType === 'Tensor' ? 'tensor' : 'op', opType === 'Tensor' ? undefined : opType);
         const defaults: Record<string, any> = {};
         
         Object.entries(metadata.paramFields).forEach(([name, field]) => {
@@ -79,6 +86,8 @@ export function Sidebar() {
     };
 
     const validateModuleParams = useCallback((params: Record<string, any>, opType: string): string | null => {
+        if(opType === 'Tensor')
+            return null;
         return validateParams(opType, params);
     }, []);
 
@@ -114,6 +123,16 @@ export function Sidebar() {
         const validationError = showError && opType ? validateModuleParams(params, opType) : undefined;
 
         switch (field.type) {
+            case 'boolean':
+                return (
+                    <Checkbox
+                        key={name}
+                        label={field.label}
+                        description={field.description}
+                        checked={value || false}
+                        onChange={(e) => handleParamChange(name, e.currentTarget.checked)}
+                    />
+                );
             case 'shape':
                 return (
                     <TextInput
@@ -169,7 +188,40 @@ export function Sidebar() {
     const handleAdd = useCallback(() => {
         if (!opType) return;
         
-        // Validate parameters
+        // Special handling for Tensor nodes
+        if (opType === 'Tensor') {
+            const shape = params.shape;
+            if (!shape || !Array.isArray(shape)) {
+                setError('A valid shape is required for tensor nodes');
+                return;
+            }
+            
+            try {
+                const id = crypto.randomUUID();
+                const node = {
+                    id,
+                    type: 'tensor' as NodeType,
+                    params: { shape }
+                };
+                
+                addNode(node);
+                
+                // If this is an input tensor, make it a source
+                if (params.isInput) {
+                    makeTensorSource(id);
+                }
+                
+                setOpType(null);
+                setParams({});
+                setRawInputs({});
+                setError(null);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to create tensor node');
+            }
+            return;
+        }
+        
+        // Validate parameters for op nodes
         const validationError = validateModuleParams(params, opType);
         if (validationError) {
             setError(validationError);
@@ -193,9 +245,9 @@ export function Sidebar() {
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to create node');
         }
-    }, [opType, params, addNode, validateModuleParams]);
+    }, [opType, params, addNode, validateModuleParams, makeTensorSource]);
 
-    const metadata = opType ? getMeta('op', opType) : null;
+    const metadata = opType ? getMeta(opType === 'Tensor' ? 'tensor' : 'op', opType === 'Tensor' ? undefined : opType) : null;
 
     useEffect(() => {
         if (selectedId && selectedNodeData) {

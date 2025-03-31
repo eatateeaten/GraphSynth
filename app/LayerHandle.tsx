@@ -1,11 +1,15 @@
 import { Handle, Position, type HandleProps } from 'reactflow';
 import { Text, Stack, Popover } from '@mantine/core';
-import { Shape } from './checker';
+
+// Define Shape type directly here
+type Shape = number[];
 
 interface LayerHandleProps extends Omit<HandleProps, 'position'> {
     dimensions?: Shape;
     position: Position;
     error?: string;
+    handleId?: string;
+    offset?: number;
 }
 
 export function LayerHandle({ dimensions, position, error, type, ...handleProps }: LayerHandleProps) {
@@ -13,7 +17,7 @@ export function LayerHandle({ dimensions, position, error, type, ...handleProps 
         <div className="layer-handle-content">
             {dimensions ? (
                 <Stack gap={2} align="center" style={{ width: '100%' }}>
-                    {dimensions.map((dim, i) => (
+                    {dimensions.map((dim: number, i: number) => (
                         <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <Text size="xs" style={{ width: '100%', textAlign: 'center' }}>
                                 {dim}

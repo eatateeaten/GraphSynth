@@ -48,8 +48,9 @@ interface GraphActions {
     setSelectedId: (id: string | null) => void;
     updateNodes: (nodes: FlowNode[]) => void;
     updateEdges: (edges: FlowEdge[]) => void;
-    addEdge: (edge: FlowEdge) => void;
+    addEdge: (edge: FlowEdge, sourceIndex?: number, sinkIndex?: number) => void;
     updateNodeParams: (id: string, params: Record<string, any>) => void;
+    makeTensorSource: (id: string) => void;
 }
 
 export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
@@ -156,65 +157,35 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
 
         updateEdges: (edges) => set({ edges }),
 
-        addEdge: (edge) => {
+        addEdge: (edge: FlowEdge, sourceIndex = 0, sinkIndex = 0) => {
             // Clear any existing errors
             setNodeError(edge.source, {});
             setNodeError(edge.target, {});
 
-            try {
-                // Connect nodes in ZophGraph
-                get().checkerGraph.connect(
-                    edge.source, 
-                    edge.target,
-                    // Convert string handles to numbers if provided
-                    edge.sourceHandle ? parseInt(edge.sourceHandle) : undefined,
-                    edge.targetHandle ? parseInt(edge.targetHandle) : undefined
-                );
-                
-                // Check if connection moved nodes from pending to main graph
-                const sourceNode = get().checkerGraph.getNode(edge.source);
-                const targetNode = get().checkerGraph.getNode(edge.target);
-                
-                // Update our pending nodes tracking
-                if (sourceNode && get().pendingNodeIds.has(edge.source)) {
-                    const pendingNodeIds = new Set(get().pendingNodeIds);
-                    pendingNodeIds.delete(edge.source);
-                    set({ pendingNodeIds });
-                }
-                
-                if (targetNode && get().pendingNodeIds.has(edge.target)) {
-                    const pendingNodeIds = new Set(get().pendingNodeIds);
-                    pendingNodeIds.delete(edge.target);
-                    set({ pendingNodeIds });
-                }
-                
-                // Add visual edge if connection succeeded
-                set(state => ({ edges: [...state.edges, edge] }));
-            } catch (error) {
-                console.error('Connection error:', error);
-                
-                // Handle error based on message contents
-                if (error instanceof Error) {
-                    const errorMsg = error.message.toLowerCase();
-                    
-                    if (errorMsg.includes('shape mismatch') || 
-                        errorMsg.includes('output shape') || 
-                        errorMsg.includes('cannot connect from')) {
-                        // Error from source node's output
-                        setNodeError(edge.source, { output: error.message });
-                    } else if (errorMsg.includes('input shape') || 
-                               errorMsg.includes('cannot connect to')) {
-                        // Error from target node's input
-                        setNodeError(edge.target, { input: error.message });
-                    } else {
-                        console.error('Failed to add edge:', error);
-                        throw error; // Let unknown errors propagate
-                    }
-                } else {
-                    console.error('Failed to add edge (unknown error type):', error);
-                    throw error;
-                }
+            /* ok. first we need to check if the source is pending or not */
+            if(!get().checkerGraph.getNode(edge.source)){
+                setNodeError(edge.source, { output: "Source cannot be a pending node"});
+                return;
             }
+
+            /* now try to connect in the checker graph */
+            try {
+                get().checkerGraph.connect(
+                    edge.source,
+                    edge.target,
+                    sourceIndex,
+                    sinkIndex
+                );
+            } catch(e: any) {
+                setNodeError(edge.source, { output: e.message });
+            }
+
+            /* if it succeeded, connect in visual graph */
+            set(state => ({ edges: [...state.edges, edge] }));
+            /* sink shouldn't be a pending node anymore */
+            set(state => ({
+                pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== edge.target))
+            }));
         },
 
         updateNodeParams: (id, params) => {
@@ -337,6 +308,18 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
             } catch (error) {
                 console.error('Failed to update params:', error);
                 throw error;
+            }
+        },
+
+        makeTensorSource: (id: string) => {
+            try {
+                get().checkerGraph.makeTensorSource(id);
+                set(state => ({
+                    pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== id))
+                }));
+            } catch (e) {
+                console.error('Failed to make tensor source:', e);
+                throw e;
             }
         }
     };
