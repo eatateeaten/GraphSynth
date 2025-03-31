@@ -305,16 +305,18 @@ export class Graph {
         if (sinkIsPending) {
             sink = (sink as PendingNode<GraphNode>).unwrap();
         }
-        
+          
         // Validate connection endpoints and get shapes
         const sourceOutShape = this._validateSourceAndGetOutShape(source, sourceIndex);
         const sinkInShape = this._validateSinkAndGetInShape(sink, sinkIndex);
 
-        // Check shape compatibility
-        if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
+        // Skip shape compatibility check if sink has no defined input shape yet
+        // This allows connecting nodes before their shapes are fully determined
+        if (sinkInShape === null) {
+            // Skip shape check - allow connection without shape validation
+        } else if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
             throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
         }
-
         // Establish bidirectional connections
         // Let each node handle its own connection logic
         sink.addPrev(source, sinkIndex, sourceIndex);
@@ -325,7 +327,6 @@ export class Graph {
             this._pendingNodes.delete(sink.id);
             this._nodes.set(sink.id, sink);
         }
-
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
         this._refreshNodeSinkSourceStatus(sink);
@@ -357,32 +358,35 @@ export class Graph {
             }
             return source.outShape;
         }
-        
         // Unknown node type
         throw new Error(`Unknown source node type: ${source.constructor.name}`);
     }
 
     /**
-     * Validates the sink node's connection point and returns its input shape
+     * Validates the sink node's connection point and returns its input shape, returned value can be Null 
      */
-    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex?: number): number[] {
+    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex?: number): number[] | null {
         // For MergeOp, validate the index and get specific input shape
         if (sink instanceof MergeOp) {
             if (sinkIndex === undefined) {
                 throw new Error("When connecting to a MergeOp, an input index must be specified");
             }
             sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect (MergeOp input)");
-            
             if (!sink.inShape || !sink.inShape[sinkIndex]) {
-                throw new Error(`Input shape at index ${sinkIndex} is undefined for MergeOp with id ${sink.id}`);
+                throw new Error(`MergeOp with id ${sink.id} must have defined input shape at index ${sinkIndex}`);
             }
             return sink.inShape[sinkIndex];
         }
         
-        // For other node types (Tensor, Op, BranchOp)
-        if (sink instanceof Tensor || sink instanceof Op || sink instanceof BranchOp) {
+        // For Op and BranchOp, allow undefined input shape
+        if (sink instanceof Op || sink instanceof BranchOp) {
+            return sink.inShape || null;
+        }
+        
+        // For Tensor, input shape must be defined
+        if (sink instanceof Tensor) {
             if (!sink.inShape) {
-                throw new Error(`Input shape is undefined for ${sink.constructor.name} with id ${sink.id}`);
+                throw new Error(`Tensor with id ${sink.id} must have defined input shape`);
             }
             return sink.inShape;
         }
