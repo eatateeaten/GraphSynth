@@ -1,4 +1,4 @@
-import { ModuleMetadata, ParamFieldMetadata } from './types';
+import { ModuleMetadata } from './types';
 
 export const reshapeModules: Record<string, ModuleMetadata> = {
   'Reshape': {

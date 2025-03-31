@@ -19,7 +19,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.cursorrules
 node_modules/
 
 # Virtual Environment
