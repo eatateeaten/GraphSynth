@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
-import { useGraphStore } from './store';
+import { useStore } from './store';
 import { NodeType, ParamFieldMetadata, Shape } from './registry/types';
 import { ModuleRegistry, getMeta, validateParams } from './registry/index';
 
@@ -8,14 +8,14 @@ import { ModuleRegistry, getMeta, validateParams } from './registry/index';
 const LAYER_TYPE_OPTIONS = (() => {
     // Create a list of all operation types
     const opTypes = Object.keys(ModuleRegistry.op)
-        .filter(key => key.startsWith('op:'))
+        .filter(key => key.startsWith('Op:'))
         .map(key => key.slice(3));
 
     let out = [{ group: 'Tensor', items: [{ value: 'Tensor', label: 'Tensor' }] }];
 
     out.push(...opTypes.reduce((groups, type) => {
         // Get metadata for this operation
-        const metadata = getMeta('op', type);
+        const metadata = getMeta('Op', type);
         const category = metadata.category;
         const item = { value: type, label: metadata.label };
         
@@ -38,16 +38,16 @@ export function Sidebar() {
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
     const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
-    const addNode = useGraphStore(state => state.addNode);
-    const selectedId = useGraphStore(state => state.selectedId);
-    const updateNodeParams = useGraphStore(state => state.updateNodeParams);
-    const nodes = useGraphStore(state => state.nodes);
+    const addNode = useStore(state => state.addNode);
+    const selectedId = useStore(state => state.selectedId);
+    const updateNodeParams = useStore(state => state.updateNodeParams);
+    const nodes = useStore(state => state.nodes);
     const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
-    const makeTensorSource = useGraphStore(state => state.makeTensorSource);
+    const makeTensorSource = useStore(state => state.makeTensorSource);
 
     // Get default params for a node type
     const getDefaultParams = useCallback((opType: string) => {
-        const metadata = getMeta(opType === 'Tensor' ? 'tensor' : 'op', opType === 'Tensor' ? undefined : opType);
+        const metadata = getMeta(opType === 'Tensor' ? 'Tensor' : 'Op', opType === 'Tensor' ? undefined : opType);
         const defaults: Record<string, any> = {};
         
         Object.entries(metadata.paramFields).forEach(([name, field]) => {
@@ -200,17 +200,17 @@ export function Sidebar() {
                 const id = crypto.randomUUID();
                 const node = {
                     id,
-                    type: 'tensor' as NodeType,
+                    type: 'Tensor' as NodeType,
                     params: { shape }
                 };
-                
+
                 addNode(node);
-                
+
                 // If this is an input tensor, make it a source
                 if (params.isInput) {
                     makeTensorSource(id);
                 }
-                
+
                 setOpType(null);
                 setParams({});
                 setRawInputs({});
@@ -233,7 +233,7 @@ export function Sidebar() {
             
             addNode({
                 id,
-                type: 'op' as NodeType,
+                type: 'Op' as NodeType,
                 opType,
                 params
             });
@@ -247,12 +247,12 @@ export function Sidebar() {
         }
     }, [opType, params, addNode, validateModuleParams, makeTensorSource]);
 
-    const metadata = opType ? getMeta(opType === 'Tensor' ? 'tensor' : 'op', opType === 'Tensor' ? undefined : opType) : null;
+    const metadata = opType ? getMeta(opType === 'Tensor' ? 'Tensor' : 'Op', opType === 'Tensor' ? undefined : opType) : null;
 
     useEffect(() => {
         if (selectedId && selectedNodeData) {
             // Get data from the store's nodes array
-            setOpType(selectedNodeData.data.opType || null);
+            setOpType(selectedNodeData.data.type === 'Tensor' ? 'Tensor' : selectedNodeData.data.opType || null);
             setParams(selectedNodeData.data.params || {});
             setRawInputs(paramsToRawInputs(selectedNodeData.data.params || {}));
             setError(null);

@@ -1,7 +1,9 @@
 import { Position, type NodeProps } from 'reactflow';
 import { Card, Text, Group, Pill } from '@mantine/core';
 import { LayerHandle } from './LayerHandle';
-import { useGraphStore } from './store';
+import { useStore } from './store';
+import { stat } from 'fs';
+import { PendingNode } from '../isomorphic/graph';
 
 interface LayerBoxProps extends NodeProps {
     data: {
@@ -14,13 +16,8 @@ interface LayerBoxProps extends NodeProps {
 
 export function LayerBox({ data, id }: LayerBoxProps) {
     const { type, opType, inputError, outputError } = data;
-    let node = useGraphStore(state => state.checkerGraph?.getNode(id));
-    let pending = false;
-
-    if(!node){
-        node = useGraphStore(state => state.checkerGraph?.getPendingNode(id));
-        pending = true;
-    }
+    let node = useStore(state => state.checkerGraph?.getNode(id) || state.checkerGraph?.getPendingNode(id));
+    const pending = node instanceof PendingNode;
 
     // Get shapes, handling all possible types (null, number[], number[][])
     const inShape = node?.inShape;

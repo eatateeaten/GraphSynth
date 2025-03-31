@@ -16,7 +16,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { LayerBox } from './LayerBox';
 import { Button } from '@mantine/core';
-import { useGraphStore } from './store';
+import { useStore } from './store';
 import { GRID_SIZE } from './config';
 
 // Define nodeTypes outside component to prevent recreation
@@ -25,10 +25,10 @@ const nodeTypes: NodeTypes = {
 };
 
 export function Workspace() {
-  const nodes = useGraphStore(state => state.nodes);
-  const edges = useGraphStore(state => state.edges);
-  const selectedId = useGraphStore(state => state.selectedId);
-  const { updateNodes, updateEdges, setSelectedId, deleteNode, addEdge } = useGraphStore();
+  const nodes = useStore(state => state.nodes);
+  const edges = useStore(state => state.edges);
+  const selectedId = useStore(state => state.selectedId);
+  const { updateNodes, updateEdges, setSelectedId, deleteNode, addEdge } = useStore();
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => updateNodes(applyNodeChanges(changes, nodes)),

@@ -4,7 +4,7 @@
  * we centralize our application state here for predictable data flow and updates.
  * 
  * The store maintains two parallel graph representations:
- * 1. ZophGraph: Domain logic layer
+ * 1. CheckerGraph: Domain logic layer
  *        - Validates tensor shapes and parameter constraints
  *        - Manages node connectivity and data flow
  *        - Source of truth for computational graph structure
@@ -12,23 +12,23 @@
  * 2. React Flow: Presentation layer
  *        - Handles node positioning and visual layout
  *        - Manages UI state (selection, dragging, etc)
- *        - Displays validation errors from ZophGraph
+ *        - Displays validation errors from CheckerGraph
  * 
  * Operations follow a consistent pattern:
- * 1. Validate operation against ZophGraph (shape checking, valid connections)
+ * 1. Validate operation against CheckerGraph (shape checking, valid connections)
  * 2. On success: update React Flow state
  * 3. On failure: propagate error to UI layer
  */
 
 import { create } from 'zustand';
-import type { FlowNode, FlowEdge  } from './types';
+import type { FlowNode, FlowEdge, NodeType  } from './types';
 import { GRID_SIZE } from './config';
 
 import { Graph as CheckerGraph } from '../isomorphic/graph';
 
 interface NodeConfig {
     id: string;
-    type: 'tensor' | 'op' | 'merge' | 'branch';
+    type: NodeType;
     opType?: string; // For operations, e.g., "Conv2d", "ReLU"
     params: Record<string, any>;
 }
@@ -53,7 +53,34 @@ interface GraphActions {
     makeTensorSource: (id: string) => void;
 }
 
-export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
+const makePendingParams = (type: NodeType, op_type: string | null, params: Record<string, any>): Record<string, any> => {
+    switch (type) {
+        case 'Tensor':
+            return {
+                shape: params.shape,
+                variableName: params.variableName || null
+            };
+        case 'Op':
+            return {
+                opType: op_type,
+                opParams: params
+            };
+        case 'Split':
+            return {
+                inShape: params.inShape,
+                splitParams: params.splitParams
+            };
+        case 'Concat':
+            return {
+                inShapes: params.inShapes,
+                concatParams: params.concatParams
+            };
+        default:
+            throw new Error(`Unknown node type: ${type}`);
+    }
+};
+
+export const useStore = create<GraphState & GraphActions>((set, get) => {
     // Helper to set node error
     const setNodeError = (nodeId: string, error: { input?: string, output?: string }) => 
         set(state => ({
@@ -81,74 +108,56 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
 
         // Actions
         addNode: (config) => {
-            try {
-                // Create a pending node in ZophGraph
-                get().checkerGraph.createPendingNode(
-                    config.type === 'tensor' ? 'Tensor' : 
-                    config.type === 'op' ? 'Op' : config.type,
-                    config.id,
-                    {
-                        target: "torch",
-                        ...config.params,
-                        opType: config.opType,
-                    }
-                );
-                
-                // Track this ID as pending
-                set(state => ({
-                    pendingNodeIds: new Set([...state.pendingNodeIds, config.id])
-                }));
+            // Create a pending node in ZophGraph
+            get().checkerGraph.createPendingNode(
+                config.type,
+                config.id,
+                {
+                    target: "torch",
+                    ...makePendingParams(config.type, config.opType || null, config.params)
+                }
+            );
+            
+            // Track this ID as pending
+            set(state => ({
+                pendingNodeIds: new Set([...state.pendingNodeIds, config.id])
+            }));
 
-                // Create a visual node in React Flow
-                const flowNode: FlowNode = {
-                    id: config.id,
-                    type: 'default',
-                    data: { 
-                        type: config.type,
-                        opType: config.opType,
-                        params: config.params 
-                    },
-                    position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
-                    draggable: true,
-                };
+            // Create a visual node in React Flow
+            const flowNode: FlowNode = {
+                id: config.id,
+                type: 'default',
+                data: { 
+                    type: config.type,
+                    opType: config.opType,
+                    params: config.params 
+                },
+                position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
+                draggable: true,
+            };
 
-                set(state => ({ nodes: [...state.nodes, flowNode] }));
-            } catch (e) {
-                // Don't create visual node if node creation failed
-                console.error('Failed to create node:', e);
-                throw e;
-            }
+            set(state => ({ nodes: [...state.nodes, flowNode] }));
         },
 
         deleteNode: (id) => {
-            try {
-                // Check if node is in main graph
-                const node = get().checkerGraph.getNode(id);
-                if (node) {
-                    // If it's in the main graph, remove it
-                    get().checkerGraph.removeNode(id);
-                } else if (get().pendingNodeIds.has(id)) {
-                    // If it's a pending node, remove it from pending
-                    get().checkerGraph.removePendingNode(id);
-                    
-                    // Update our pending nodes set
-                    const pendingNodeIds = new Set(get().pendingNodeIds);
-                    pendingNodeIds.delete(id);
-                    set({ pendingNodeIds });
-                }
-                
-                // Clean up visual elements
+            const node = get().checkerGraph.getNode(id);
+            if(node){
+                get().checkerGraph.removeNode(id);
+            }else{
+                get().checkerGraph.removePendingNode(id);
                 set(state => ({
-                    nodes: state.nodes.filter(node => node.id !== id),
-                    edges: state.edges.filter(edge => 
-                        edge.source !== id && edge.target !== id
-                    ),
-                    selectedId: state.selectedId === id ? null : state.selectedId
+                    pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== id))
                 }));
-            } catch (e) {
-                console.error('Failed to delete node:', e);
-                throw e;
             }
+
+            // Clean up visual elements
+            set(state => ({
+                nodes: state.nodes.filter(node => node.id !== id),
+                edges: state.edges.filter(edge => 
+                    edge.source !== id && edge.target !== id
+                ),
+                selectedId: state.selectedId === id ? null : state.selectedId
+            }));
         },
 
         setSelectedId: (id) => set({ selectedId: id }),
@@ -178,6 +187,7 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
                 );
             } catch(e: any) {
                 setNodeError(edge.source, { output: e.message });
+                return;
             }
 
             /* if it succeeded, connect in visual graph */
@@ -192,13 +202,13 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
             try {
                 // Get node from graph
                 const node = get().checkerGraph.getNode(id);
-                
+
                 // Store connection info for reconnection
                 let connections = {
                     sources: [] as {id: string, sourceIndex?: number, targetIndex?: number}[],
                     targets: [] as {id: string, sourceIndex?: number, targetIndex?: number}[]
                 };
-                
+
                 if (node) {
                     // Node is in the main graph
                     // We need to:
@@ -254,19 +264,16 @@ export const useGraphStore = create<GraphState & GraphActions>((set, get) => {
                 const flowNode = get().nodes.find(n => n.id === id);
                 if (!flowNode) throw new Error("Node not found in React Flow");
                 
-                // Create a new node with updated params
-                const nodeType = flowNode.data.type === 'tensor' ? 'Tensor' : 
-                              flowNode.data.type === 'op' ? 'Op' : flowNode.data.type;
-                
-                // Create a pending node
+                // Create a pending node with wrapped params
                 get().checkerGraph.createPendingNode(
-                    nodeType,
+                    flowNode.data.type,
                     id,
                     {
                         target: "torch",
-                        ...(flowNode.data.params || {}),
-                        ...params,
-                        opType: flowNode.data.opType
+                        ...makePendingParams(flowNode.data.type, flowNode.data.opType || null, {
+                            ...(flowNode.data.params || {}),
+                            ...params
+                        })
                     }
                 );
                 

@@ -9,7 +9,7 @@ import { normalizationModules } from './normalization';
 // Combine all module metadata
 const allModules: Record<string, ModuleMetadata> = {
   // Tensor nodes
-  'tensor': {
+  'Tensor': {
     label: 'Tensor',
     description: 'Represents input data or intermediate results',
     category: 'Basic',
@@ -30,17 +30,17 @@ const allModules: Record<string, ModuleMetadata> = {
     }
   },
   // Operation nodes
-  ...Object.entries(convolutionalModules).reduce((acc, [key, value]) => ({ ...acc, [`op:${key}`]: value }), {}),
-  ...Object.entries(activationModules).reduce((acc, [key, value]) => ({ ...acc, [`op:${key}`]: value }), {}),
-  ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`op:${key}`]: value }), {}),
+  ...Object.entries(convolutionalModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+  ...Object.entries(activationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+  ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   // Flow nodes
-  'merge': {
+  'Merge': {
     label: 'Merge',
     description: 'Combines multiple inputs into a single output',
     category: 'Flow',
     paramFields: {}
   },
-  'branch': {
+  'Branch': {
     label: 'Branch',
     description: 'Splits a single input into multiple outputs',
     category: 'Flow',

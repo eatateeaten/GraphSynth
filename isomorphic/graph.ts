@@ -44,7 +44,7 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 }
                 node = new Op(id, target, params.opType, params.opParams || {});
                 break;
-                
+
             case "Split":
                 if (!params.inShape) {
                     throw new Error("inShape parameter is required for Split");
@@ -392,7 +392,7 @@ export class Graph {
             }
             return sink.inShape;
         }
-        
+
         // Unknown node type
         throw new Error(`Unknown sink node type: ${sink.constructor.name}`);
     }

@@ -106,36 +106,24 @@ export class Op extends GraphNode {
         // Get the output shape from the source node
         let sourceOutShape: number[];
         
-        // Debug logging
-        console.log(`Adding prev node of type ${prev.constructor.name} with id ${prev.id}`);
-        console.log(`Prev node properties:`, {
-            outShape: prev.outShape,
-            inShape: prev.inShape,
-            indexPrev
-        });
-        
         // Extract shape from prev node based on its type
         if (prev instanceof BranchOp && indexPrev !== undefined) {
-            console.log(`BranchOp outShapes:`, prev.outShape);
             const branchOutShape = prev.outShape[indexPrev];
             if (branchOutShape === null || branchOutShape === undefined) {
                 throw new Error(`Cannot connect to BranchOp with id ${prev.id} at output ${indexPrev}: output shape is undefined`);
             }
             sourceOutShape = branchOutShape;
         } else if (prev instanceof Tensor) {
-            console.log(`Tensor outShape:`, prev.outShape);
             if (!prev.outShape) {
                 throw new Error(`Cannot connect to Tensor with id ${prev.id}: output shape is undefined`);
             }
             sourceOutShape = prev.outShape;
         } else if (prev instanceof Op) {
-            console.log(`Op outShape:`, prev.outShape);
             if (!prev.outShape) {
                 throw new Error(`Cannot connect to Op with id ${prev.id}: output shape is undefined`);
             }
             sourceOutShape = prev.outShape;
         } else if (prev instanceof MergeOp) {
-            console.log(`MergeOp outShape:`, prev.outShape);
             if (!prev.outShape) {
                 throw new Error(`Cannot connect to MergeOp with id ${prev.id}: output shape is undefined`);
             }
