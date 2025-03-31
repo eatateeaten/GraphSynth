@@ -23,9 +23,9 @@ export abstract class BranchOp extends GraphNode {
     }
 
     protected abstract computeOutShapes(): number[][];
-    abstract to_torch_functional(inputs: string[]): string;
+    abstract to_torch_functional(inputs: string[], outputs: string[]): string;
 
-    // Getters and setters
+    // Getters and setters 
     get inShape(): number[] { return this._inShape; }
     get outShape(): number[][] { return this._outShapes; }
     get prev(): GraphNode | null { return this._prev; }
@@ -116,7 +116,7 @@ export class MapOp extends BranchOp {
         return outShapes;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs: string[]): string {
         const op = this._opType.toLowerCase();
         const numOutputs = this._params.numOutputs || 1;
         
@@ -124,7 +124,6 @@ export class MapOp extends BranchOp {
             return `${inputs[0]} = ${inputs[0]}`;
         }
         
-        const outputs = inputs.map((input, i) => `${input}_${i}`);
         const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
         
         return assignments;
@@ -163,14 +162,13 @@ export class Broadcast extends BranchOp {
         return outShapes;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs: string[]): string {
         const numOutputs = this._params.numOutputs;
         
         if (numOutputs === 1) {
             return `${inputs[0]} = ${inputs[0]}`;
         }
         
-        const outputs = inputs.map((input, i) => `${input}_${i}`);
         const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
         
         return assignments;
@@ -211,7 +209,7 @@ export class Split extends BranchOp {
         return outShapes;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs: string[]): string {
         const { dim, sections } = this._params;
         
         if (sections.length === 1) {

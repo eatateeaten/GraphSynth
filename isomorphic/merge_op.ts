@@ -24,7 +24,7 @@ export abstract class MergeOp extends GraphNode {
     }
 
     protected abstract computeOutShape(): number[];
-    abstract to_torch_functional(inputs: string[]): string;
+    abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
 
     // Getters and setters
     get inShape(): number[][] { return this._inShapes; }
@@ -126,7 +126,7 @@ export class Concat extends MergeOp {
         return outShape;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
         return `${inputs[0]} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
     }
 }
@@ -159,7 +159,7 @@ export class ReduceOp extends MergeOp {
         return referenceShape;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 1) {
             throw new Error("ReduceOp requires at least 1 input");
         }
@@ -234,7 +234,7 @@ export class PointwiseReduce extends ReduceOp {
         return resultShape;
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 2) {
             throw new Error("PointwiseReduce requires at least 2 inputs");
         }
@@ -259,7 +259,7 @@ export class AllReduceOp extends ReduceOp {
         super(id, inShapes, target, opType, params);
     }
 
-    to_torch_functional(inputs: string[]): string {
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 1) {
             throw new Error("AllReduceOp requires at least 1 input");
         }
