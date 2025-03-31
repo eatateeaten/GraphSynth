@@ -209,9 +209,9 @@ export class Graph {
      * });
      * 
      * // Promote it to a source node
-     * graph.makePendingNodeSource("input-tensor-id");
+     * graph.makeTensorSource("input-tensor-id");
      */
-    makePendingNodeSource(nodeId: string): void {
+    makeTensorSource(nodeId: string): void {
         // Check if the node exists in pending nodes
         if (!this._pendingNodes.has(nodeId)) {
             throw new Error(`Node with id ${nodeId} is not a pending node`);
