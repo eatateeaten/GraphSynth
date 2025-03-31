@@ -1,5 +1,5 @@
 import { GraphNode } from './graph_node';
-import { getElementwiseOpCode, forwardShapeInference } from './torch_nn_module_op';
+import { getElementwiseOpCode, forwardShapeInference, getTorchCode } from './torch_nn_module_op';
 import { Tensor } from './tensor';
 import { BranchOp } from './branch_op';
 import { MergeOp } from './merge_op';
@@ -51,6 +51,27 @@ export class Op extends GraphNode {
         }
         
         return `${inputs[0]} = torch.${this._opType}(${inputs[0]})`;
+    }
+
+    /**
+     * Generates PyTorch code for this operation without requiring input variable names.
+     * Unlike to_torch_functional, this method generates standalone module code.
+     * 
+     * @returns A string containing the PyTorch code for this operation
+     * @throws Error if the operation is not a PyTorch operation or has undefined shapes
+     */
+    to_torch(): string {
+        if (this._target !== "torch") {
+            throw new Error("Operation is not a PyTorch operation");
+        }
+
+        try {
+            // Directly use the module metadata code generator
+            return getTorchCode(this._opType, this._params);
+        } catch (err: any) {
+            // If the operation doesn't have module metadata, use a simpler format
+            return `torch.${this._opType}`;
+        }
     }
 
     // Getters and setters
