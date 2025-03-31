@@ -190,6 +190,51 @@ export class Graph {
     }
 
     /**
+     * Promotes a pending Tensor node to a source node in the main graph.
+     * 
+     * This method allows adding an input tensor to the graph without requiring
+     * it to be connected to another node first. It will move the node from
+     * the pending collection to the main graph and mark it as a source.
+     * 
+     * @param nodeId - ID of the pending node to promote as a source
+     * @throws Error if the node doesn't exist in the pending collection
+     * @throws Error if the node is not a Tensor (only Tensors can be sources)
+     * 
+     * @example
+     * // Create a pending tensor
+     * const pendingTensor = graph.createPendingNode("Tensor", "input-tensor-id", {
+     *   shape: [1, 3, 224, 224],
+     *   target: "torch",
+     *   variableName: "input_image"
+     * });
+     * 
+     * // Promote it to a source node
+     * graph.makePendingNodeSource("input-tensor-id");
+     */
+    makePendingNodeSource(nodeId: string): void {
+        // Check if the node exists in pending nodes
+        if (!this._pendingNodes.has(nodeId)) {
+            throw new Error(`Node with id ${nodeId} is not a pending node`);
+        }
+        
+        // Get the pending node and unwrap it
+        const pendingNode = this._pendingNodes.get(nodeId)!;
+        const node = pendingNode.unwrap();
+        
+        // Verify that the node is a Tensor
+        if (!(node instanceof Tensor)) {
+            throw new Error(`Cannot make node with id ${nodeId} a source: only Tensor nodes can be sources`);
+        }
+        
+        // Remove from pending nodes and add to main graph
+        this._pendingNodes.delete(nodeId);
+        this._nodes.set(nodeId, node);
+        
+        // Add to sources
+        this._sources.add(node);
+    }
+
+    /**
      * Removes a node from the main graph.
      * 
      * This method only works for nodes that have no active connections.
