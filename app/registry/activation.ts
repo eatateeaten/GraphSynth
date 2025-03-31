@@ -181,5 +181,69 @@ export const activationModules: Record<string, ModuleMetadata> = {
         default: 0.25
       }
     }
+  },
+  'Hardtanh': {
+    label: 'Hardtanh',
+    description: 'Applies the HardTanh function element-wise',
+    category: 'Activation',
+    paramFields: {
+      min_val: {
+        label: 'Minimum Value',
+        description: 'Minimum value of the linear region range',
+        type: 'number',
+        default: -1
+      },
+      max_val: {
+        label: 'Maximum Value',
+        description: 'Maximum value of the linear region range',
+        type: 'number',
+        default: 1
+      },
+    }
+  },
+  'Hardshrink': {
+    label: 'Hardshrink',
+    description: 'Applies the hard shrinkage function element-wise',
+    category: 'Activation',
+    paramFields: {
+      lambda: {
+        label: 'Lambda',
+        description: 'The lambda value for the Hardshrink formulation',
+        type: 'number',
+        default: 0.5
+      }
+    }
+  },
+  'RReLU': {
+    label: 'RReLU',
+    description: 'Applies the randomized rectified linear unit function element-wise',
+    category: 'Activation',
+    paramFields: {
+      lower: {
+        label: 'Lower Bound',
+        description: 'Lower bound of the uniform distribution',
+        type: 'number',
+        default: 0.125
+      },
+      upper: {
+        label: 'Upper Bound',
+        description: 'Upper bound of the uniform distribution',
+        type: 'number',
+        default: 0.3333333333333333
+      }
+    }
+  },
+  'Softshrink': {
+    label: 'Softshrink',
+    description: 'Applies the soft shrinkage function element-wise',
+    category: 'Activation',
+    paramFields: {
+      lambda: {
+        label: 'Lambda',
+        description: 'The lambda value for the Softshrink formulation',
+        type: 'number',
+        default: 0.5
+      }
+    }
   }
 };

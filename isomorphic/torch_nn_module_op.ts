@@ -707,8 +707,8 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
 
     "Hardshrink": {
         required_params: [],
-        optional_params: ["lambd"],
-        code_generator: (params) => `nn.Hardshrink(lambd=${params['lambd'] ?? 0.5})`,
+        optional_params: ["lambda"],
+        code_generator: (params) => `nn.Hardshrink(lambd=${params['lambda'] ?? 0.5})`,
         forward_shape_inference: (inShape) => inShape,
     },
 
@@ -735,7 +735,7 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
 
     "Softshrink": {
         required_params: [],
-        optional_params: ["lambd"],
+        optional_params: ["lambda"],
         code_generator: (params) => `nn.Softshrink(lambd=${params['lambd'] ?? 0.5})`,
         forward_shape_inference: (inShape) => inShape,
     },

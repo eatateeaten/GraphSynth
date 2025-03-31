@@ -3,11 +3,15 @@ import { NodeType, ModuleMetadata } from './types';
 import { convolutionalModules } from './convolutional';
 import { activationModules } from './activation';
 import { normalizationModules } from './normalization';
+import { linearModules } from './linear';
+import { poolingModules } from './pooling';
+import { dropoutModules } from './dropout';
+import { reshapeModules } from './reshape';
 
 // Re-export types
 
 // Combine all module metadata
-const allModules: Record<string, ModuleMetadata> = {
+export const allModules: Record<string, ModuleMetadata> = {
   // Tensor nodes
   'Tensor': {
     label: 'Tensor',
@@ -30,8 +34,12 @@ const allModules: Record<string, ModuleMetadata> = {
     }
   },
   // Operation nodes
+  ...Object.entries(linearModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(convolutionalModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+  ...Object.entries(reshapeModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(activationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+  ...Object.entries(dropoutModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+  ...Object.entries(poolingModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   // Flow nodes
   'Merge': {
