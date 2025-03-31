@@ -2,7 +2,8 @@ import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
-import { MergeOp, Concat } from './merge_op';
+import { MergeOp} from './merge_op';
+import { Concat} from './reduce_op';
 import { Split } from './branch_op';
 
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp };
