@@ -740,6 +740,187 @@ export class Graph {
         }
         return processedNodes.get(node.id)!;
     }
+
+    /**
+     * Generates functional PyTorch code from the graph.
+     * Uses a breadth-first traversal strategy with special handling for multi-input nodes.
+     * 
+     * @returns A string containing PyTorch code in functional style
+     */
+    to_torch_functional(): string {
+        // Validate the graph
+        this.validate_graph();
+        
+        // Initialize code string
+        let code = "";
+        
+        // Create a variable counter for generating unique variable names
+        const varCounter = { value: 0 };
+        
+        // Map to track processed nodes and their output variable names
+        const processedNodes = new Map<string, string>();
+        
+        // Queue for BFS traversal - contains nodes and their input variables
+        const queue: Array<{node: GraphNode, inputs: string[]}> = [];
+        
+        // Waiting map for multi-input nodes - stores partially collected inputs
+        const waiting = new Map<string, {
+            node: GraphNode,
+            inputs: string[],
+            remainingInputs: number
+        }>();
+        
+        // Start with source nodes
+        const sourceNodes = Array.from(this._sources);
+        for (const sourceNode of sourceNodes) {
+            if (sourceNode instanceof Tensor) {
+                // Generate variable name for source tensor
+                let varName = "";
+                if (sourceNode.variableName) {
+                    varName = sourceNode.variableName;
+                } else {
+                    varName = `var_${varCounter.value++}`;
+                }
+                
+                // Add variable declaration for input tensor
+                code += `${varName} = ${sourceNode.to_torch_functional([], [varName])}\n`;
+                
+                // Mark this node as processed with its variable
+                processedNodes.set(sourceNode.id, varName);
+                
+                // Add its next node to the queue
+                if (sourceNode.next) {
+                    this._enqueueOrWait(sourceNode.next, [varName], queue, waiting);
+                }
+            }
+        }
+        
+        // Process the queue until empty
+        while (queue.length > 0) {
+            const { node, inputs } = queue.shift()!;
+            
+            // Skip if already processed
+            if (processedNodes.has(node.id)) {
+                continue;
+            }
+            
+            // Generate output variable name
+            const outputVar = `var_${varCounter.value++}`;
+            
+            // Generate code for this node
+            if (node instanceof BranchOp) {
+                // Branch operations need output variables for each output
+                const outputs: string[] = [];
+                for (let i = 0; i < node.outShape.length; i++) {
+                    outputs.push(`var_${varCounter.value++}`);
+                }
+                
+                // Generate the code
+                code += `${node.to_torch_functional(inputs, outputs)}\n`;
+                
+                // Enqueue or wait for next nodes
+                for (let i = 0; i < node._nexts.length; i++) {
+                    const nextNode = node._nexts[i];
+                    if (nextNode) {
+                        this._enqueueOrWait(nextNode, [outputs[i]], queue, waiting);
+                    }
+                }
+                
+                // Store the output variables
+                processedNodes.set(node.id, outputs.join(','));
+                
+            } else {
+                // Regular nodes with single output
+                code += `${outputVar} = ${node.to_torch_functional(inputs)}\n`;
+                
+                // Mark this node as processed
+                processedNodes.set(node.id, outputVar);
+                
+                // Add next node to queue if it exists
+                if (node instanceof Tensor || node instanceof Op) {
+                    if (node.next) {
+                        this._enqueueOrWait(node.next, [outputVar], queue, waiting);
+                    }
+                } else if (node instanceof MergeOp) {
+                    if (node.next) {
+                        this._enqueueOrWait(node.next, [outputVar], queue, waiting);
+                    }
+                }
+            }
+        }
+        
+        // Add a return statement for the sink nodes
+        const sinkNodes = Array.from(this._sinks);
+        if (sinkNodes.length > 0) {
+            const sinkVars = sinkNodes
+                .filter(sink => processedNodes.has(sink.id))
+                .map(sink => processedNodes.get(sink.id)!);
+            
+            if (sinkVars.length === 1) {
+                code += `return ${sinkVars[0]}\n`;
+            } else if (sinkVars.length > 1) {
+                code += `return (${sinkVars.join(', ')})\n`;
+            }
+        }
+        
+        return code;
+    }
+    
+    /**
+     * Helper method to either enqueue a node or add it to the waiting map
+     */
+    private _enqueueOrWait(
+        node: GraphNode,
+        inputs: string[],
+        queue: Array<{node: GraphNode, inputs: string[]}>,
+        waiting: Map<string, {node: GraphNode, inputs: string[], remainingInputs: number}>
+    ): void {
+        if (node instanceof MergeOp) {
+            // Handle multi-input nodes
+            const nodeId = node.id;
+            
+            if (waiting.has(nodeId)) {
+                // Update existing entry
+                const entry = waiting.get(nodeId)!;
+                const indexToUpdate = entry.inputs.findIndex(input => input === '');
+                
+                if (indexToUpdate !== -1) {
+                    entry.inputs[indexToUpdate] = inputs[0];
+                    entry.remainingInputs--;
+                    
+                    // If all inputs collected, move to queue
+                    if (entry.remainingInputs === 0) {
+                        queue.push({ node: entry.node, inputs: entry.inputs });
+                        waiting.delete(nodeId);
+                    }
+                }
+            } else {
+                // Create new entry in waiting map
+                const totalInputs = node._prevs.length;
+                const waitingInputs = new Array(totalInputs).fill('');
+                
+                // Find where this input belongs
+                const inputIndex = node._prevs.findIndex(prev => 
+                    prev && inputs.length > 0 && prev.id === inputs[0]);
+                
+                if (inputIndex !== -1) {
+                    waitingInputs[inputIndex] = inputs[0];
+                }
+                
+                const remainingInputs = totalInputs - waitingInputs.filter(input => input !== '').length;
+                
+                // If only one input needed, directly enqueue
+                if (remainingInputs === 0) {
+                    queue.push({ node, inputs: waitingInputs });
+                } else {
+                    waiting.set(nodeId, { node, inputs: waitingInputs, remainingInputs });
+                }
+            }
+        } else {
+            // For nodes with single input, directly enqueue
+            queue.push({ node, inputs });
+        }
+    }
 }
 
 
