@@ -1,4 +1,5 @@
 import { GraphNode } from './graph_node';
+import { getDifferentiablePointWiseOpCode } from './pointwise_op_map';
 
 export abstract class MergeOp extends GraphNode {
     protected _inShapes: number[][];
@@ -135,6 +136,15 @@ export abstract class PointwiseOp extends MergeOp {
         }
         
         return [...shape0Array];
+    }
+
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
+        if (inputs.length !== 2) {
+            throw new Error("PointwiseOp requires exactly 2 inputs");
+        }
+
+        const opCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
+        return `${inputs[0]} = ${opCode}(${inputs[0]}, ${inputs[1]})`;
     }
 
     addPrev(prev: GraphNode, indexSelf: number, indexPrev?: number): void {
