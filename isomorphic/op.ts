@@ -50,28 +50,24 @@ export class Op extends GraphNode {
             throw new Error("Cannot generate torch code: operation has undefined input or output shape");
         }
         
-        return `${inputs[0]} = torch.${this._opType}(${inputs[0]})`;
+        // No fallback - either get the module code or error out
+        const moduleCode = getTorchCode(this._opType, this._params);
+        return `${inputs[0]} = ${moduleCode}(${inputs[0]})`;
     }
 
     /**
      * Generates PyTorch code for this operation without requiring input variable names.
-     * Unlike to_torch_functional, this method generates standalone module code.
      * 
      * @returns A string containing the PyTorch code for this operation
-     * @throws Error if the operation is not a PyTorch operation or has undefined shapes
+     * @throws Error if the operation is not a PyTorch operation
      */
     to_torch(): string {
         if (this._target !== "torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
-
-        try {
-            // Directly use the module metadata code generator
-            return getTorchCode(this._opType, this._params);
-        } catch (err: any) {
-            // If the operation doesn't have module metadata, use a simpler format
-            return `torch.${this._opType}`;
-        }
+        
+        // No fallback - either get the module code or error out
+        return getTorchCode(this._opType, this._params);
     }
 
     // Getters and setters
