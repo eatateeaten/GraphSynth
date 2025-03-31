@@ -639,6 +639,188 @@ export class Graph {
         visiting.delete(node.id);
         visited.add(node.id);
     }
+
+    
+    /**
+     * Generates functional PyTorch code from the graph.
+     * Uses a depth-first traversal strategy to respect computation order.
+     * 
+     * @returns A string containing PyTorch code in functional style
+     */
+    toTorchFunctional(): string {
+        // Validate the graph
+        this.validate_graph();
+        
+        // Initialize code string
+        let code = "";
+        
+        // Create a variable counter for generating unique variable names
+        const varCounter = { value: 0 };
+        
+        // Map to track multi-input nodes and their collected input variables
+        const multiInputNodes = new Map<GraphNode, string[]>();
+        
+        // Set to track used variable names to ensure uniqueness
+        const usedVarNames = new Set<string>();
+        
+        // Stack for DFS traversal - contains nodes and their input variables
+        const stack: Array<{node: GraphNode, inputs: string[]}> = [];
+        
+        // Start with source nodes
+        const sourceNodes = Array.from(this._sources);
+        for (const sourceNode of sourceNodes) {
+            if (sourceNode instanceof Tensor) {
+                // Generate variable name for source tensor
+                let varName = "";
+                if (sourceNode.variableName) {
+                    // If variableName is already used, append a number to make it unique
+                    varName = sourceNode.variableName;
+                    let counter = 1;
+                    while (usedVarNames.has(varName)) {
+                        varName = `${sourceNode.variableName}_${counter++}`;
+                    }
+                } else {
+                    // Generate a unique variable name
+                    do {
+                        varName = `var_${varCounter.value++}`;
+                    } while (usedVarNames.has(varName));
+                }
+                
+                // Mark this variable name as used
+                usedVarNames.add(varName);
+                
+                // Add variable declaration for input tensor
+                code += `${varName} = ${sourceNode.to_torch_functional([], [varName])}\n`;
+                
+                // Add its next node to the stack
+                if (sourceNode.next) {
+                    stack.push({ node: sourceNode.next, inputs: [varName] });
+                }
+            }
+        }
+        
+        // Process the stack until empty
+        while (stack.length > 0) {
+            const { node, inputs } = stack.pop()!;
+            
+            // Generate output variable name
+            let outputVar;
+            do {
+                outputVar = `var_${varCounter.value++}`;
+            } while (usedVarNames.has(outputVar));
+            usedVarNames.add(outputVar);
+            
+            // Generate code for this node
+            if (node instanceof BranchOp) {
+                // Branch operations need output variables for each output
+                const outputs: string[] = [];
+                for (let i = 0; i < node.outShape.length; i++) {
+                    let branchVar;
+                    do {
+                        branchVar = `var_${varCounter.value++}`;
+                    } while (usedVarNames.has(branchVar));
+                    usedVarNames.add(branchVar);
+                    outputs.push(branchVar);
+                }
+                
+                // Generate the code
+                code += `${node.to_torch_functional(inputs, outputs)}\n`;
+                
+                // Add next nodes to stack in reverse order to process them in the original order
+                for (let i = node._nexts.length - 1; i >= 0; i--) {
+                    const nextNode = node._nexts[i];
+                    if (nextNode) {
+                        // If next node is a multi-input node, add to waiting map
+                        if (nextNode instanceof MergeOp) {
+                            const collectedInputs = multiInputNodes.get(nextNode) || new Array(nextNode._prevs.length).fill('');
+                            const inputIndex = nextNode._prevs.findIndex(prev => prev && prev.id === node.id);
+                            if (inputIndex !== -1) {
+                                collectedInputs[inputIndex] = outputs[i];
+                                multiInputNodes.set(nextNode, collectedInputs);
+                                
+                                // If we have all inputs, add to stack
+                                if (collectedInputs.every(input => input !== '')) {
+                                    stack.push({ node: nextNode, inputs: collectedInputs });
+                                    multiInputNodes.delete(nextNode);
+                                }
+                            }
+                        } else {
+                            stack.push({ node: nextNode, inputs: [outputs[i]] });
+                        }
+                    }
+                }
+                
+            } else if (node instanceof MergeOp) {
+                // For MergeOp, we need to collect all inputs before processing
+                const collectedInputs = multiInputNodes.get(node) || new Array(node._prevs.length).fill('');
+                const inputIndex = node._prevs.findIndex(prev => prev && inputs.length > 0 && prev.id === node.id);
+                
+                if (inputIndex !== -1) {
+                    collectedInputs[inputIndex] = inputs[0];
+                    multiInputNodes.set(node, collectedInputs);
+                    
+                    // If we have all inputs, process the node
+                    if (collectedInputs.every(input => input !== '')) {
+                        code += `${outputVar} = ${node.to_torch_functional(collectedInputs)}\n`;
+                        multiInputNodes.delete(node);
+                        
+                        // Add next node to stack if it exists
+                        if (node.next) {
+                            stack.push({ node: node.next, inputs: [outputVar] });
+                        }
+                    }
+                }
+            } else {
+                // Regular nodes with single input/output (Op or Tensor)
+                code += `${outputVar} = ${node.to_torch_functional(inputs)}\n`;
+                
+                // Add next node to stack if it exists
+                if (node.next) {
+                    // If next node is a multi-input node, add to waiting map
+                    if (node.next instanceof MergeOp) {
+                        const collectedInputs = multiInputNodes.get(node.next) || new Array(node.next._prevs.length).fill('');
+                        const inputIndex = node.next._prevs.findIndex(prev => prev && prev.id === node.id);
+                        if (inputIndex !== -1) {
+                            collectedInputs[inputIndex] = outputVar;
+                            multiInputNodes.set(node.next, collectedInputs);
+                            
+                            // If we have all inputs, add to stack
+                            if (collectedInputs.every(input => input !== '')) {
+                                stack.push({ node: node.next, inputs: collectedInputs });
+                                multiInputNodes.delete(node.next);
+                            }
+                        }
+                    } else {
+                        stack.push({ node: node.next, inputs: [outputVar] });
+                    }
+                }
+            }
+        }
+        
+        // Add a return statement for the sink nodes
+        const sinkNodes = Array.from(this._sinks);
+        if (sinkNodes.length > 0) {
+            const sinkVars = sinkNodes
+                .filter(sink => !(sink instanceof MergeOp) || multiInputNodes.has(sink))
+                .map(sink => {
+                    if (sink instanceof MergeOp && multiInputNodes.has(sink)) {
+                        const collectedInputs = multiInputNodes.get(sink)!;
+                        const outputVar = `var_${varCounter.value++}`;
+                        code += `${outputVar} = ${sink.to_torch_functional(collectedInputs)}\n`;
+                        return outputVar;
+                    }
+                    return `var_${varCounter.value - 1}`; // Use the last generated variable
+                });
+            
+            if (sinkVars.length === 1) {
+                code += `return ${sinkVars[0]}\n`;
+            } else if (sinkVars.length > 1) {
+                code += `return (${sinkVars.join(', ')})\n`;
+            }
+        }
+        
+        return code;
+    }
 }
 
 
