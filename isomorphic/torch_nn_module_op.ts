@@ -66,8 +66,14 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) => `nn.Linear(${params['input_features']}, ${params['output_features']}, bias=${params['bias'] ?? true})`,
         forward_shape_inference: (inShape, params) => {
             // Typically, linear expects [N, input_features], output => [N, output_features]
-            // We'll assume inShape is [N, input_features]
-            return [inShape[0], params['output_features']];
+            // We'll assume inShape is [N, input_features] or [input_features]
+            if (inShape.length === 1) {
+                // Input is just [input_features] without batch dimension
+                return [params['output_features']];
+            } else {
+                // Input has batch dimension [N, input_features]
+                return [inShape[0], params['output_features']];
+            }
         },
     },
 
@@ -81,13 +87,21 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // inShape = [N, C_in, L]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const L_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-            return [inShape[0], params['out_channels'], L_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 2) {
+                // Input is [C_in, L] without batch dimension
+                const L_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
+                return [params['out_channels'], L_out];
+            } else {
+                // Standard case: [N, C_in, L]
+                const L_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+                return [inShape[0], params['out_channels'], L_out];
+            }
         },
     },
 
@@ -100,14 +114,23 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // inShape = [N, C_in, H_in, W_in]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const H_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-            const W_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
-            return [inShape[0], params['out_channels'], H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 3) {
+                // Input is [C_in, H_in, W_in] without batch dimension
+                const H_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
+                const W_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+                return [params['out_channels'], H_out, W_out];
+            } else {
+                // Standard case: [N, C_in, H_in, W_in]
+                const H_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+                const W_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
+                return [inShape[0], params['out_channels'], H_out, W_out];
+            }
         },
     },
 
@@ -120,15 +143,25 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // inShape = [N, C_in, D_in, H_in, W_in]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const D_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-            const H_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
-            const W_out = convOutputSize(inShape[4], kernel, stride, padding, dilation);
-            return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 4) {
+                // Input is [C_in, D_in, H_in, W_in] without batch dimension
+                const D_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
+                const H_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+                const W_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
+                return [params['out_channels'], D_out, H_out, W_out];
+            } else {
+                // Standard case: [N, C_in, D_in, H_in, W_in]
+                const D_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+                const H_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
+                const W_out = convOutputSize(inShape[4], kernel, stride, padding, dilation);
+                return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            }
         },
     },
 
@@ -143,14 +176,22 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
             `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C_in, L_in] -> [N, out_channels, L_out]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const L_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-            return [inShape[0], params['out_channels'], L_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 2) {
+                // Input is [C_in, L_in] without batch dimension
+                const L_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
+                return [params['out_channels'], L_out];
+            } else {
+                // Standard case: [N, C_in, L_in]
+                const L_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+                return [inShape[0], params['out_channels'], L_out];
+            }
         },
     },
 
@@ -164,15 +205,24 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
             `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C_in, H_in, W_in] -> [N, out_channels, H_out, W_out]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const H_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-            const W_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
-            return [inShape[0], params['out_channels'], H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 3) {
+                // Input is [C_in, H_in, W_in] without batch dimension
+                const H_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
+                const W_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+                return [params['out_channels'], H_out, W_out];
+            } else {
+                // Standard case: [N, C_in, H_in, W_in]
+                const H_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+                const W_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
+                return [inShape[0], params['out_channels'], H_out, W_out];
+            }
         },
     },
 
@@ -186,16 +236,26 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
             `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C_in, D_in, H_in, W_in] -> [N, out_channels, D_out, H_out, W_out]
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
-            const D_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-            const H_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
-            const W_out = convTransposeOutputSize(inShape[4], kernel, stride, padding, dilation, outputPadding);
-            return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 4) {
+                // Input is [C_in, D_in, H_in, W_in] without batch dimension
+                const D_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
+                const H_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+                const W_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
+                return [params['out_channels'], D_out, H_out, W_out];
+            } else {
+                // Standard case: [N, C_in, D_in, H_in, W_in]
+                const D_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+                const H_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
+                const W_out = convTransposeOutputSize(inShape[4], kernel, stride, padding, dilation, outputPadding);
+                return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            }
         },
     },
 
@@ -208,14 +268,22 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, L] -> [N, C, L_out]
             const kernel = params['kernel_size'];
             const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
-            const L_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], L_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 2) {
+                // Input is [C, L] without batch dimension
+                const L_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], L_out];
+            } else {
+                // Standard case: [N, C, L]
+                const L_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], inShape[1], L_out];
+            }
         },
     },
 
@@ -227,15 +295,24 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, H, W] -> [N, C, H_out, W_out]
             const kernel = params['kernel_size'];
             const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
-            const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 3) {
+                // Input is [C, H, W] without batch dimension
+                const H_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
+                const W_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], H_out, W_out];
+            } else {
+                // Standard case: [N, C, H, W]
+                const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+                const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], inShape[1], H_out, W_out];
+            }
         },
     },
 
@@ -247,17 +324,26 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, D, H, W] -> [N, C, D_out, H_out, W_out]
             const kernel = params['kernel_size'];
             const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
-
-            const D_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            const H_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-            const W_out = poolOutputSize(inShape[4], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], D_out, H_out, W_out];
+            
+            // Check if we have a batch dimension
+            if (inShape.length === 4) {
+                // Input is [C, D, H, W] without batch dimension
+                const D_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
+                const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+                const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], D_out, H_out, W_out];
+            } else {
+                // Standard case: [N, C, D, H, W]
+                const D_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+                const H_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
+                const W_out = poolOutputSize(inShape[4], kernel, stride, padding, dilation, ceil_mode);
+                return [inShape[0], inShape[1], D_out, H_out, W_out];
+            }
         },
     },
 
