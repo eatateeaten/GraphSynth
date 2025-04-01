@@ -5,7 +5,7 @@ import { BranchOp } from './branch_op';
 import { MergeOp, PointwiseOp, DotOp, CrossOp} from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
 import { Split, Copy } from './branch_op';
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp};
 
 /**
  * Interface defining a connection edge between two nodes in the graph
