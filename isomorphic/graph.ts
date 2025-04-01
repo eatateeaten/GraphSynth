@@ -812,7 +812,15 @@ export class Graph {
             // e.g. Split, Copy, or any node that fans out multiple paths
             // The node's `outShape` typically has the # of outputs.
             const branchOp = node as BranchOp;  // or a node that acts like Branch
-            const numOutputs = branchOp.outShape!.length;
+            let numOutputs: number;
+            try {
+                if (!branchOp.outShape) {
+                    throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
+                }
+                numOutputs = branchOp.outShape.length;
+            } catch (error: any) {
+                throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
+            }
         
             const outVars: string[] = [];
             for (let i = 0; i < numOutputs; i++) {

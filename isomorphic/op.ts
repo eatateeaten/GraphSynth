@@ -102,38 +102,13 @@ export class Op extends GraphNode {
         if (this._prev !== null) {
             throw new Error("Op already has a source connection");
         }
-
-        // Get the output shape from the source node
-        let sourceOutShape: number[];
-        
-        // Extract shape from prev node based on its type
-        if (prev instanceof BranchOp && indexPrev !== undefined) {
-            const branchOutShape = prev.outShape[indexPrev];
-            if (branchOutShape === null || branchOutShape === undefined) {
-                throw new Error(`Cannot connect to BranchOp with id ${prev.id} at output ${indexPrev}: output shape is undefined`);
-            }
-            sourceOutShape = branchOutShape;
-        } else if (prev instanceof Tensor) {
-            if (!prev.outShape) {
-                throw new Error(`Cannot connect to Tensor with id ${prev.id}: output shape is undefined`);
-            }
-            sourceOutShape = prev.outShape;
-        } else if (prev instanceof Op) {
-            if (!prev.outShape) {
-                throw new Error(`Cannot connect to Op with id ${prev.id}: output shape is undefined`);
-            }
-            sourceOutShape = prev.outShape;
-        } else if (prev instanceof MergeOp) {
-            if (!prev.outShape) {
-                throw new Error(`Cannot connect to MergeOp with id ${prev.id}: output shape is undefined`);
-            }
-            sourceOutShape = prev.outShape;
-        } else {
-            throw new Error(`Cannot connect to unknown node type: ${prev.constructor.name}`);
+        // Get the output shape from the source node        
+        if (!prev.outShape) {
+            throw new Error(`Previous node ${prev.id} has no output shape defined`);
         }
         
         // Set inShape and compute outShape
-        this._inShape = [...sourceOutShape];
+        this._inShape = [...prevOutShape];
         
         try {
             this._outShape = this.computeOutShape();
@@ -142,7 +117,6 @@ export class Op extends GraphNode {
             this._inShape = null;
             throw err;
         }
-        
         // Set our prev reference
         this._prev = prev;
     }
@@ -151,6 +125,7 @@ export class Op extends GraphNode {
         if (this._next !== null) {
             throw new Error("Op already has a sink connection");
         }
+        console.log('Op._next:', this._next);
         this._next = next;
     }
 

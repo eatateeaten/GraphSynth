@@ -22,6 +22,7 @@ export abstract class BranchOp extends GraphNode {
         this._params = params;
         this._outShape = null;
         this._numberOfBranches = numberOfBranches;
+        this._nexts = Array(numberOfBranches).fill(null);
     }
 
     protected abstract computeOutShape(): number[][];
@@ -71,9 +72,10 @@ export abstract class BranchOp extends GraphNode {
 
     addNext(next: GraphNode, indexSelf: number, indexNext?: number): void {
         if (this._nexts[indexSelf] !== null) {
+            console.log("index" + indexSelf)
             throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
         }
-        this._nexts[indexSelf] = next;
+        this._nexts[indexSelf] = next; 
     }
 
     deletePrev(indexSelf?: number): void {
@@ -117,7 +119,7 @@ export class Split extends BranchOp {
         if (!this._inShape) {
             throw new Error("Input shape must be defined to compute output shapes");
         }
-
+        
         let start = 0;
         for (const size of sections) {
             const outShape = [...this._inShape];
@@ -126,6 +128,8 @@ export class Split extends BranchOp {
             outShapes.push(outShape);
             start += size;
         }
+
+
 
         // Verify total size matches input shape
         if (start !== this._inShape[dim]) {
@@ -160,7 +164,7 @@ export class Copy extends BranchOp {
 
     protected computeOutShape(): number[][] {
         const { copies } = this._params;
-        const outShapes: number[][] = [];
+        const outShapes: number[][] = []; 
         
         if (!this._inShape) {
             throw new Error("Input shape must be defined to compute output shapes");
@@ -169,6 +173,7 @@ export class Copy extends BranchOp {
         for (let i = 0; i < copies; i++) {
             outShapes.push([...this._inShape]);
         } 
+
         return outShapes;
     }
 

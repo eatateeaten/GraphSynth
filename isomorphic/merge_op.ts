@@ -19,11 +19,12 @@ export abstract class MergeOp extends GraphNode {
         numberOfMerges: number 
     ) {
         super(id, target);
-        this._inShape = Array(numberOfMerges).fill(null)
+        this._inShape = Array(numberOfMerges).fill(null); 
+        this._prevs = Array(numberOfMerges).fill(null); 
         this._opType = opType;
         this._params = params;
         this._outShape = null; 
-        this._numberOfMerges = numberOfMerges
+        this._numberOfMerges = numberOfMerges; 
     }
     
     protected abstract computeOutShape(): number[];
