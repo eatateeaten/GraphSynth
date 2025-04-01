@@ -137,9 +137,142 @@ export abstract class PointwiseOp extends MergeOp {
         if (inputs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
+        try {
+            const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
+            return `${inputs[0]} = ${diffOpCode}(${inputs[0]}, ${inputs[1]})`;
+        } catch {
+            const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, this._target);
+            return `${inputs[0]} = ${nonDiffOpCode}(${inputs[0]}, ${inputs[1]})`;
+        }
+    }
+}
 
-        const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
-        const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, this._target);
-        return `${inputs[0]} = ${diffOpCode}(${inputs[0]}, ${inputs[1]})`;
+/**
+ * DotOp represents dot product operations between two tensors.
+ * For 1D tensors: dot product
+ * For 2D tensors: matrix multiplication
+ * For higher dimensions: batched matrix multiplication
+ */
+export abstract class DotOp extends MergeOp {
+    constructor(
+        id: string,
+        target: string,
+        opType: string,
+        params: Record<string, any> = {}
+    ) {
+        super(id, target, opType, params, 2); // Always 2 inputs for dot ops
+    }
+
+    protected checkIncomingShapeMatch(shape: number[]): void {
+        if (!this._inShape.some(s => s !== null)) {
+            return; // First shape, no need to check
+        }
+
+        const referenceShape = this._inShape.find(s => s !== null);
+        if (!referenceShape) return;
+
+        // For dot product, last dimension of first tensor must match first dimension of second tensor
+        if (referenceShape[referenceShape.length - 1] !== shape[0]) {
+            throw new Error(
+                `Dot product dimension mismatch: last dim of first tensor (${referenceShape[referenceShape.length - 1]}) ` +
+                `must match first dim of second tensor (${shape[0]})`
+            );
+        }
+
+        // All other dimensions must match for batched operations
+        for (let i = 0; i < Math.min(referenceShape.length - 1, shape.length - 1); i++) {
+            if (referenceShape[i] !== shape[i]) {
+                throw new Error(
+                    `Batch dimension mismatch at dim ${i}: ` +
+                    `expected ${referenceShape[i]}, got ${shape[i]}`
+                );
+            }
+        }
+    }
+
+    protected computeOutShape(): number[] {
+        if (this._prevs.length !== 2) {
+            throw new Error("DotOp requires exactly 2 inputs");
+        }
+
+        const shape1 = this._prevs[0]?.outShape;
+        const shape2 = this._prevs[1]?.outShape;
+        if (!shape1 || !shape2) {
+            throw new Error("DotOp requires both inputs to have defined shapes");
+        }
+
+        // For dot product, output shape is [batch_dims..., shape1[-2], shape2[-1]]
+        const arr1 = Array.isArray(shape1) ? shape1 as number[] : [shape1 as number];
+        const arr2 = Array.isArray(shape2) ? shape2 as number[] : [shape2 as number];
+        return [...arr1.slice(0, -1), arr2[arr2.length - 1]];
+    }
+
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
+        if (inputs.length !== 2) {
+            throw new Error("DotOp requires exactly 2 inputs");
+        }
+        return `${inputs[0]} = torch.matmul(${inputs[0]}, ${inputs[1]})`;
+    }
+}
+
+/**
+ * CrossOp represents cross product operations between two tensors.
+ * Only valid for 3D vectors (shape [..., 3]).
+ */
+export abstract class CrossOp extends MergeOp {
+    constructor(
+        id: string,
+        target: string,
+        opType: string,
+        params: Record<string, any> = {}
+    ) {
+        super(id, target, opType, params, 2); // Always 2 inputs for cross ops
+    }
+
+    protected checkIncomingShapeMatch(shape: number[]): void {
+        if (!this._inShape.some(s => s !== null)) {
+            return; // First shape, no need to check
+        }
+
+        const referenceShape = this._inShape.find(s => s !== null);
+        if (!referenceShape) return;
+
+        // For cross product, last dimension must be 3
+        if (shape[shape.length - 1] !== 3) {
+            throw new Error(
+                `Cross product requires 3D vectors, got shape [..., ${shape[shape.length - 1]}]`
+            );
+        }
+
+        // All other dimensions must match for batched operations
+        for (let i = 0; i < shape.length - 1; i++) {
+            if (shape[i] !== referenceShape[i]) {
+                throw new Error(
+                    `Batch dimension mismatch at dim ${i}: ` +
+                    `expected ${referenceShape[i]}, got ${shape[i]}`
+                );
+            }
+        }
+    }
+
+    protected computeOutShape(): number[] {
+        if (this._prevs.length !== 2) {
+            throw new Error("CrossOp requires exactly 2 inputs");
+        }
+
+        const shape = this._prevs[0]?.outShape;
+        if (!shape) {
+            throw new Error("CrossOp requires first input to have defined shape");
+        }
+
+        // Cross product preserves the input shape
+        return Array.isArray(shape) ? shape as number[] : [shape as number];
+    }
+
+    to_torch_functional(inputs: string[], outputs?: string[]): string {
+        if (inputs.length !== 2) {
+            throw new Error("CrossOp requires exactly 2 inputs");
+        }
+        return `${inputs[0]} = torch.cross(${inputs[0]}, ${inputs[1]})`;
     }
 }
