@@ -69,15 +69,26 @@ export abstract class BranchOp extends GraphNode {
         this._prev = prev; 
     }
 
-    addNext(next: GraphNode, indexSelf: number, indexNext?: number): void {
-        //at this point we already know outShape is not none and indexSelf is validated from _validateSourceAndGetOutShape
-        // Validate and normalize index
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+        if (indexSelf === undefined) {
+            indexSelf = this._nexts.findIndex(n => !n);
+            if (indexSelf === -1) {
+                indexSelf = this._nexts.length;
+                if (!this._inShape || !this._outShape) {
+                    throw new Error("Input and output shapes must be defined to add new outputs");
+                }
+                if (indexSelf >= this._outShape.length) {
+                    const lastShape = [...this._inShape];
+                    lastShape[this._params.dim] = 1;
+                    this._outShape.push(lastShape);
+                    this._params.sections.push(1);
+                }
+            }
+        }
         
-        // Check if a connection already exists at this output
         if (this._nexts[indexSelf] !== null) {
             throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
         }
-        // Set the connection
         this._nexts[indexSelf] = next;
     }
 
@@ -109,23 +120,33 @@ export abstract class BranchOp extends GraphNode {
 export class Split extends BranchOp {
     constructor(
         id: string,
-        inShape: number[],
         target: string,
         params: { dim: number, sections: number[]}
     ) {
-        super(id, inShape, target, "Split", params, len(sections));
+        super(id, target, "Split", params, params.sections.length);
     }
 
     protected computeOutShape(): number[][] {
         const { dim, sections } = this._params;
         const outShapes: number[][] = [];
         
+        if (!this._inShape) {
+            throw new Error("Input shape must be defined to compute output shapes");
+        }
+
+        let start = 0;
         for (const size of sections) {
             const outShape = [...this._inShape];
+            // Each section starts at 'start' and has length 'size'
             outShape[dim] = size;
             outShapes.push(outShape);
+            start += size;
         }
-        
+
+        // Verify total size matches input shape
+        if (start !== this._inShape[dim]) {
+            throw new Error(`Total split size ${start} does not match input dimension ${this._inShape[dim]}`);
+        }
         return outShapes;
     }
 
@@ -135,45 +156,8 @@ export class Split extends BranchOp {
         if (sections.length === 1) {
             return `${inputs[0]} = ${inputs[0]}`;
         }
-        
         const outputsStr = inputs.map((input, i) => `${input}`).join(', ');
         return `${outputsStr} = torch.split(${inputs[0]}, sections=${JSON.stringify(sections)}, dim=${dim})`;
-    }
-
-    get next(): GraphNode | null {
-        return this._nexts.length > 0 ? this._nexts[0] : null;
-    }
-
-    set next(node: GraphNode | null) {
-        this._nexts = [];
-        if (node !== null) {
-            this._nexts.push(node);
-        }
-    }
-
-    // For test compatibility
-    get nexts(): GraphNode[] {
-        return this._nexts;
-    }
-
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (indexSelf === undefined) {
-            indexSelf = this._nexts.findIndex(n => !n);
-            if (indexSelf === -1) {
-                indexSelf = this._nexts.length;
-                if (indexSelf >= this._outShape.length) {
-                    // This is not ideal for Split since output shapes depend on sections
-                    // But we'll allow it for flexibility
-                    const lastShape = [...this._inShape];
-                    lastShape[this._params.dim] = 1; // Default to size 1 for new sections
-                    this._outShape.push(lastShape);
-                    // Update sections parameter
-                    this._params.sections.push(1);
-                }
-            }
-        }
-        
-        super.addNext(next, indexSelf, indexNext);
     }
 } 
 
@@ -193,6 +177,11 @@ export class Copy extends BranchOp {
     protected computeOutShape(): number[][] {
         const { copies } = this._params;
         const outShapes: number[][] = [];
+        
+        if (!this._inShape) {
+            throw new Error("Input shape must be defined to compute output shapes");
+        }
+    
         for (let i = 0; i < copies; i++) {
             outShapes.push([...this._inShape]);
         } 
