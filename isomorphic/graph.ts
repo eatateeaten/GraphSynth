@@ -801,8 +801,17 @@ export class Graph {
           // Determine node "type" by singleInput/singleOutput
           const singleIn = GraphNode.singleInput(node);
           const singleOut = GraphNode.singleOutput(node);
+          
+          // Add explicit check for Split and Copy - they should always be treated as branch nodes
+          const isBranchNode = node instanceof BranchOp;
+          
+          // Debug logging for node type classification
+          console.log(`Node ${node.id} (${node.constructor.name}): singleIn=${singleIn}, singleOut=${singleOut}, isBranchNode=${isBranchNode}`);
+          if (isBranchNode && singleOut) {
+            console.warn(`WARNING: BranchOp ${node.id} was incorrectly classified as singleOutput`);
+          }
         
-          if (singleIn && singleOut) {
+          if (singleIn && singleOut && !isBranchNode) {
             // =============== Op or Tensor (single in, single out) ===============
             // (e.g. ReLU, any standard unary/binary op, or an in-graph Tensor)
             const outVar = newVar();
@@ -878,7 +887,7 @@ export class Graph {
               }
             }
         
-          } else if (singleIn && !singleOut) {
+          } else if (isBranchNode || (singleIn && !singleOut)) {
             // =============== Branch (single input, multiple outputs) ===============
             // e.g. Split, Copy, or any node that fans out multiple paths
             // The node's `outShape` typically has the # of outputs.

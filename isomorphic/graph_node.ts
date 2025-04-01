@@ -114,11 +114,31 @@ export abstract class GraphNode {
      * @returns true if the node can only have a single input
      */
     static singleInput(node: GraphNode): boolean {
+        // Direct class name check for maximum clarity and reliability
         const className = node.constructor.name;
-        return className.includes('Op') || 
-               className.includes('Tensor') || 
-               className.includes('BranchOp') || 
-               (!className.includes('MergeOp') && !className.includes('Module'));
+        
+        // Multi-input node types (explicit listing)
+        const multiInputTypes = [
+            'MergeOp',
+            'Concat',
+            'PointwiseReduce',
+            'PointwiseOp',
+            'DotOp',
+            'CrossOp'
+        ];
+        
+        // Check if class name matches any of the multi-input types
+        if (multiInputTypes.some(type => className === type || className.includes(`${type}Module`))) {
+            return false;
+        }
+        
+        // Any module-type node has multiple inputs
+        if (className.includes('Module')) {
+            return false;
+        }
+        
+        // All other nodes have single inputs
+        return true;
     }
 
     /**
@@ -127,11 +147,28 @@ export abstract class GraphNode {
      * @returns true if the node can only have a single output
      */
     static singleOutput(node: GraphNode): boolean {
+        // Direct class name check for maximum clarity and reliability
         const className = node.constructor.name;
-        return className.includes('Op') || 
-               className.includes('Tensor') || 
-               className.includes('MergeOp') || 
-               (!className.includes('BranchOp') && !className.includes('Module'));
+        
+        // Multi-output node types (explicit listing)
+        const multiOutputTypes = [
+            'BranchOp',
+            'Split',
+            'Copy'
+        ];
+        
+        // Check if class name matches any of the multi-output types
+        if (multiOutputTypes.some(type => className === type || className.endsWith(type))) {
+            return false;
+        }
+        
+        // Any module-type node has multiple outputs
+        if (className.includes('Module')) {
+            return false;
+        }
+        
+        // All other nodes have single outputs
+        return true;
     }
 
     /**
