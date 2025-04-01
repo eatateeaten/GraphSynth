@@ -58,11 +58,24 @@ export abstract class GraphNode {
      * @returns true if node is MergeOp, BranchOp, or Op; false if node is Tensor or Module
      */
     static inShapeInferred(node: GraphNode): boolean {
-        // Check if the node is of a type that infers its input shape
         const className = node.constructor.name;
-        return className.includes('MergeOp') || 
-               className.includes('BranchOp') || 
-               className === 'Op' ||
+        
+        // List all node types that infer their input shape
+        const shapeInferredTypes = [
+            'MergeOp',
+            'BranchOp',
+            'Op',
+            'Concat',
+            'PointwiseReduce',
+            'PointwiseOp',
+            'DotOp',
+            'CrossOp',
+            'Split',
+            'Copy'
+        ];
+        
+        // Check if node is a type that infers shape
+        return shapeInferredTypes.includes(className) || 
                (!className.includes('Tensor') && !className.includes('Module'));
     }
 
@@ -74,28 +87,43 @@ export abstract class GraphNode {
      */
     static multipleStaticInputs(node: GraphNode): boolean {
         const className = node.constructor.name;
+        // Only specific module classes have multiple static inputs
         return className.includes('Module');
     }
 
     /**
-     * Checks if the node can have multiple inputs
+     * Checks if the node can have multiple outputs
      * @param node The graph node to check
-     * @returns true if the node can have multiple inputs
+     * @returns true if the node can have multiple outputs
      */
     static multipleOutputs(node: GraphNode): boolean {
         const className = node.constructor.name;
-        return className.includes('BranchOp') || className.includes('Module');
+        // List all node types that have multiple outputs
+        const multiOutputTypes = [
+            'BranchOp',
+            'Split',
+            'Copy'
+        ];
+        return multiOutputTypes.includes(className) || className.includes('Module');
     }
     
     /**
      * Checks if the node can have multiple inputs
      * @param node The graph node to check
      * @returns true if the node can have multiple inputs
-     * By default we won't be supporting arbitrary length of input 
      */
     static multipleInputs(node: GraphNode): boolean {
         const className = node.constructor.name;
-        return className.includes('MergeOp') || className.includes('Module');
+        // List all node types that have multiple inputs
+        const multiInputTypes = [
+            'MergeOp',
+            'Concat',
+            'PointwiseReduce',
+            'PointwiseOp',
+            'DotOp',
+            'CrossOp'
+        ];
+        return multiInputTypes.includes(className) || className.includes('Module');
     }
     
     /**
@@ -105,9 +133,14 @@ export abstract class GraphNode {
      */
     static multipleStaticOutputs(node: GraphNode): boolean {
         const className = node.constructor.name;
-        return className.includes('Module') || className.includes('Split') || className.includes('Copy');
+        // List all node types that have multiple static outputs
+        const multiStaticOutputTypes = [
+            'Split',
+            'Copy'
+        ];
+        return multiStaticOutputTypes.includes(className) || className.includes('Module');
     }
-    
+
     /**
      * Checks if the node can only have a single input
      * @param node The graph node to check
@@ -177,9 +210,21 @@ export abstract class GraphNode {
      * @returns true if the node has any inputs connected
      */
     static hasInputs(node: GraphNode): boolean {
-        if (node.constructor.name.includes('MergeOp')) {
+        const className = node.constructor.name;
+        
+        // List all node types that use _prevs array for multiple inputs
+        const multiInputTypes = [
+            'MergeOp',
+            'Concat', 
+            'PointwiseReduce',
+            'PointwiseOp',
+            'DotOp',
+            'CrossOp'
+        ];
+        
+        if (multiInputTypes.includes(className)) {
             // @ts-ignore: Accessing protected property
-            return node._prevs && node._prevs.some(p => p !== null && p !== undefined);
+            return !node._prevs.every(p => !p);
         } else {
             return node.prev !== null;
         }
@@ -191,27 +236,20 @@ export abstract class GraphNode {
      * @returns true if the node has any outputs connected
      */
     static hasOutputs(node: GraphNode): boolean {
-        if (node.constructor.name.includes('BranchOp')) {
+        const className = node.constructor.name;
+        
+        // List all node types that use _nexts array for multiple outputs
+        const multiOutputTypes = [
+            'BranchOp',
+            'Split',
+            'Copy'
+        ];
+        
+        if (multiOutputTypes.includes(className)) {
             // @ts-ignore: Accessing protected property
-            return node._nexts && node._nexts.some(n => n !== null && n !== undefined);
+            return !node._nexts.every(n => !n);
         } else {
             return node.next !== null;
         }
     }
-
-
-    /**
-     * Check if node has multiple inputs with inferred shapes
-     * This is specifically for nodes like Concat, PointwiseReduce, DotOp, and CrossOp
-     * that have multiple inputs and infer their shapes from those inputs
-     * @param node The node to check
-     * @returns True if the node has multiple inputs with inferred shapes
-     */
-    static multiInputsShapeInferred(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        return className === 'Concat' ||
-               className === 'PointwiseReduce' ||
-               className === 'DotOp' ||
-               className === 'CrossOp';
-    }
-} 
+}

@@ -187,16 +187,6 @@ export class DotOp extends MergeOp {
                 `must match first dim of second tensor (${shape[0]})`
             );
         }
-
-        // All other dimensions must match for batched operations
-        for (let i = 0; i < Math.min(referenceShape.length - 1, shape.length - 1); i++) {
-            if (referenceShape[i] !== shape[i]) {
-                throw new Error(
-                    `Batch dimension mismatch at dim ${i}: ` +
-                    `expected ${referenceShape[i]}, got ${shape[i]}`
-                );
-            }
-        }
     }
 
     protected computeOutShape(): number[] {

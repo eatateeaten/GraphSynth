@@ -405,7 +405,7 @@ export class Graph {
         }
         
         // For nodes with multiple inputs but not static (Concat, Product, etc.)
-        if (GraphNode.multiInputsShapeInferred(sink)) {
+        if (GraphNode.multipleInputs(sink) && GraphNode.inShapeInferred(sink)) {
             // These nodes handle shape validation themselves
             if (sinkIndex === undefined) {
                 throw new Error("When connecting to a node with multiple inputs, an input index must be specified");
@@ -505,8 +505,8 @@ export class Graph {
         }
         //----------------------------------------------------------
         // Update graph status
-        //this._refreshNodeSinkSourceStatus(source);
-        //this._refreshNodeSinkSourceStatus(sink);
+        this._refreshNodeSinkSourceStatus(source);
+        this._refreshNodeSinkSourceStatus(sink);
     }
 
     
@@ -521,8 +521,8 @@ export class Graph {
         source.deleteNext(sourceIndex);
 
         // Update graph status
-        //this._refreshNodeSinkSourceStatus(source);
-        //this._refreshNodeSinkSourceStatus(sink);
+        this._refreshNodeSinkSourceStatus(source);
+        this._refreshNodeSinkSourceStatus(sink);
     }
 
 
@@ -570,7 +570,7 @@ export class Graph {
         
         // Recompute sources and sinks to ensure they're correctly identified
         // This fixes potential issues with BranchOp and other node types
-        //this._refreshAllNodesSourceSinkStatus();
+        this._refreshAllNodesSourceSinkStatus();
         
         // Re-check for sinks after refreshing
         if (this._sinks.size === 0) {
