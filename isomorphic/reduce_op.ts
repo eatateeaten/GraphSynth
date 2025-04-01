@@ -79,8 +79,13 @@ export abstract class ReduceOp extends MergeOp {
         }
         //-------------------------------------------------------
         this.checkIncomingShapeMatch(prevOutShape); 
-        this.computeOutShape();
+        
+        // Store both the prev node and its shape
         this._prevs[validatedIndex] = prev;
+        this._inShape[validatedIndex] = [...prevOutShape];
+        
+        // Now compute the output shape based on the updated input shapes
+        this._outShape = this.computeOutShape();
     }
 }
 
@@ -126,7 +131,15 @@ export class PointwiseReduce extends ReduceOp {
         // Find the first defined input shape
         const referenceShapeIndex = this._inShape.findIndex(s => s !== null);
         if (referenceShapeIndex === -1) {
-            return []; // This part most likely cannot be reached? 
+            // No shapes yet, check if we have any _prevs that might have shapes
+            const prevWithShape = this._prevs.find(p => p && p.outShape);
+            if (prevWithShape && prevWithShape.outShape) {
+                // Use the shape from the first connected prev node
+                return Array.isArray(prevWithShape.outShape) ? 
+                       [...prevWithShape.outShape as number[]] : 
+                       [prevWithShape.outShape as number];
+            }
+            return []; // No valid shapes found anywhere
         }
         // Return a copy of the reference shape
         return [...this._inShape[referenceShapeIndex]];
