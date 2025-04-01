@@ -9,6 +9,17 @@ import { Split } from './branch_op';
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp };
 
 /**
+ * Interface defining a connection edge between two nodes in the graph
+ */
+interface Edge {
+    edgeId: string;     // Unique identifier for the edge
+    sourceId: string;
+    sinkId: string;
+    sourceIndex?: number;
+    sinkIndex?: number;
+}
+
+/**
  * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 
  * It delegates all GraphNode methods to the wrapped node.
  */
@@ -50,20 +61,17 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.inShape) {
                     throw new Error("inShape parameter is required for Split");
                 }
-                if (!params.splitParams || !params.splitParams.dim || !params.splitParams.sections) {
+                if (!params.splitParams || params.splitParams.dim === undefined || !params.splitParams.sections) {
                     throw new Error("splitParams with dim and sections is required for Split");
                 }
                 node = new Split(id, params.inShape, target, params.splitParams);
                 break;
                 
             case "Concat":
-                if (!params.inShapes) {
-                    throw new Error("inShapes parameter is required for Concat");
-                }
                 if (!params.concatParams || params.concatParams.dim === undefined) {
                     throw new Error("concatParams with dim is required for Concat");
                 }
-                node = new Concat(id, params.inShapes, target, params.concatParams);
+                node = new Concat(id, target, params.concatParams);
                 break;
                 
             default:
@@ -98,12 +106,14 @@ export class Graph {
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
     private _pendingNodes: Map<string, PendingNode<GraphNode>>;  // Changed to Map for O(1) lookups by ID
+    private _edges: Edge[]; // Track all connections for easier disconnection
 
     constructor() {
         this._nodes = new Map();
         this._sources = new Set();
         this._sinks = new Set();
-        this._pendingNodes = new Map(); 
+        this._pendingNodes = new Map();
+        this._edges = [];
     }
 
     /**
@@ -272,228 +282,211 @@ export class Graph {
     }
 
     /**
-     * Connects two nodes in the graph.
+     * Validates the source node's connection point and returns its output shape
+     */
+    private _validateSourceAndGetOutShape(source: GraphNode, sourceIndex?: number): number[] {
+        // First, ensure the source has an output shape
+        if (!source.outShape) {
+            throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
+        }
+        //------------------------------------------------------------------------------------------------
+        // For nodes with multiple static outputs (Module) - WITH TENTACLES EACH WITH AN OUTPUT SHAPE
+        if (GraphNode.multipleStaticOutputs(source)) {
+            // SourceIndex must be defined
+            if (sourceIndex === undefined) {
+                throw new Error("When connecting from a node with multiple static outputs, an output index must be specified");
+            }
+            // SourceIndex must be in bounds of Source.outShape
+            sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "connect");
+            // Get specific output shape
+            const outShapeArray = source.outShape as number[][];
+            const outputShape = outShapeArray[sourceIndex];
+            // The indexed shape must be defined
+            if (outputShape === null || outputShape === undefined) {
+                throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id} at output ${sourceIndex}: output shape is undefined`);
+            }
+            return outputShape;
+        } 
+        //--------------------------------------------------------------------------------------------------
+        // For nodes with single output (Op, Tensor, Merge)
+        if (GraphNode.singleOutput(source)) {
+            // Source.outShape must be defined (already checked at the top)
+            return source.outShape as number[];
+        }
+        // Unknown node type
+        throw new Error(`Unknown source node type: ${source.constructor.name}`);
+    }
+
+   
+    /**
+     * Validates the sink node's connection point and returns its input shape, returned value can be Null 
+     */
+    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex?: number): number[] | null {
+        // For nodes with multiple static inputs (Module)
+        if (GraphNode.multipleStaticInputs(sink)) {
+            if (sinkIndex === undefined) {
+                throw new Error("When connecting to a node with multiple static inputs, an input index must be specified");
+            }
+            if (!sink.inShape) {
+                throw new Error(`Node with id ${sink.id} must have defined input shape`);
+            }
+            
+            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect");
+            
+            // Get specific input shape
+            const inShapeArray = sink.inShape as number[][];
+            if (!inShapeArray[sinkIndex]) {
+                throw new Error(`Node with id ${sink.id} must have defined input shape at index ${sinkIndex}`);
+            }
+            return inShapeArray[sinkIndex];
+        }
+        
+        // For nodes with multiple inputs but not static (Concat, Product, etc.)
+        if (GraphNode.multipleInputs(sink) && !GraphNode.multipleStaticInputs(sink)) {
+            // These nodes handle shape validation themselves
+            // Will call specific shapeCheck function when adding
+            return null; // Skip shape check
+        }
+        
+        // For nodes with single input and not inShapeInferred (Tensor)
+        if (GraphNode.singleInput(sink) && !GraphNode.inShapeInferred(sink)) {
+            if (!sink.inShape) {
+                throw new Error(`${sink.constructor.name} with id ${sink.id} must have defined input shape`);
+            }
+            return sink.inShape as number[];
+        }
+        
+        // For nodes with single input and inShapeInferred (Op)
+        if (GraphNode.singleInput(sink) && GraphNode.inShapeInferred(sink)) {
+            // These nodes infer their shape from the connection
+            return null; // Skip shape check
+        }
+        
+        // Unknown node type
+        throw new Error(`Unknown sink node type: ${sink.constructor.name}`);
+    }
+
+    /**
+     * Connects two nodes.
      * 
-     * The source node must be in the main graph, but the sink can be either in the main graph
-     * or in the pending collection. If the sink is a pending node, it will be promoted to
-     * the main graph after a successful connection.
+     * This method establishes a connection between two nodes in the graph.
+     * If the source node exists in the main graph and the sink node is pending,
+     * the sink node will be moved from pending to the main graph.
+     * Shape validation is performed to ensure compatible connections.
      * 
      * @param sourceId - ID of the source node
      * @param sinkId - ID of the sink node
-     * @param sourceIndex - Index for the source node output (required for BranchOp)
-     * @param sinkIndex - Index for the sink node input (required for MergeOp)
-     * @throws Error if nodes don't exist, indices are invalid, or shapes don't match
+     * @param sourceIndex - Index for the source node output (required for nodes with multiple outputs)
+     * @param sinkIndex - Index for the sink node input (required for nodes with multiple inputs)
+     * @throws Error if nodes don't exist or have incompatible shapes
      * 
      * @example
-     * // Connect a tensor to an operation
-     * graph.connect("tensorId", "opId");
+     * // Connect two nodes
+     * graph.connect("opId", "tensorId");
      * 
      * // Connect with specific indices (for branch/merge operations)
-     * graph.connect("splitId", "opId", 0); // Connect to first output of split
+     * graph.connect("splitId", "opId", 0); // Connect from first output of split
      * graph.connect("opId", "concatId", undefined, 1); // Connect to second input of concat
      */
     connect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
         // Get source node from main graph
         const source = this._nodes.get(sourceId);
         if (!source) {throw new Error(`Source node with id ${sourceId} does not exist in graph`);}
-
         // Get sink node from either main graph or pending nodes
         let sink = this._nodes.get(sinkId) || this._pendingNodes.get(sinkId);
         if (!sink) {throw new Error(`Sink node with id ${sinkId} does not exist in graph or pending nodes`);}
-        
         // Determine if sink is pending and unwrap it if needed
         const sinkIsPending = sink instanceof PendingNode;
         if (sinkIsPending) {
             sink = (sink as PendingNode<GraphNode>).unwrap();
         }
-        
+        //-------------------------------------------------------
         // Validate connection endpoints and get shapes
         const sourceOutShape = this._validateSourceAndGetOutShape(source, sourceIndex);
         const sinkInShape = this._validateSinkAndGetInShape(sink, sinkIndex);
 
         // Skip shape compatibility check if sink has no defined input shape yet
         // This allows connecting nodes before their shapes are fully determined
-        if (sinkInShape === null) {
-            // Skip shape check - allow connection without shape validation
-        } else if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
-            throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
+        if (sinkInShape !== null) {
+            if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
+                throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
+            }
         }
-
+        //---------------------------------------------------------
         // Establish bidirectional connections
         // Let each node handle its own connection logic
         sink.addPrev(source, sinkIndex, sourceIndex);
         source.addNext(sink, sourceIndex, sinkIndex);
 
+        // Add the connection to our edge list with a unique ID
+        this._edges.push({
+            edgeId: this._generateUUID(),
+            sourceId: sourceId,
+            sinkId: sinkId,
+            sourceIndex: sourceIndex,
+            sinkIndex: sinkIndex
+        });
+        
+        //---------------------------------------------------------
         // Only if the connection was successful and sink was pending, move it to the main graph
         if (sinkIsPending) {
             this._pendingNodes.delete(sink.id);
             this._nodes.set(sink.id, sink);
         }
-
+        //----------------------------------------------------------
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
         this._refreshNodeSinkSourceStatus(sink);
-    }
-
-    /**
-     * Validates the source node's connection point and returns its output shape
-     */
-    private _validateSourceAndGetOutShape(source: GraphNode, sourceIndex?: number): number[] {
-        // For BranchOp, validate the index
-        if (source instanceof BranchOp) {
-            if (sourceIndex === undefined) {
-                throw new Error("When connecting from a BranchOp, an output index must be specified");
-            }
-            sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "connect (BranchOp output)");
-            
-            // Get specific output shape for the branch
-            const branchOutShape = source.outShape[sourceIndex];
-            if (branchOutShape === null || branchOutShape === undefined) {
-                throw new Error(`Cannot connect from BranchOp with id ${source.id} at output ${sourceIndex}: output shape is undefined`);
-            }
-            return branchOutShape;
-        } 
-        
-        // For other node types (Tensor, Op, MergeOp)
-        if (source instanceof Tensor || source instanceof Op || source instanceof MergeOp) {
-            if (source.outShape === null) {
-                throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
-            }
-            return source.outShape;
-        }
-        // Unknown node type
-        throw new Error(`Unknown source node type: ${source.constructor.name}`);
-    }
-
-    /**
-     * Validates the sink node's connection point and returns its input shape, returned value can be Null 
-     */
-    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex?: number): number[] | null {
-        // For MergeOp, validate the index and get specific input shape
-        if (sink instanceof MergeOp) {
-            if (sinkIndex === undefined) {
-                throw new Error("When connecting to a MergeOp, an input index must be specified");
-            }
-            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect (MergeOp input)");
-            if (!sink.inShape || !sink.inShape[sinkIndex]) {
-                throw new Error(`MergeOp with id ${sink.id} must have defined input shape at index ${sinkIndex}`);
-            }
-            return sink.inShape[sinkIndex];
-        }
-        
-        // For Op and BranchOp, allow undefined input shape
-        if (sink instanceof Op || sink instanceof BranchOp) {
-            return sink.inShape || null;
-        }
-        
-        // For Tensor, input shape must be defined
-        if (sink instanceof Tensor) {
-            if (!sink.inShape) {
-                throw new Error(`Tensor with id ${sink.id} must have defined input shape`);
-            }
-            return sink.inShape;
-        }
-
-        // Unknown node type
-        throw new Error(`Unknown sink node type: ${sink.constructor.name}`);
     }
 
     /**
      * Disconnects two nodes.
      * 
-     * This method breaks the connection between two nodes in the main graph.
+     * This method breaks the connection between two nodes in the main graph using the tracked edge list.
      * Both nodes must exist in the main graph (not in pending nodes).
-     * After disconnection, shape validation may need to be performed again when reconnecting.
      * 
+     * @param edgeId - ID of the edge to disconnect, or
      * @param sourceId - ID of the source node
      * @param sinkId - ID of the sink node
-     * @param sourceIndex - Index for the source node output (required for BranchOp)
-     * @param sinkIndex - Index for the sink node input (required for MergeOp)
+     * @param sourceIndex - Index for the source node output (for nodes with multiple outputs)
+     * @param sinkIndex - Index for the sink node input (for nodes with multiple inputs)
      * @throws Error if nodes don't exist or are not properly connected
-     * 
-     * @example
-     * // Disconnect two nodes
-     * graph.disconnect("opId", "tensorId");
-     * 
-     * // Disconnect with specific indices (for branch/merge operations)
-     * graph.disconnect("splitId", "opId", 0); // Disconnect from first output of split
-     * graph.disconnect("opId", "concatId", undefined, 1); // Disconnect from second input of concat
      */
-    disconnect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
-        // Get source and sink nodes from the main graph
-        const source = this._nodes.get(sourceId);
-        if (!source) {
-            throw new Error(`Source node with id ${sourceId} does not exist in graph`);
+    disconnect(edgeIdOrSourceId: string): void {
+        // If only one  is provided, assume it's an edge ID
+        const edgeId = edgeIdOrSourceId;
+        const edgeIndex = this._edges.findIndex(edge => edge.edgeId === edgeId);
+        
+        if (edgeIndex === -1) {
+            throw new Error(`No connection found with edge ID ${edgeId}`);
         }
         
-        const sink = this._nodes.get(sinkId);
-        if (!sink) {
-            throw new Error(`Sink node with id ${sinkId} does not exist in graph`);
+        const edge = this._edges[edgeIndex];
+        const source = this._nodes.get(edge.sourceId);
+        const sink = this._nodes.get(edge.sinkId);
+        
+        if (!source || !sink) {
+            throw new Error(`Edge ${edgeId} refers to nodes that no longer exist`);
         }
         
-        if (source instanceof BranchOp) {
-            if (sourceIndex === undefined) {
-                throw new Error("When disconnecting from a BranchOp, an output index must be specified");
-            }
-            sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "disconnect (BranchOp output)");
-        }
-        if (sink instanceof MergeOp) {
-            if (sinkIndex === undefined) {
-                throw new Error("When disconnecting to a MergeOp, an input index must be specified");
-            }
-            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "disconnect (MergeOp input)");
-        }
-        // Verify connections exist
-        this._verifyConnectionExists(source, sink, sourceIndex, sinkIndex);
-
         // Break connections using node methods
-        sink.deletePrev(sinkIndex);
-        source.deleteNext(sourceIndex);
-
+        sink.deletePrev(edge.sinkIndex);
+        source.deleteNext(edge.sourceIndex);
+            
+        // Remove the edge from our list
+        this._edges.splice(edgeIndex, 1);
+            
         // Update graph status
-        this._refreshNodeSinkSourceStatus(source);
-        this._refreshNodeSinkSourceStatus(sink);
-    }
-
-    private _verifyConnectionExists(source: GraphNode, sink: GraphNode, sourceIndex?: number, sinkIndex?: number): void {
-        // Check source to sink connection
-        let sourceHasConnection = false;
-        if (source instanceof Tensor || source instanceof Op || source instanceof MergeOp) {
-            sourceHasConnection = source.next === sink;
-        } else if (source instanceof BranchOp) {
-            if (sourceIndex === undefined) {
-                throw new Error("When disconnecting from a BranchOp, an output index must be specified");
-            }
-            sourceHasConnection = source._nexts[sourceIndex] === sink;
-        }
-
-        // Check sink to source connection
-        let sinkHasConnection = false;
-        if (sink instanceof Tensor || sink instanceof Op || sink instanceof BranchOp) {
-            sinkHasConnection = sink.prev === source;
-        } else if (sink instanceof MergeOp) {
-            if (sinkIndex === undefined) {
-                throw new Error("When disconnecting to a MergeOp, an input index must be specified");
-            }
-            sinkHasConnection = sink._prevs[sinkIndex] === source;
-        }
-
-        // If connections don't match, issue a warning but proceed
-        if (!sourceHasConnection || !sinkHasConnection) {
-            console.warn(`Warning: Disconnecting nodes that may not be properly connected: ${source.id} -> ${sink.id}`);
-        }
+        this._refreshNodeSinkSourceStatus(source!);
+        this._refreshNodeSinkSourceStatus(sink!);
     }
 
     private _refreshNodeSinkSourceStatus(node: GraphNode): void {
         // Check source status (no incoming connections)
-        const isSource = node instanceof MergeOp
-            ? node._prevs.every(p => !p)
-            : node.prev === null;
+        const isSource = !GraphNode.hasInputs(node);
             
         // Check sink status (no outgoing connections)
-        const isSink = node instanceof BranchOp
-            ? node._nexts.every(n => !n)
-            : node.next === null;
+        const isSink = !GraphNode.hasOutputs(node);
 
         // Update collections
         if (isSource) this._sources.add(node);
@@ -827,6 +820,21 @@ export class Graph {
         }
         
         return code;
+    }
+
+    // Add a helper method to generate UUIDs
+    /**
+     * Generates a UUID v4 string
+     * @private
+     * @returns A UUID v4 string
+     */
+    private _generateUUID(): string {
+        // RFC4122 compliant UUID v4
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     }
 }
 

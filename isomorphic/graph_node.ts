@@ -51,4 +51,112 @@ export abstract class GraphNode {
         }
         return true;
     }
+
+    /**
+     * Checks if the node's input shape is inferred from its inputs
+     * @param node The graph node to check
+     * @returns true if node is MergeOp, BranchOp, or Op; false if node is Tensor or Module
+     */
+    static inShapeInferred(node: GraphNode): boolean {
+        // Check if the node is of a type that infers its input shape
+        const className = node.constructor.name;
+        return className.includes('MergeOp') || 
+               className.includes('BranchOp') || 
+               className === 'Op' ||
+               (!className.includes('Tensor') && !className.includes('Module'));
+    }
+
+    /**
+     * Checks if the node can have multiple inputs
+     * @param node The graph node to check
+     * @returns true if the node can have multiple inputs
+     */
+    static multipleInputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('MergeOp') || className.includes('Module');
+    }
+    
+    /**
+     * Checks if the node can have arbitray amount of outputs 
+     * @param node The graph node to check
+     * @returns true if the node can have arbitrary amount of ouputs 
+     */
+    static multipleNotStaticOutputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('BranchOp');
+    }
+
+    /**
+     * Checks if the node can have multiple static inputs
+     * @param node The graph node to check
+     * @returns true if the node can have multiple static inputs
+     */
+    static multipleStaticInputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('Module');
+    }
+    
+    /**
+     * Checks if the node can have multiple static outputs
+     * @param node The graph node to check
+     * @returns true if the node can have multiple static outputs
+     */
+    static multipleStaticOutputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('Module');
+    }
+
+    /**
+     * Checks if the node can only have a single input
+     * @param node The graph node to check
+     * @returns true if the node can only have a single input
+     */
+    static singleInput(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('Op') || 
+               className.includes('Tensor') || 
+               className.includes('BranchOp') || 
+               (!className.includes('MergeOp') && !className.includes('Module'));
+    }
+
+    /**
+     * Checks if the node can only have a single output
+     * @param node The graph node to check
+     * @returns true if the node can only have a single output
+     */
+    static singleOutput(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('Op') || 
+               className.includes('Tensor') || 
+               className.includes('Merge') || 
+               (!className.includes('BranchOp') && !className.includes('Module'));
+    }
+
+    /**
+     * Checks if the node has any input connections
+     * @param node The graph node to check
+     * @returns true if the node has any inputs connected
+     */
+    static hasInputs(node: GraphNode): boolean {
+        if (node.constructor.name.includes('MergeOp')) {
+            // @ts-ignore: Accessing protected property
+            return !node._prevs.every(p => !p);
+        } else {
+            return node.prev !== null;
+        }
+    }
+
+    /**
+     * Checks if the node has any output connections
+     * @param node The graph node to check
+     * @returns true if the node has any outputs connected
+     */
+    static hasOutputs(node: GraphNode): boolean {
+        if (node.constructor.name.includes('BranchOp')) {
+            // @ts-ignore: Accessing protected property
+            return !node._nexts.every(n => !n);
+        } else {
+            return node.next !== null;
+        }
+    }
 } 

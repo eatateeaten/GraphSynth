@@ -2,7 +2,7 @@ import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode } from './pointwise_op_map';
 
 export abstract class MergeOp extends GraphNode {
-    protected _inShapes: number[][];
+    protected _inShape: number[][];
     protected _outShape: number[];
     public _prevs: GraphNode[] = [];
     protected _next: GraphNode | null = null;
@@ -12,23 +12,22 @@ export abstract class MergeOp extends GraphNode {
 
     constructor(
         id: string,
-        inShapes: number[][],
         target: string,
         opType: string,
-        params: Record<string, any>
+        params: Record<string, any> = {}
     ) {
         super(id, target);
-        this._inShapes = inShapes;
+        this._inShape = [];
         this._opType = opType;
         this._params = params;
         this._outShape = this.computeOutShape();
     }
-
+    
     protected abstract computeOutShape(): number[];
     abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
 
     // Getters and setters
-    get inShape(): number[][] { return this._inShapes; }
+    get inShape(): number[][] { return this._inShape; }
     get outShape(): number[] { return this._outShape; }
     get next(): GraphNode | null { return this._next; }
     set next(node: GraphNode | null) { this._next = node; }
@@ -52,7 +51,7 @@ export abstract class MergeOp extends GraphNode {
             throw new Error("MergeOp.addPrev requires an input index");
         }
         
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev");
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev");
         
         if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
             throw new Error(`MergeOp already has a connection at input ${validatedIndex}`);
@@ -76,7 +75,7 @@ export abstract class MergeOp extends GraphNode {
             return;
         }
         
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.deletePrev");
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.deletePrev");
         
         this._prevs[validatedIndex] = null as unknown as GraphNode;
     }
@@ -109,7 +108,7 @@ export abstract class PointwiseOp extends MergeOp {
         opType: string,
         params: Record<string, any> = {}
     ) {
-        super(id, [], target, opType, params);
+        super(id, target, opType, params);
     }
 
     protected computeOutShape(): number[] {

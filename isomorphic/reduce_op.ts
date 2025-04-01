@@ -28,23 +28,22 @@ import { GraphNode } from './graph_node';
 export class ReduceOp extends MergeOp {
     constructor(
         id: string,
-        inShapes: number[][],
         target: string,
         opType: string,
-        params: Record<string, any>
+        params: Record<string, any> = {}
     ) {
-        super(id, inShapes, target, opType, params);
+        super(id, target, opType, params);
     }
 
     protected computeOutShape(): number[] {
-        if (this._inShapes.length < 1) {
+        if (this._inShape.length < 1) {
             throw new Error("ReduceOp requires at least 1 input tensor");
         }
 
-        const referenceShape = [...this._inShapes[0]];
+        const referenceShape = [...this._inShape[0]];
         
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const shape = this._inShapes[i];
+        for (let i = 1; i < this._inShape.length; i++) {
+            const shape = this._inShape[i];
             if (!GraphNode.shapeMatch(referenceShape, shape)) {
                 throw new Error(`For reduction operations, all input shapes must match. Shape at index ${i} [${shape}] doesn't match reference shape [${referenceShape}]`);
             }
@@ -77,8 +76,8 @@ export class ReduceOp extends MergeOp {
             indexSelf = this._prevs.findIndex(p => !p);
             if (indexSelf === -1) {
                 indexSelf = this._prevs.length;
-                if (indexSelf >= this._inShapes.length) {
-                    this._inShapes.push([...this._inShapes[0]]);
+                if (indexSelf >= this._inShape.length) {
+                    this._inShape.push([...this._inShape[0]]);
                 }
             }
         }
@@ -88,19 +87,24 @@ export class ReduceOp extends MergeOp {
 }
 
 export class PointwiseReduce extends ReduceOp {
-    constructor(id: string, inShapes: number[][], target: string, opType: string) {
-        super(id, inShapes, target, opType, {});
+    constructor(
+        id: string,
+        target: string,
+        opType: string,
+        params: Record<string, any> = {}
+    ) {
+        super(id, target, opType, params);
     }
 
     protected computeOutShape(): number[] {
-        if (this._inShapes.length < 2) {
+        if (this._inShape.length < 2) {
             throw new Error("PointwiseReduce requires at least 2 input tensors");
         }
 
-        let resultShape = [...this._inShapes[0]];
+        let resultShape = [...this._inShape[0]];
 
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const currentShape = this._inShapes[i];
+        for (let i = 1; i < this._inShape.length; i++) {
+            const currentShape = this._inShape[i];
             
             if (currentShape.length !== resultShape.length) {
                 throw new Error(`Input shapes must have the same rank. Shape at index ${i} has rank ${currentShape.length}, expected ${resultShape.length}`);
@@ -143,19 +147,23 @@ export class PointwiseReduce extends ReduceOp {
 }
 
 export class Concat extends ReduceOp {
-    constructor(id: string, inShapes: number[][], target: string, params: { dim: number }) {
-        super(id, inShapes, target, "Concat", params);
+    constructor(
+        id: string,
+        target: string,
+        params: { dim: number }
+    ) {
+        super(id, target, "Concat", params);
     }
 
     protected computeOutShape(): number[] {
         const dim = this._params.dim;
-        if (dim < 0 || dim >= this._inShapes[0].length) {
-            throw new Error(`Invalid concatenation dimension ${dim} for input shape of length ${this._inShapes[0].length}`);
+        if (dim < 0 || dim >= this._inShape[0].length) {
+            throw new Error(`Invalid concatenation dimension ${dim} for input shape of length ${this._inShape[0].length}`);
         }
 
-        const referenceShape = this._inShapes[0];
-        for (let i = 1; i < this._inShapes.length; i++) {
-            const shape = this._inShapes[i];
+        const referenceShape = this._inShape[0];
+        for (let i = 1; i < this._inShape.length; i++) {
+            const shape = this._inShape[i];
             if (shape.length !== referenceShape.length) {
                 throw new Error(`For concatenation, all input shapes must have the same rank. Shape at index ${i} has rank ${shape.length}, expected ${referenceShape.length}`);
             }
@@ -167,7 +175,7 @@ export class Concat extends ReduceOp {
         }
 
         const outShape = [...referenceShape];
-        outShape[dim] = this._inShapes.reduce((sum, shape) => sum + shape[dim], 0);
+        outShape[dim] = this._inShape.reduce((sum, shape) => sum + shape[dim], 0);
         return outShape;
     }
 
