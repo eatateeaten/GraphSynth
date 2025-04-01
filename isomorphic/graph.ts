@@ -185,9 +185,9 @@ export class Graph {
      */
     createPendingNode(type: string, id: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
         // Check if the node already exists in pending nodes or main graph
-        if (this._pendingNodes.has(id)) {
-            throw new Error(`Node with id ${id} already exists in pending nodes`);
-        }
+        //if (this._pendingNodes.has(id)) {
+        //    throw new Error(`Node with id ${id} already exists in pending nodes`);
+        //}
         if (this._nodes.has(id)) {
             throw new Error(`Node with id ${id} already exists in the graph`);
         }
