@@ -48,6 +48,7 @@ export abstract class ReduceOp extends MergeOp {
         this._outShape = null; 
         this._numberOfMerges = numberOfMerges
     }
+
     
     protected abstract computeOutShape(): number[];
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
