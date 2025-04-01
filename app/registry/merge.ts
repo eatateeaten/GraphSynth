@@ -13,5 +13,25 @@ export const mergeModules: Record<string, ModuleMetadata> = {
                 default: 0
             }
         }
+    },
+    'PointwiseReduce': {
+        label: 'Pointwise Reduce',
+        description: 'Combines multiple tensors using an element-wise operation',
+        category: 'Flow',
+        paramFields: {
+            opType: {
+                label: 'Operation',
+                description: 'The type of reduction operation to perform',
+                type: 'option',
+                default: 'add',
+                options: ['add', 'multiply', 'maximum', 'minimum']
+            },
+            numberOfMerges: {
+                label: 'Number of Inputs',
+                description: 'Number of tensors to combine',
+                type: 'number',
+                default: 2
+            }
+        }
     }
 };

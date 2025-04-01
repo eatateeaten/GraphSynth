@@ -21,6 +21,10 @@ export function LayerBox({ data, id }: LayerBoxProps) {
     // Get shapes, handling all possible types (null, number[], number[][])
     const inShape = node?.inShape;
     const outShape = node?.outShape;
+    
+    // Use the node type to determine handle configuration
+    const isBranchNode = type === 'Split' || type === 'Copy';
+    const isMergeNode = type === 'Concat' || type === 'PointwiseReduce';
 
     const card = (
         <Card shadow="sm" radius="sm" withBorder style={{ padding: "8px 16px 8px" }}>
@@ -33,36 +37,41 @@ export function LayerBox({ data, id }: LayerBoxProps) {
 
     // Render input handles based on node type
     const renderInputHandles = () => {
-        // For null shape, render a single "Any" handle
-        if (!inShape) return (
+        // No shape or pending split/copy (they don't know their input shape yet)
+        if (!inShape || (pending && isBranchNode)) return (
             <LayerHandle
                 position={Position.Left}
                 type="target"
+                id="0"
                 dimensions={undefined}
                 error={inputError}
             />
         );
 
-        // Array of arrays - multiple input shapes (MergeOp)
-        if (Array.isArray(inShape[0])) {
-            return (inShape as number[][]).map((shape, idx) => (
+        // Multiple inputs (MergeOp)
+        if (Array.isArray(inShape[0]) || isMergeNode) {
+            const shapes = inShape as number[][];
+            console.log(shapes);
+            return shapes.map((shape, idx) => (
                 <LayerHandle
                     key={`in-${idx}`}
                     position={Position.Left}
                     type="target"
                     dimensions={shape}
                     error={inputError}
-                    handleId={idx.toString()}
+                    id={idx.toString()}
                     offset={idx}
+                    total={shapes.length}
                 />
             ));
         }
 
-        // Simple array - single input shape (Tensor, Op, BranchOp)
+        // Single input shape (Tensor, Op, BranchOp)
         return (
             <LayerHandle
                 position={Position.Left}
                 type="target"
+                id="0"
                 dimensions={inShape as number[]}
                 error={inputError}
             />
@@ -71,36 +80,40 @@ export function LayerBox({ data, id }: LayerBoxProps) {
 
     // Render output handles based on node type
     const renderOutputHandles = () => {
-        // For null shape, render a single "Any" handle
+        // No shape
         if (!outShape) return (
             <LayerHandle
                 position={Position.Right}
                 type="source"
+                id="0"
                 dimensions={undefined}
                 error={outputError}
             />
         );
 
-        // Array of arrays - multiple output shapes (BranchOp)
-        if (Array.isArray(outShape[0])) {
-            return (outShape as number[][]).map((shape, idx) => (
+        // Multiple outputs (BranchOp)
+        if (Array.isArray(outShape[0]) || isBranchNode) {
+            const shapes = outShape as number[][];
+            return shapes.map((shape, idx) => (
                 <LayerHandle
                     key={`out-${idx}`}
                     position={Position.Right}
                     type="source"
                     dimensions={shape}
                     error={outputError}
-                    handleId={idx.toString()}
+                    id={idx.toString()}
                     offset={idx}
+                    total={shapes.length}
                 />
             ));
         }
 
-        // Simple array - single output shape (Tensor, Op, MergeOp)
+        // Single output shape (Tensor, Op, MergeOp)
         return (
             <LayerHandle
                 position={Position.Right}
                 type="source"
+                id="0"
                 dimensions={outShape as number[]}
                 error={outputError}
             />

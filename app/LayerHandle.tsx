@@ -8,11 +8,12 @@ interface LayerHandleProps extends Omit<HandleProps, 'position'> {
     dimensions?: Shape;
     position: Position;
     error?: string;
-    handleId?: string;
+    id: string;
     offset?: number;
+    total?: number; // Total number of handles for proper spacing
 }
 
-export function LayerHandle({ dimensions, position, error, type, ...handleProps }: LayerHandleProps) {
+export function LayerHandle({ dimensions, position, error, type, offset = 0, total = 1, ...handleProps }: LayerHandleProps) {
     const content = (
         <div className="layer-handle-content">
             {dimensions ? (
@@ -36,6 +37,11 @@ export function LayerHandle({ dimensions, position, error, type, ...handleProps 
         </div>
     );
 
+    // Calculate vertical position based on offset and total
+    const offsetPercent = total > 1 
+        ? -10 + ((150 / (total - 1)) * offset) // Distribute handles evenly between 20% and 80%
+        : 50; // Center if only one handle
+
     return (
         <Handle
             className="layer-handle"
@@ -49,6 +55,8 @@ export function LayerHandle({ dimensions, position, error, type, ...handleProps 
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '4px 0',
+                top: `${offsetPercent}%`, // Position handle vertically
+                transform: 'translateY(-50%)', // Center the handle on its position
             }}
         >
             {error ? (

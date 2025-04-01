@@ -20,5 +20,18 @@ export const branchModules: Record<string, ModuleMetadata> = {
                 allowNegativeOne: false
             }
         }
+    },
+    'Copy': {
+        label: 'Copy',
+        description: 'Creates multiple identical copies of the input tensor',
+        category: 'Flow',
+        paramFields: {
+            copies: {
+                label: 'Number of Copies',
+                description: 'Number of identical copies to create',
+                type: 'number',
+                default: 2
+            }
+        }
     }
 };

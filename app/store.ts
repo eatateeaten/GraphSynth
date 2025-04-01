@@ -67,13 +67,29 @@ const makePendingParams = (type: NodeType, op_type: string | null, params: Recor
             };
         case 'Split':
             return {
-                inShape: params.inShape,
-                splitParams: params.splitParams
+                splitParams: {
+                    dim: params.dim || 0,
+                    sections: params.sections || [1, 1]
+                }
+            };
+        case 'Copy':
+            return {
+                copyParams: {
+                    copies: params.copies || 2
+                }
             };
         case 'Concat':
             return {
-                inShapes: params.inShapes,
-                concatParams: params.concatParams
+                concatParams: {
+                    dim: params.dim || 0
+                },
+                numberOfMerges: params.numberOfMerges || 2
+            };
+        case 'PointwiseReduce':
+            return {
+                opType: params.opType || 'add',
+                reduceParams: params.reduceParams || {},
+                numberOfMerges: params.numberOfMerges || 2
             };
         default:
             throw new Error(`Unknown node type: ${type}`);
@@ -242,9 +258,9 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                                 const connectedNode = get().checkerGraph.getNode(conn.id);
                                 if (connectedNode) {
                                     if (connections.sources.some(s => s.id === conn.id)) {
-                                        get().checkerGraph.disconnect(conn.id, id, conn.sourceIndex, conn.targetIndex);
+                                        get().checkerGraph.disconnect(conn.id, id, conn.sourceIndex || 0, conn.targetIndex || 0);
                                     } else {
-                                        get().checkerGraph.disconnect(id, conn.id, conn.sourceIndex, conn.targetIndex);
+                                        get().checkerGraph.disconnect(id, conn.id, conn.sourceIndex || 0, conn.targetIndex || 0);
                                     }
                                 }
                             }

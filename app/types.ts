@@ -1,7 +1,7 @@
 // src/types.ts
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 
-export type NodeType = 'Tensor' | 'Op' | 'Branch' | 'Merge';
+export type NodeType = 'Tensor' | 'Op' | 'Split' | 'Copy' | 'Concat' | 'PointwiseReduce';
 
 export interface FlowNode extends ReactFlowNode {
     data: {

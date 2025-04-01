@@ -43,16 +43,15 @@ export const allModules: Record<string, ModuleMetadata> = {
   ...Object.entries(dropoutModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(poolingModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  /* Merge and branch */
-  ...Object.entries(mergeModules).reduce((acc, [key, value]) => ({ ...acc, [`Merge:${key}`]: value }), {}),
-  ...Object.entries(branchModules).reduce((acc, [key, value]) => ({ ...acc, [`Branch:${key}`]: value }), {}),
+  /* Branch and Merge nodes */
+  ...branchModules,
+  ...mergeModules
 };
 
-// Get metadata for any node type and operation
-export function getMeta(nodeType: NodeType, opType?: string): ModuleMetadata {
-  const key = opType ? `${nodeType}:${opType}` : nodeType;
+// Get metadata for any module by key
+export function getMeta(key: string): ModuleMetadata {
   if (!allModules[key]) {
-    throw new Error(`No metadata found for node type ${nodeType} and opType ${opType}`);
+    throw new Error(`No metadata found for module key ${key}`);
   }
   return allModules[key];
 }

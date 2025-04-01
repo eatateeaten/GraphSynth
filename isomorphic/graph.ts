@@ -5,7 +5,7 @@ import { BranchOp } from './branch_op';
 import { MergeOp, PointwiseOp, DotOp, CrossOp} from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
 import { Split, Copy } from './branch_op';
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp, ElementwiseOp };
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -61,8 +61,9 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                     throw new Error("splitParams with dim and sections is required for Split");
                 }
                 node = new Split(id, target, params.splitParams);
+                node = new Split(id, target, params.splitParams);
                 break;
-                
+
             case "Concat":
                 if (!params.concatParams || params.concatParams.dim === undefined) {
                     throw new Error("concatParams with dim is required for Concat");
@@ -72,17 +73,14 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 }
                 node = new Concat(id, target, params.concatParams, params.numberOfMerges);
                 break;
-                
+
             case "Copy":
-                if (!params.inShape) {
-                    throw new Error("inShape parameter is required for Copy");
-                }
                 if (!params.copyParams || params.copyParams.copies === undefined) {
                     throw new Error("copyParams with copies is required for Copy");
                 }
                 node = new Copy(id, target, params.copyParams);
                 break;
-                
+
             case "PointwiseReduce":
                 if (!params.opType) {
                     throw new Error("opType parameter is required for PointwiseReduce");
@@ -814,7 +812,7 @@ export class Graph {
             // e.g. Split, Copy, or any node that fans out multiple paths
             // The node's `outShape` typically has the # of outputs.
             const branchOp = node as BranchOp;  // or a node that acts like Branch
-            const numOutputs = branchOp.outShape.length;
+            const numOutputs = branchOp.outShape!.length;
         
             const outVars: string[] = [];
             for (let i = 0; i < numOutputs; i++) {

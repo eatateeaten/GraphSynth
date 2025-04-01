@@ -9,23 +9,23 @@ const LAYER_TYPE_OPTIONS = (() => {
     // Create lists of all operation types
     const opTypes = Object.keys(allModules)
         .filter(key => key.startsWith('Op:'))
-        .map(key => key.slice(3));
+        .map(key => ({ key, label: allModules[key].label }));
     
-    const branchTypes = Object.keys(allModules)
-        .filter(key => key.startsWith('Branch:'))
-        .map(key => key.slice(7));
-    
-    const mergeTypes = Object.keys(allModules)
-        .filter(key => key.startsWith('Merge:'))
-        .map(key => key.slice(6));
+    // Get direct node types
+    const directTypes = ['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce']
+        .filter(key => allModules[key])
+        .map(key => ({ key, label: allModules[key].label }));
 
-    let out = [{ group: 'Tensor', items: [{ value: 'Tensor', label: 'Tensor' }] }];
+    let out = [{ 
+        group: 'Tensor', 
+        items: [{ value: 'Tensor', label: 'Tensor' }] 
+    }];
 
     // Add Op types
-    out.push(...opTypes.reduce((groups, type) => {
-        const metadata = getMeta('Op', type);
+    out.push(...opTypes.reduce((groups, { key, label }) => {
+        const metadata = getMeta(key);
         const category = metadata.category;
-        const item = { value: type, label: metadata.label };
+        const item = { value: key, label };
         
         const existingGroup = groups.find(g => g.group === category);
         if (existingGroup) {
@@ -37,41 +37,29 @@ const LAYER_TYPE_OPTIONS = (() => {
         return groups;
     }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
 
-    // Add Branch types
-    out.push(...branchTypes.reduce((groups, type) => {
-        const metadata = getMeta('Branch', type);
-        const item = { value: type, label: metadata.label };
-        
-        const existingGroup = groups.find(g => g.group === 'Flow');
-        if (existingGroup) {
-            existingGroup.items.push(item);
-        } else {
-            groups.push({ group: 'Flow', items: [item] });
-        }
+    // Add direct node types (excluding Tensor which is already added)
+    out.push(...directTypes
+        .filter(({ key }) => key !== 'Tensor')
+        .reduce((groups, { key, label }) => {
+            const metadata = getMeta(key);
+            const category = metadata.category;
+            const item = { value: key, label };
+            
+            const existingGroup = groups.find(g => g.group === category);
+            if (existingGroup) {
+                existingGroup.items.push(item);
+            } else {
+                groups.push({ group: category, items: [item] });
+            }
 
-        return groups;
-    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
-
-    // Add Merge types
-    out.push(...mergeTypes.reduce((groups, type) => {
-        const metadata = getMeta('Merge', type);
-        const item = { value: type, label: metadata.label };
-        
-        const existingGroup = groups.find(g => g.group === 'Flow');
-        if (existingGroup) {
-            existingGroup.items.push(item);
-        } else {
-            groups.push({ group: 'Flow', items: [item] });
-        }
-
-        return groups;
-    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
+            return groups;
+        }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
 
     return out;
 })();
 
 export function Sidebar() {
-    const [opType, setOpType] = useState<string | null>(null);
+    const [moduleKey, setModuleKey] = useState<string | null>(null);
     const [params, setParams] = useState<Record<string, any>>({});
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
     const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
@@ -84,9 +72,9 @@ export function Sidebar() {
     const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
     const makeTensorSource = useStore(state => state.makeTensorSource);
 
-    // Get default params for a node type
-    const getDefaultParams = useCallback((opType: string) => {
-        const metadata = getMeta(opType === 'Tensor' ? 'Tensor' : 'Op', opType === 'Tensor' ? undefined : opType);
+    // Get default params for a module
+    const getDefaultParams = useCallback((moduleKey: string) => {
+        const metadata = getMeta(moduleKey);
         const defaults: Record<string, any> = {};
         
         Object.entries(metadata.paramFields).forEach(([name, field]) => {
@@ -111,7 +99,7 @@ export function Sidebar() {
 
     // Reset raw inputs when type changes
     const handleTypeChange = (v: string | null) => {
-        setOpType(v);
+        setModuleKey(v);
         if (v) {
             const defaults = getDefaultParams(v);
             setParams(defaults);
@@ -124,9 +112,14 @@ export function Sidebar() {
         setError(null);
     };
 
-    const validateModuleParams = useCallback((params: Record<string, any>, opType: string): string | null => {
-        if(opType === 'Tensor')
+    const validateModuleParams = useCallback((params: Record<string, any>, moduleKey: string): string | null => {
+        // If it's not an Op, no validation needed
+        if (!moduleKey.startsWith('Op:')) {
             return null;
+        }
+        
+        // For ops, validate using the op type
+        const opType = moduleKey.slice(3);
         return validateParams(opType, params);
     }, []);
 
@@ -159,7 +152,7 @@ export function Sidebar() {
         const value = params[name];
         const rawValue = rawInputs[name] ?? '';
         const showError = touchedFields.has(name);
-        const validationError = showError && opType ? validateModuleParams(params, opType) : undefined;
+        const validationError = showError && moduleKey ? validateModuleParams(params, moduleKey) : undefined;
 
         switch (field.type) {
             case 'boolean':
@@ -225,82 +218,66 @@ export function Sidebar() {
     };
 
     const handleAdd = useCallback(() => {
-        if (!opType) return;
+        if (!moduleKey) return;
         
-        // Special handling for Tensor nodes
-        if (opType === 'Tensor') {
-            const shape = params.shape;
-            if (!shape || !Array.isArray(shape)) {
-                setError('A valid shape is required for tensor nodes');
-                return;
-            }
+        try {
+            const id = crypto.randomUUID();
             
-            try {
-                const id = crypto.randomUUID();
-                const node = {
+            // Handle different node types based on the module key
+            if (moduleKey === 'Tensor') {
+                const shape = params.shape;
+                if (!shape || !Array.isArray(shape)) {
+                    setError('A valid shape is required for tensor nodes');
+                    return;
+                }
+                
+                addNode({
                     id,
-                    type: 'Tensor' as NodeType,
+                    type: 'Tensor',
                     params: { shape }
-                };
-
-                addNode(node);
-
+                });
+                
                 // If this is an input tensor, make it a source
                 if (params.isInput) {
                     makeTensorSource(id);
                 }
-
-                setOpType(null);
-                setParams({});
-                setRawInputs({});
-                setError(null);
-            } catch (e) {
-                setError(e instanceof Error ? e.message : 'Failed to create tensor node');
+            } else if (moduleKey.startsWith('Op:')) {
+                // For Op types
+                const opType = moduleKey.slice(3);
+                
+                // Validate parameters
+                const validationError = validateModuleParams(params, moduleKey);
+                if (validationError) {
+                    setError(validationError);
+                    return;
+                }
+                
+                addNode({
+                    id,
+                    type: 'Op',
+                    opType,
+                    params
+                });
+            } else {
+                // For direct node types (Split, Copy, Concat, PointwiseReduce)
+                addNode({
+                    id,
+                    type: moduleKey as NodeType,
+                    params
+                });
             }
-            return;
-        }
-        
-        // Determine node type based on opType prefix
-        let nodeType: NodeType;
-        let actualOpType = opType;
-        
-        if (opType.startsWith('Branch:')) {
-            nodeType = 'Branch';
-            actualOpType = opType.slice(7);
-        } else if (opType.startsWith('Merge:')) {
-            nodeType = 'Merge';
-            actualOpType = opType.slice(6);
-        } else {
-            nodeType = 'Op';
-        }
-        
-        // Validate parameters
-        const validationError = validateModuleParams(params, actualOpType);
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-
-        try {
-            const id = crypto.randomUUID();
             
-            addNode({
-                id,
-                type: nodeType,
-                opType: actualOpType,
-                params
-            });
-            
-            setOpType(null);
+            setModuleKey(null);
             setParams({});
             setRawInputs({});
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to create node');
         }
-    }, [opType, params, addNode, validateModuleParams, makeTensorSource]);
+    }, [moduleKey, params, addNode, validateModuleParams, makeTensorSource]);
 
-    const metadata = opType ? getMeta(opType === 'Tensor' ? 'Tensor' : 'Op', opType === 'Tensor' ? undefined : opType) : null;
+    // Get metadata for the selected module key
+    const metadata = moduleKey ? getMeta(moduleKey) : null;
 
     useEffect(() => {
         if (selectedId && selectedNodeData) {
@@ -308,23 +285,21 @@ export function Sidebar() {
             const type = selectedNodeData.data.type;
             const opType = selectedNodeData.data.opType;
             
-            let displayType: string | null = null;
-            if (type === 'Tensor') {
-                displayType = 'Tensor';
-            } else if (type === 'Branch') {
-                displayType = `Branch:${opType}`;
-            } else if (type === 'Merge') {
-                displayType = `Merge:${opType}`;
-            } else {
-                displayType = opType || null;
+            let newModuleKey: string | null = null;
+            
+            // Convert node type + opType into the corresponding module key
+            if (type === 'Op' && opType) {
+                newModuleKey = `Op:${opType}`;
+            } else if (['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce'].includes(type)) {
+                newModuleKey = type;
             }
             
-            setOpType(displayType);
+            setModuleKey(newModuleKey);
             setParams(selectedNodeData.data.params || {});
             setRawInputs(paramsToRawInputs(selectedNodeData.data.params || {}));
             setError(null);
         } else if (!selectedId) {
-            setOpType(null);
+            setModuleKey(null);
             setParams({});
             setRawInputs({});
             setError(null);
@@ -337,7 +312,7 @@ export function Sidebar() {
                 label="Layer Type"
                 placeholder="Choose Layer..."
                 data={LAYER_TYPE_OPTIONS}
-                value={opType}
+                value={moduleKey}
                 onChange={handleTypeChange}
                 searchable
                 clearable
@@ -364,7 +339,7 @@ export function Sidebar() {
             {!selectedId && (
                 <Button 
                     onClick={handleAdd} 
-                    disabled={!opType || !metadata || validateModuleParams(params, opType) !== null}
+                    disabled={!moduleKey || !metadata || validateModuleParams(params, moduleKey) !== null}
                     variant="filled"
                 >
                     Add Layer
