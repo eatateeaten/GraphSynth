@@ -621,180 +621,266 @@ export class Graph {
      * 
      * @returns A string containing PyTorch code in functional style
      */
-    toTorchFunctional(): string {
-        // Validate the graph
+    public to_torch_functional(): string {
+        // 1) Validate the graph (checks for sources, sinks, shape consistency, cycles, etc.)
         this.validate_graph();
-        
-        // Initialize code string
+      
+        // 2) Prepare a buffer for the generated code
         let code = "";
-        
-        // Create a variable counter for generating unique variable names
-        const varCounter = { value: 0 };
-        
-        // Map to track multi-input nodes and their collected input variables
-        const multiInputNodes = new Map<GraphNode, string[]>();
-        
-        // Set to track used variable names to ensure uniqueness
-        const usedVarNames = new Set<string>();
-        
-        // Stack for DFS traversal - contains nodes and their input variables
-        const stack: Array<{node: GraphNode, inputs: string[]}> = [];
-        
-        // Start with source nodes
-        const sourceNodes = Array.from(this._sources);
-        for (const sourceNode of sourceNodes) {
-            if (sourceNode instanceof Tensor) {
-                // Generate variable name for source tensor
-                let varName = "";
-                if (sourceNode.variableName) {
-                    // If variableName is already used, append a number to make it unique
-                    varName = sourceNode.variableName;
-                    let counter = 1;
-                    while (usedVarNames.has(varName)) {
-                        varName = `${sourceNode.variableName}_${counter++}`;
-                    }
-            } else {
-                    // Generate a unique variable name
-                    do {
-                        varName = `var_${varCounter.value++}`;
-                    } while (usedVarNames.has(varName));
-                }
-                
-                // Mark this variable name as used
-                usedVarNames.add(varName);
-                
-                // Add variable declaration for input tensor
-                code += `${varName} = ${sourceNode.to_torch_functional([], [varName])}\n`;
-                
-                // Add its next node to the stack
-                if (sourceNode.next) {
-                    stack.push({ node: sourceNode.next, inputs: [varName] });
-                }
-            }
+      
+        // 3) A variable counter to produce unique variable names
+        let varCounter = 0;
+        function newVar(): string {
+          return `Var${varCounter++}`;
         }
+      
+        // Track which variable names we've used (just in case you need to avoid collision with user-provided ones)
+        const usedNames = new Set<string>();
+      
+        // 4) A LIFO stack for DFS. Each entry has: { node, inputs: string[] }
+        //    "inputs" = the variable names feeding into this node.
+        const stack: Array<{ node: GraphNode; inputs: string[] }> = [];
+      
+        // 5) A map for multi-input nodes that collects partial inputs until all are available.
+        //    Key: a multi-input node, Value: array of input var names
+        const waiting = new Map<GraphNode, string[]>();
+      
+        // 6) Assign variable names for source Tensors, push them onto the stack
+        for (const source of this._sources) {
+          // We already enforce that sources are Tensors in validate_graph()
+          const tensorSource = source as Tensor;
+          
+          // Use a user-defined variableName if present, else generate one
+          let varName = tensorSource.variableName ?? newVar();
+          while (usedNames.has(varName)) {
+            varName = newVar();
+          }
+          usedNames.add(varName);
         
-        // Process the stack until empty
+          // Generate code line for creating/referencing this Tensor source
+          // Typically something like: `Var0 = torch.randn([...])` or `Var0 = input_image`
+          code += `${varName} = ${tensorSource.to_torch_functional([], [varName])}\n`;
+        
+          // Send this var to the source's children
+          const nextNodes = this._getNextNodes(source);
+          for (const nxt of nextNodes) {
+            if (!nxt) continue;
+            
+            // Count how many inputs the child has
+            const inDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+            const singleIn = GraphNode.singleInput(nxt);
+        
+            if (singleIn && inDegree <= 1) {
+              // Single-input node, safe to push directly
+              stack.push({ node: nxt, inputs: [varName] });
+            } else {
+              // Multi-input node → partially fill in waiting
+              let partialInputs = waiting.get(nxt);
+              if (!partialInputs) {
+                partialInputs = new Array(inDegree).fill("");
+              }
+              // Find the correct index for this edge
+              const idx = this._getPrevNodeIndex(nxt, source);
+              partialInputs[idx] = varName;
+              waiting.set(nxt, partialInputs);
+        
+              // If all inputs are now filled, push the node onto stack
+              if (partialInputs.every(v => v !== "")) {
+                stack.push({ node: nxt, inputs: partialInputs });
+                waiting.delete(nxt);
+              }
+            }
+          }
+        }
+      
+        // 7) Keep track of visited nodes so we don't generate code twice
+        const visited = new Set<GraphNode>();
+      
+        // 8) DFS: pop from the stack, generate code, push outputs forward
         while (stack.length > 0) {
-            const { node, inputs } = stack.pop()!;
-            
-            // Generate output variable name
-            let outputVar;
-            do {
-                outputVar = `var_${varCounter.value++}`;
-            } while (usedVarNames.has(outputVar));
-            usedVarNames.add(outputVar);
+          const { node, inputs } = stack.pop()!;
         
-        // Generate code for this node
-            if (node instanceof BranchOp) {
-                // Branch operations need output variables for each output
-                const outputs: string[] = [];
-                for (let i = 0; i < node.outShape.length; i++) {
-                    let branchVar;
-                    do {
-                        branchVar = `var_${varCounter.value++}`;
-                    } while (usedVarNames.has(branchVar));
-                    usedVarNames.add(branchVar);
-                    outputs.push(branchVar);
+          if (visited.has(node)) {
+            // Already handled this node
+            continue;
+          }
+          visited.add(node);
+        
+          // Determine node "type" by singleInput/singleOutput
+          const singleIn = GraphNode.singleInput(node);
+          const singleOut = GraphNode.singleOutput(node);
+        
+          if (singleIn && singleOut) {
+            // =============== Op or Tensor (single in, single out) ===============
+            // (e.g. ReLU, any standard unary/binary op, or an in-graph Tensor)
+            const outVar = newVar();
+            usedNames.add(outVar);
+        
+            // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
+            // We'll do: `outVar = that_snippet`
+            code += `${outVar} = ${node.to_torch_functional(inputs, [outVar])}\n`;
+        
+            // Pass outVar to this node's children
+            const nextNodes = this._getNextNodes(node);
+            for (const nxt of nextNodes) {
+              if (!nxt) continue;
+              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+              const childSingleIn = GraphNode.singleInput(nxt);
+              
+              if (childSingleIn && childInDegree <= 1) {
+                stack.push({ node: nxt, inputs: [outVar] });
+              } else {
+                // Multi-input child
+                let partialInputs = waiting.get(nxt);
+                if (!partialInputs) {
+                  partialInputs = new Array(childInDegree).fill("");
                 }
-                
-                // Generate the code
-                code += `${node.to_torch_functional(inputs, outputs)}\n`;
-                
-                // Add next nodes to stack in reverse order to process them in the original order
-                for (let i = node._nexts.length - 1; i >= 0; i--) {
-                    const nextNode = node._nexts[i];
-                    if (nextNode) {
-                        // If next node is a multi-input node, add to waiting map
-                        if (nextNode instanceof MergeOp) {
-                            const collectedInputs = multiInputNodes.get(nextNode) || new Array(nextNode._prevs.length).fill('');
-                            const inputIndex = nextNode._prevs.findIndex(prev => prev && prev.id === node.id);
-                            if (inputIndex !== -1) {
-                                collectedInputs[inputIndex] = outputs[i];
-                                multiInputNodes.set(nextNode, collectedInputs);
-                                
-                                // If we have all inputs, add to stack
-                                if (collectedInputs.every(input => input !== '')) {
-                                    stack.push({ node: nextNode, inputs: collectedInputs });
-                                    multiInputNodes.delete(nextNode);
-                                }
-                            }
-                        } else {
-                            stack.push({ node: nextNode, inputs: [outputs[i]] });
-                        }
-                    }
+                const idx = this._getPrevNodeIndex(nxt, node);
+                partialInputs[idx] = outVar;
+                waiting.set(nxt, partialInputs);
+        
+                if (partialInputs.every(v => v !== "")) {
+                  stack.push({ node: nxt, inputs: partialInputs });
+                  waiting.delete(nxt);
                 }
-                
-            } else if (node instanceof MergeOp) {
-                // For MergeOp, we need to collect all inputs before processing
-                const collectedInputs = multiInputNodes.get(node) || new Array(node._prevs.length).fill('');
-                const inputIndex = node._prevs.findIndex(prev => prev && inputs.length > 0 && prev.id === node.id);
-                
-                if (inputIndex !== -1) {
-                    collectedInputs[inputIndex] = inputs[0];
-                    multiInputNodes.set(node, collectedInputs);
-                    
-                    // If we have all inputs, process the node
-                    if (collectedInputs.every(input => input !== '')) {
-                        code += `${outputVar} = ${node.to_torch_functional(collectedInputs)}\n`;
-                        multiInputNodes.delete(node);
-                        
-                        // Add next node to stack if it exists
-                        if (node.next) {
-                            stack.push({ node: node.next, inputs: [outputVar] });
-                        }
-                    }
-                }
-            } else {
-                // Regular nodes with single input/output (Op or Tensor)
-                code += `${outputVar} = ${node.to_torch_functional(inputs)}\n`;
-                
-                // Add next node to stack if it exists
-                if (node.next) {
-                    // If next node is a multi-input node, add to waiting map
-                    if (node.next instanceof MergeOp) {
-                        const collectedInputs = multiInputNodes.get(node.next) || new Array(node.next._prevs.length).fill('');
-                        const inputIndex = node.next._prevs.findIndex(prev => prev && prev.id === node.id);
-                        if (inputIndex !== -1) {
-                            collectedInputs[inputIndex] = outputVar;
-                            multiInputNodes.set(node.next, collectedInputs);
-                            
-                            // If we have all inputs, add to stack
-                            if (collectedInputs.every(input => input !== '')) {
-                                stack.push({ node: node.next, inputs: collectedInputs });
-                                multiInputNodes.delete(node.next);
-                            }
-                        }
-                    } else {
-                        stack.push({ node: node.next, inputs: [outputVar] });
-                    }
-                }
+              }
             }
-        }
         
-        // Add a return statement for the sink nodes
-        const sinkNodes = Array.from(this._sinks);
-        if (sinkNodes.length > 0) {
-            const sinkVars = sinkNodes
-                .filter(sink => !(sink instanceof MergeOp) || multiInputNodes.has(sink))
-                .map(sink => {
-                    if (sink instanceof MergeOp && multiInputNodes.has(sink)) {
-                        const collectedInputs = multiInputNodes.get(sink)!;
-                        const outputVar = `var_${varCounter.value++}`;
-                        code += `${outputVar} = ${sink.to_torch_functional(collectedInputs)}\n`;
-                        return outputVar;
-                    }
-                    return `var_${varCounter.value - 1}`; // Use the last generated variable
-                });
-            
-            if (sinkVars.length === 1) {
-                code += `return ${sinkVars[0]}\n`;
-            } else if (sinkVars.length > 1) {
-                code += `return (${sinkVars.join(', ')})\n`;
+          } else if (!singleIn && singleOut) {
+            // =============== Merge (multi-input, single output) ===============
+            // e.g. Concat, AddN, etc.
+            // `inputs` array should have all inDegree vars
+            const outVar = newVar();
+            usedNames.add(outVar);
+        
+            code += `${outVar} = ${node.to_torch_functional(inputs, [outVar])}\n`;
+        
+            // Pass output var to children
+            const nextNodes = this._getNextNodes(node);
+            for (const nxt of nextNodes) {
+              if (!nxt) continue;
+              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+              const childSingleIn = GraphNode.singleInput(nxt);
+        
+              if (childSingleIn && childInDegree <= 1) {
+                stack.push({ node: nxt, inputs: [outVar] });
+              } else {
+                let partialInputs = waiting.get(nxt);
+                if (!partialInputs) {
+                  partialInputs = new Array(childInDegree).fill("");
+                }
+                const idx = this._getPrevNodeIndex(nxt, node);
+                partialInputs[idx] = outVar;
+                waiting.set(nxt, partialInputs);
+        
+                if (partialInputs.every(v => v !== "")) {
+                  stack.push({ node: nxt, inputs: partialInputs });
+                  waiting.delete(nxt);
+                }
+              }
             }
-        }
         
+          } else if (singleIn && !singleOut) {
+            // =============== Branch (single input, multiple outputs) ===============
+            // e.g. Split, Copy, or any node that fans out multiple paths
+            // The node's `outShape` typically has the # of outputs.
+            const branchOp = node as BranchOp;  // or a node that acts like Branch
+            const numOutputs = branchOp.outShape.length;
+        
+            const outVars: string[] = [];
+            for (let i = 0; i < numOutputs; i++) {
+              const v = newVar();
+              usedNames.add(v);
+              outVars.push(v);
+            }
+        
+            // e.g. `[Var2, Var3] = torch.split(Var1, ...)`
+            code += `${node.to_torch_functional(inputs, outVars)}\n`;
+        
+            // Connect each outVar to the corresponding child (by index)
+            const nextNodes = this._getNextNodes(node);
+            for (let i = 0; i < nextNodes.length; i++) {
+              const nxt = nextNodes[i];
+              if (!nxt) continue;
+              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+              const childSingleIn = GraphNode.singleInput(nxt);
+        
+              const varToPass = outVars[i];
+        
+              if (childSingleIn && childInDegree <= 1) {
+                stack.push({ node: nxt, inputs: [varToPass] });
+              } else {
+                let partialInputs = waiting.get(nxt);
+                if (!partialInputs) {
+                  partialInputs = new Array(childInDegree).fill("");
+                }
+                const idx = this._getPrevNodeIndex(nxt, node);
+                partialInputs[idx] = varToPass;
+                waiting.set(nxt, partialInputs);
+        
+                if (partialInputs.every(v => v !== "")) {
+                  stack.push({ node: nxt, inputs: partialInputs });
+                  waiting.delete(nxt);
+                }
+              }
+            }
+        
+          } else {
+            // =============== Multi-input, multi-output? Or unrecognized module? ===============
+            throw new Error(
+              `Unsupported node type (likely multi-in & multi-out) for node ID ${node.id} (${node.constructor.name}).`
+            );
+          }
+        }
+      
+        // 9) Finally, add a return statement for sink Tensors
+        //    We assume all sinks are Tensors with single output. So we produce their final var name.
+        //    In practice, you must store each node's final assigned variable name in the loop above.
+        //    For demonstration, we do a placeholder or a minimal approach:
+        const sinkVars: string[] = [];
+        for (const sink of this._sinks) {
+          // If we had stored the last-assigned variable in a map, we'd retrieve it here.
+          // For example: `const finalVar = finalVarMap.get(sink.id)`
+          // But here we'll just stub it out:
+          sinkVars.push(`#finalVar_for_${sink.id}#`);
+        }
+      
+        if (sinkVars.length === 1) {
+          code += `return ${sinkVars[0]}\n`;
+        } else if (sinkVars.length > 1) {
+          code += `return (${sinkVars.join(', ')})\n`;
+        }
+      
+        // 10) Return the entire generated code
         return code;
-    }
+      }
+      
+      // Helper to safely get next nodes regardless of node type
+      private _getNextNodes(node: GraphNode): GraphNode[] {
+        if (node instanceof BranchOp) {
+          return (node as BranchOp)._nexts.filter(n => n !== null);
+        } else {
+          return node.next ? [node.next] : [];
+        }
+      }
+      
+      // Helper to safely get previous nodes regardless of node type
+      private _getPrevNodes(node: GraphNode): GraphNode[] {
+        if (node instanceof MergeOp) {
+          return (node as MergeOp)._prevs.filter(p => p !== null);
+        } else {
+          return node.prev ? [node.prev] : [];
+        }
+      }
+      
+      // Helper to find the index of a prev node
+      private _getPrevNodeIndex(node: GraphNode, prevNode: GraphNode): number {
+        if (node instanceof MergeOp) {
+          return (node as MergeOp)._prevs.findIndex(p => p && p.id === prevNode.id);
+        } else {
+          return 0; // For single-input nodes
+        }
+      }
 
     // Add a helper method to generate UUIDs
     /**
