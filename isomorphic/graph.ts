@@ -720,10 +720,18 @@ export class Graph {
       
         // Track which variable names we've used (just in case you need to avoid collision with user-provided ones)
         const usedNames = new Set<string>();
+        
+        // Keep track of the final variable assigned to each node
+        const nodeToVarMap = new Map<string, string>();
       
         // 4) A LIFO stack for DFS. Each entry has: { node, inputs: string[] }
         //    "inputs" = the variable names feeding into this node.
         const stack: Array<{ node: GraphNode; inputs: string[] }> = [];
+        
+        // Helper function to update the variable mapping for a node
+        const updateNodeVar = (nodeId: string, varName: string) => {
+          nodeToVarMap.set(nodeId, varName);
+        };
       
         // 5) A map for multi-input nodes that collects partial inputs until all are available.
         //    Key: a multi-input node, Value: array of input var names
@@ -741,10 +749,10 @@ export class Graph {
           }
           usedNames.add(varName);
         
-          // Generate code line for creating/referencing this Tensor source
-          // Typically something like: `Var0 = torch.randn([...])` or `Var0 = input_image`
-          code += `${tensorSource.to_torch_functional([varName], [varName])}\n`;
-        
+          // Track the source variable in our map
+          updateNodeVar(source.id, varName);
+          console.log(`Mapped source node ${source.id} to variable ${varName}`);
+          
           // Send this var to the source's children
           const nextNodes = this._getNextNodes(source);
           for (const nxt of nextNodes) {
@@ -803,6 +811,9 @@ export class Graph {
             // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
             // We'll do: `outVar = that_snippet`
             code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+            
+            // Track the output variable for this node
+            updateNodeVar(node.id, outVar);
         
             // Pass outVar to this node's children
             const nextNodes = this._getNextNodes(node);
@@ -831,15 +842,18 @@ export class Graph {
             }
         
           } else if (!singleIn && singleOut) {
-            // =============== Merge (multi-input, single output) ===============
-            // e.g. Concat, AddN, etc.
-            // `inputs` array should have all inDegree vars
+            // =============== Op (multi in, single out) ===============
+            // e.g. Add, Concat, most ops with 2+ inputs but single output
             const outVar = newVar();
             usedNames.add(outVar);
         
+            // Generate code as described above
             code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+            
+            // Track the output variable for this node
+            updateNodeVar(node.id, outVar);
         
-            // Pass output var to children
+            // Pass the new single output to node's children
             const nextNodes = this._getNextNodes(node);
             for (const nxt of nextNodes) {
               if (!nxt) continue;
@@ -869,48 +883,89 @@ export class Graph {
             // e.g. Split, Copy, or any node that fans out multiple paths
             // The node's `outShape` typically has the # of outputs.
             const branchOp = node as BranchOp;  // or a node that acts like Branch
+            
+            // DEBUG: Log the _nexts array structure
+            console.log(`DEBUG: BranchOp ${branchOp.id} _nexts array:`, 
+                branchOp._nexts.map((n, i) => n ? `[${i}]: ${n.constructor.name}[${n.id}]` : `[${i}]: null`));
+            
             let numOutputs: number;
             try {
                 if (!branchOp.outShape) {
+                    console.error(`ERROR: BranchOp ${branchOp.id} has no outShape defined!`);
                     throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
                 }
+                
+                console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShape);
                 numOutputs = branchOp.outShape.length;
+                console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp._nexts.length} next slots`);
             } catch (error: any) {
+                console.error(`ERROR in output shape for ${branchOp.id}:`, error);
                 throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
             }
         
+            // Get output variables
             const outVars: string[] = [];
             for (let i = 0; i < numOutputs; i++) {
               const v = newVar();
               usedNames.add(v);
               outVars.push(v);
+              console.log(`Generated output var ${v} for branch ${i} of ${branchOp.id}`);
             }
+            
+            console.log(`Generated output variables for ${branchOp.id}: ${outVars.join(', ')}`);
         
-            // e.g. `[Var2, Var3] = torch.split(Var1, ...)`
-            code += `${node.to_torch_functional(inputs, outVars)}\n`;
-        
-            // Connect each outVar to the corresponding child (by index)
-            const nextNodes = this._getNextNodes(node);
-            for (let i = 0; i < nextNodes.length; i++) {
-              const nxt = nextNodes[i];
-              if (!nxt) continue;
+            // Generate the torch functional code
+            const branchCode = branchOp.to_torch_functional(inputs, outVars);
+            console.log(`Generated branch code for ${branchOp.id}:\n${branchCode}`);
+            code += `${branchCode}\n`;
+            
+            // Track the generated code to diagnose issues
+            console.log(`Code so far:\n${code}`);
+            
+            // Track each output variable for this branch node
+            for (let i = 0; i < outVars.length; i++) {
+              // For branch nodes, track variables by output index
+              // Use a unique key format: nodeId_outputIndex
+              updateNodeVar(`${branchOp.id}_${i}`, outVars[i]);
+              console.log(`Mapped branch output: ${branchOp.id}_${i} -> ${outVars[i]}`);
+            }
+            
+            // IMPORTANT: Don't use filtered nextNodes - use the actual _nexts array with its indices
+            // This ensures we match the correct output variable to each branch output
+            for (let i = 0; i < branchOp._nexts.length; i++) {
+              const nxt = branchOp._nexts[i];
+              if (!nxt) {
+                console.log(`Next node at index ${i} is null for ${branchOp.id}`);
+                continue;
+              }
+              
+              // Make sure we don't go out of bounds in outVars array
+              if (i >= outVars.length) {
+                console.error(`ERROR: Index ${i} is out of bounds for outVars array of length ${outVars.length}`);
+                continue;
+              }
+              
+              const varToPass = outVars[i];
+              console.log(`Connecting output ${i} (${varToPass}) of ${branchOp.id} to ${nxt.id}`);
+              
               const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
               const childSingleIn = GraphNode.singleInput(nxt);
-        
-              const varToPass = outVars[i];
-        
+              
               if (childSingleIn && childInDegree <= 1) {
+                console.log(`Pushing single-input node ${nxt.id} to stack with input [${varToPass}]`);
                 stack.push({ node: nxt, inputs: [varToPass] });
               } else {
                 let partialInputs = waiting.get(nxt);
                 if (!partialInputs) {
                   partialInputs = new Array(childInDegree).fill("");
                 }
-                const idx = this._getPrevNodeIndex(nxt, node);
+                const idx = this._getPrevNodeIndex(nxt, branchOp);
+                console.log(`Setting partial input at index ${idx} for node ${nxt.id} to ${varToPass}`);
                 partialInputs[idx] = varToPass;
                 waiting.set(nxt, partialInputs);
-        
+                
                 if (partialInputs.every(v => v !== "")) {
+                  console.log(`All inputs filled for ${nxt.id}, pushing to stack with inputs [${partialInputs.join(', ')}]`);
                   stack.push({ node: nxt, inputs: partialInputs });
                   waiting.delete(nxt);
                 }
@@ -918,29 +973,79 @@ export class Graph {
             }
         
           } else {
-            // =============== Multi-input, multi-output? Or unrecognized module? ===============
             throw new Error(
               `Unsupported node type (likely multi-in & multi-out) for node ID ${node.id} (${node.constructor.name}).`
             );
           }
         }
       
-        // 9) Finally, add a return statement for sink Tensors
-        //    We assume all sinks are Tensors with single output. So we produce their final var name.
-        //    In practice, you must store each node's final assigned variable name in the loop above.
-        //    For demonstration, we do a placeholder or a minimal approach:
+        // return statement for sink Tensors
         const sinkVars: string[] = [];
         for (const sink of this._sinks) {
-          // If we had stored the last-assigned variable in a map, we'd retrieve it here.
-          // For example: `const finalVar = finalVarMap.get(sink.id)`
-          // But here we'll just stub it out:
-          sinkVars.push(`#finalVar_for_${sink.id}#`);
+          console.log(`Processing sink node: ${sink.id} (${sink.constructor.name})`);
+          
+          // Check if we have direct mapping for this sink
+          if (nodeToVarMap.has(sink.id)) {
+            sinkVars.push(nodeToVarMap.get(sink.id)!);
+          } else {
+            // If not, find incoming connections to this sink
+            console.log(`  No direct mapping found for sink ${sink.id}, searching incoming connections...`);
+            
+            // Find nodes that connect to this sink
+            const incomingNodes = [];
+            for (const [nodeId, node] of this._nodes.entries()) {
+              if (node instanceof BranchOp) {
+                // Check each branch output
+                for (let i = 0; i < node._nexts.length; i++) {
+                  if (node._nexts[i] === sink) {
+                    incomingNodes.push({ nodeId, outputIndex: i });
+                    console.log(`  Found incoming BranchOp connection: ${nodeId} at output ${i}`);
+                  }
+                }
+              } else if ((node instanceof Op || node instanceof MergeOp) && node.next === sink) {
+                incomingNodes.push({ nodeId, outputIndex: 0 });
+                console.log(`  Found incoming Op/MergeOp connection: ${nodeId}`);
+              }
+            }
+            
+            // Now look for mapped variables for these connections
+            let foundVar = false;
+            for (const { nodeId, outputIndex } of incomingNodes) {
+              const branchKey = `${nodeId}_${outputIndex}`;
+              if (nodeToVarMap.has(branchKey)) {
+                const varName = nodeToVarMap.get(branchKey)!;
+                console.log(`  Found branch mapping for incoming connection: ${branchKey} -> ${varName}`);
+                sinkVars.push(varName);
+                foundVar = true;
+                break;
+              } else if (nodeToVarMap.has(nodeId)) {
+                const varName = nodeToVarMap.get(nodeId)!;
+                console.log(`  Found node mapping for incoming connection: ${nodeId} -> ${varName}`);
+                sinkVars.push(varName);
+                foundVar = true;
+                break;
+              }
+            }
+            
+            // Fallback if no mappings found
+            if (!foundVar) {
+              // Create clean names for output tensors
+              const tensorName = sink instanceof Tensor && sink.variableName ? 
+                                sink.variableName : 
+                                `output${sinkVars.length + 1}`;
+              console.log(`  No incoming connections found, using fallback name: ${tensorName}`);
+              sinkVars.push(tensorName);
+            }
+          }
         }
       
+        // Return statement with all sink variables 
         if (sinkVars.length === 1) {
-          code += `return ${sinkVars[0]}\n`;
+          code += `return ${sinkVars[0]}`;
         } else if (sinkVars.length > 1) {
-          code += `return (${sinkVars.join(', ')})\n`;
+          code += `return ${sinkVars.join(", ")}`;
+        } else {
+          code += `return None`;
         }
       
         // 10) Return the entire generated code
@@ -953,6 +1058,17 @@ export class Graph {
           return (node as BranchOp)._nexts.filter(n => n !== null);
         } else {
           return node.next ? [node.next] : [];
+        }
+      }
+      
+      // Helper to safely get next nodes with their indices for BranchOp
+      private _getNextNodesWithIndices(node: GraphNode): Array<{node: GraphNode, index: number}> {
+        if (node instanceof BranchOp) {
+          return (node as BranchOp)._nexts
+            .map((next, index) => ({node: next, index}))
+            .filter(item => item.node !== null);
+        } else {
+          return node.next ? [{node: node.next, index: 0}] : [];
         }
       }
       
