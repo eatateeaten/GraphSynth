@@ -91,7 +91,7 @@ export abstract class MergeOp extends GraphNode {
  * PointwiseOp represents operations that take exactly two inputs with matching shapes
  * and perform element-wise operations between them.
  */
-export abstract class PointwiseOp extends MergeOp {
+export class PointwiseOp extends MergeOp {
     constructor(
         id: string,
         target: string,
@@ -153,7 +153,7 @@ export abstract class PointwiseOp extends MergeOp {
  * For 2D tensors: matrix multiplication
  * For higher dimensions: batched matrix multiplication
  */
-export abstract class DotOp extends MergeOp {
+export class DotOp extends MergeOp {
     constructor(
         id: string,
         target: string,
@@ -219,7 +219,7 @@ export abstract class DotOp extends MergeOp {
  * CrossOp represents cross product operations between two tensors.
  * Only valid for 3D vectors (shape [..., 3]).
  */
-export abstract class CrossOp extends MergeOp {
+export class CrossOp extends MergeOp {
     constructor(
         id: string,
         target: string,

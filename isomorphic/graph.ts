@@ -2,11 +2,11 @@ import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
-import { MergeOp} from './merge_op';
+import { MergeOp, PointwiseOp, DotOp, CrossOp, ElementwiseOp } from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
 import { Split, Copy } from './branch_op';
 
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce };
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp, ElementwiseOp };
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -58,13 +58,10 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 break;
 
             case "Split":
-                if (!params.inShape) {
-                    throw new Error("inShape parameter is required for Split");
-                }
                 if (!params.splitParams || params.splitParams.dim === undefined || !params.splitParams.sections) {
                     throw new Error("splitParams with dim and sections is required for Split");
                 }
-                node = new Split(id, params.inShape, target, params.splitParams);
+                node = new Split(id, target, params.splitParams);
                 break;
                 
             case "Concat":
@@ -84,7 +81,7 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.copyParams || params.copyParams.copies === undefined) {
                     throw new Error("copyParams with copies is required for Copy");
                 }
-                node = new Copy(id, params.inShape, target, params.copyParams);
+                node = new Copy(id, target, params.copyParams);
                 break;
                 
             case "PointwiseReduce":
@@ -95,6 +92,27 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                     throw new Error("numberOfMerges parameter must be at least 2 for PointwiseReduce");
                 }
                 node = new PointwiseReduce(id, target, params.opType, params.reduceParams || {}, params.numberOfMerges);
+                break;
+
+            case "PointwiseOp":
+                if (!params.opType) {
+                    throw new Error("opType parameter is required for PointwiseOp");
+                }
+                node = new ElementwiseOp(id, target, params.opType, params.opParams || {});
+                break;
+
+            case "DotOp":
+                if (!params.opType) {
+                    throw new Error("opType parameter is required for DotOp");
+                }
+                node = new DotOp(id, target, params.opType, params.opParams || {}) as DotOp;
+                break;
+
+            case "CrossOp":
+                if (!params.opType) {
+                    throw new Error("opType parameter is required for CrossOp");
+                }
+                node = new CrossOp(id, target, params.opType, params.opParams || {}) as CrossOp;
                 break;
                 
             default:
