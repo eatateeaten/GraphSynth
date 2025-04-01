@@ -241,6 +241,7 @@ export class Concat extends ReduceOp {
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {
-        return `${inputs[0]} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
+        const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
+        return `${outVar} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
     }
 }

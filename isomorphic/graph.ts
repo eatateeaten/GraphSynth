@@ -283,9 +283,53 @@ export class Graph {
     removeNode(nodeId: string): void {
         const node = this._nodes.get(nodeId);
         if (!node) {throw new Error(`Node with id ${nodeId} does not exist in graph`);}
-        // Check if the node has any connections using a helper function
-        const hasConnections = this._nodeHasConnections(node);
-        if (hasConnections) {throw new Error(`Cannot remove node ${nodeId}: node has active connections`);}
+        
+        // First disconnect all connections to/from this node
+        // Find all edges that involve this node
+        const edgesToRemove = this._edges.filter(
+            edge => edge.sourceId === nodeId || edge.sinkId === nodeId
+        );
+        
+        // Disconnect each edge
+        for (const edge of edgesToRemove) {
+            try {
+                // If this node is source, disconnect it from its sink
+                if (edge.sourceId === nodeId && edge.sinkId) {
+                    const sink = this._nodes.get(edge.sinkId);
+                    if (sink) {
+                        // Note: we need to handle undefined sourceIndex/sinkIndex
+                        const sourceIndex = edge.sourceIndex ?? 0;
+                        const sinkIndex = edge.sinkIndex ?? 0;
+                        
+                        // Clear the node references
+                        sink.deletePrev(sinkIndex);
+                        node.deleteNext(sourceIndex);
+                    }
+                }
+                
+                // If this node is sink, disconnect it from its source
+                if (edge.sinkId === nodeId && edge.sourceId) {
+                    const source = this._nodes.get(edge.sourceId);
+                    if (source) {
+                        // Note: we need to handle undefined sourceIndex/sinkIndex
+                        const sourceIndex = edge.sourceIndex ?? 0;
+                        const sinkIndex = edge.sinkIndex ?? 0;
+                        
+                        // Clear the node references
+                        node.deletePrev(sinkIndex);
+                        source.deleteNext(sourceIndex);
+                    }
+                }
+            } catch (error) {
+                console.warn(`Error disconnecting edge: ${error}`);
+            }
+        }
+        
+        // Remove the processed edges from the edges array
+        this._edges = this._edges.filter(
+            edge => edge.sourceId !== nodeId && edge.sinkId !== nodeId
+        );
+        
         // Remove from collections
         this._nodes.delete(nodeId);
         this._sources.delete(node);
@@ -477,8 +521,8 @@ export class Graph {
         source.deleteNext(sourceIndex);
 
         // Update graph status
-        this._refreshNodeSinkSourceStatus(source);
-        this._refreshNodeSinkSourceStatus(sink);
+        //this._refreshNodeSinkSourceStatus(source);
+        //this._refreshNodeSinkSourceStatus(sink);
     }
 
 
@@ -686,7 +730,7 @@ export class Graph {
         
           // Generate code line for creating/referencing this Tensor source
           // Typically something like: `Var0 = torch.randn([...])` or `Var0 = input_image`
-          code += `${varName} = ${tensorSource.to_torch_functional([], [varName])}\n`;
+          code += `${tensorSource.to_torch_functional([varName], [varName])}\n`;
         
           // Send this var to the source's children
           const nextNodes = this._getNextNodes(source);
