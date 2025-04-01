@@ -101,7 +101,7 @@ export abstract class Module extends GraphNode {
     /**
      * Adds a previous node to this module (implements GraphNode.addPrev)
      */
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (!prev.outShape) {
             throw new Error("Input node must have a defined shape");
         }
@@ -196,7 +196,8 @@ export abstract class Module extends GraphNode {
         this._prevs = [];
         this._inShape = [];
         if (node !== null) {
-            this.addPrev(node);
+            /* sophia: fix this. it should get the prevShape from the node */
+            this.addPrev(node, []);
         }
     }
 

@@ -41,7 +41,7 @@ export abstract class ReduceOp extends MergeOp {
         params: Record<string, any> = {}, 
         numberOfMerges: number 
     ) {
-        super(id, target);
+        super(id, target, opType, params, numberOfMerges);
         this._inShape = Array(numberOfMerges).fill(null)
         this._opType = opType;
         this._params = params;
@@ -89,9 +89,14 @@ export class PointwiseReduce extends ReduceOp {
         id: string,
         target: string,
         opType: string,
-        params: Record<string, any> = {}
+        params: Record<string, any> = {},
+        numberOfMerges: number
     ) {
-        super(id, target, opType, params);
+        super(id, target, opType, params, numberOfMerges);
+    }
+
+    protected checkIncomingShapeMatch(shape: number[]): void {
+        /* sophia: implement this */
     }
 
     protected computeOutShape(): number[] {
@@ -148,9 +153,14 @@ export class Concat extends ReduceOp {
     constructor(
         id: string,
         target: string,
-        params: { dim: number }
+        params: { dim: number },
+        numberOfMerges: number
     ) {
-        super(id, target, "Concat", params);
+        super(id, target, "Concat", params, numberOfMerges);
+    }
+
+    protected checkIncomingShapeMatch(shape: number[]): void {
+        /* sophia: implement this */
     }
 
     protected computeOutShape(): number[] {

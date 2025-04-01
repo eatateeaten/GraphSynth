@@ -104,10 +104,10 @@ export abstract class PointwiseOp extends MergeOp {
         super(id, target, opType, params, inputSize);
     }
 
-    protected checkIncomingShapeMatch(shape number[]): number[] {
-        
+    protected checkIncomingShapeMatch(shape: number[]): number[] {
+        /* sophia: implement this */
+        return [];
     }
-
 
     protected computeOutShape(): number[] {
         if (this._prevs.length !== 2) {
@@ -144,7 +144,7 @@ export abstract class PointwiseOp extends MergeOp {
         return `${inputs[0]} = ${opCode}(${inputs[0]}, ${inputs[1]})`;
     }
 
-    addPrev(prev: GraphNode, indexSelf: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
             throw new Error("PointwiseOp.addPrev requires an input index");
         }

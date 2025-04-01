@@ -98,7 +98,7 @@ export class Op extends GraphNode {
         }
     }
 
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
             throw new Error("Op already has a source connection");
         }

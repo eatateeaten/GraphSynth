@@ -71,7 +71,8 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.concatParams || params.concatParams.dim === undefined) {
                     throw new Error("concatParams with dim is required for Concat");
                 }
-                node = new Concat(id, target, params.concatParams);
+                /* sophia: it's probably not always 2. find a way */
+                node = new Concat(id, target, params.concatParams, 2);
                 break;
                 
             case "Copy":
@@ -102,7 +103,7 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
     get params(): Record<string, any> { return this._wrappedNode.params; }
 
     // Delegating methods
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, indexSelf, indexPrev); }
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, prevOutShape, indexSelf, indexPrev); }
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void { this._wrappedNode.addNext(next, indexSelf, indexNext); }
     deletePrev(indexSelf?: number): void { this._wrappedNode.deletePrev(indexSelf); }
     deleteNext(indexSelf?: number): void { this._wrappedNode.deleteNext(indexSelf); }
