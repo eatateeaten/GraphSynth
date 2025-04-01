@@ -12,7 +12,7 @@ const LAYER_TYPE_OPTIONS = (() => {
         .map(key => ({ key, label: allModules[key].label }));
     
     // Get direct node types
-    const directTypes = ['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce']
+    const directTypes = ['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce', 'DotOp', 'CrossOp']
         .filter(key => allModules[key])
         .map(key => ({ key, label: allModules[key].label }));
 
@@ -290,7 +290,7 @@ export function NodeEditor() {
             // Convert node type + opType into the corresponding module key
             if (type === 'Op' && opType) {
                 newModuleKey = `Op:${opType}`;
-            } else if (['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce'].includes(type)) {
+            } else if (['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce', 'DotOp', 'CrossOp'].includes(type)) {
                 newModuleKey = type;
             }
             

@@ -54,17 +54,23 @@ export abstract class MergeOp extends GraphNode {
     // For Reduceable Op, at any this stage they can compute an outShape (Reduceable Op's computeOutShape can be just an operation over the existing outShape)
     // However, For non-reduceable Op, they will have to check that they have filled all the requireed inputs before they can compute and outShape 
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf: number, indexPrev?: number): void {
-        // calling this from Graph.ts's connect 
-        if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
-            throw new Error(`MergeOp already has a connection at input ${indexSelf}`); // a bit redundant 
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+        if (indexSelf === undefined) {
+            throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
+        } 
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
+        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
+            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
         }
         //-------------------------------------------------------
         this.checkIncomingShapeMatch(prevOutShape); 
-        if( this._numberOfMerges === this._prevs.filter(x => x != null).length + 1) {
-            this.computeOutShape(); 
-        }
-        this._prevs[indexSelf] = prev;
+        
+        // Store both the prev node and its shape
+        this._prevs[validatedIndex] = prev;
+        this._inShape[validatedIndex] = [...prevOutShape];
+        
+        // Now compute the output shape based on the updated input shapes
+        this._outShape = this.computeOutShape();
     }
 
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
@@ -195,18 +201,21 @@ export class DotOp extends MergeOp {
 
     protected computeOutShape(): number[] {
         if (this._prevs.length !== 2) {
-            throw new Error("DotOp requires exactly 2 inputs");
+            // throw new Error("DotOp requires exactly 2 inputs");
+            return [];
         }
 
         const shape1 = this._prevs[0]?.outShape;
         const shape2 = this._prevs[1]?.outShape;
         if (!shape1 || !shape2) {
-            throw new Error("DotOp requires both inputs to have defined shapes");
+            //throw new Error("DotOp requires both inputs to have defined shapes");
+            return [];
         }
 
         // For dot product, output shape is [batch_dims..., shape1[-2], shape2[-1]]
         const arr1 = Array.isArray(shape1) ? shape1 as number[] : [shape1 as number];
         const arr2 = Array.isArray(shape2) ? shape2 as number[] : [shape2 as number];
+        console.log("in computeOutShape, returning ", [...arr1.slice(0, -1), arr2[arr2.length - 1]])
         return [...arr1.slice(0, -1), arr2[arr2.length - 1]];
     }
 
@@ -260,12 +269,14 @@ export class CrossOp extends MergeOp {
 
     protected computeOutShape(): number[] {
         if (this._prevs.length !== 2) {
-            throw new Error("CrossOp requires exactly 2 inputs");
+            //throw new Error("CrossOp requires exactly 2 inputs");
+            return [];
         }
 
         const shape = this._prevs[0]?.outShape;
         if (!shape) {
-            throw new Error("CrossOp requires first input to have defined shape");
+            //throw new Error("CrossOp requires first input to have defined shape");
+            return [];
         }
 
         // Cross product preserves the input shape

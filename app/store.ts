@@ -91,6 +91,16 @@ const makePendingParams = (type: NodeType, op_type: string | null, params: Recor
                 reduceParams: params.reduceParams || {},
                 numberOfMerges: params.numberOfMerges || 2
             };
+        case 'DotOp':
+            return {
+                opType: params.opType || 'matmul',
+                opParams: params.opParams || {}
+            };
+        case 'CrossOp':
+            return {
+                opType: params.opType || 'cross',
+                opParams: params.opParams || {}
+            };
         default:
             throw new Error(`Unknown node type: ${type}`);
     }

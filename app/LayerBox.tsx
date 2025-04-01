@@ -24,7 +24,7 @@ export function LayerBox({ data, id }: LayerBoxProps) {
     
     // Use the node type to determine handle configuration
     const isBranchNode = type === 'Split' || type === 'Copy';
-    const isMergeNode = type === 'Concat' || type === 'PointwiseReduce';
+    const isMergeNode = type === 'Concat' || type === 'PointwiseReduce' || type == "DotOp" || type == "CrossOp";
 
     const card = (
         <Card shadow="sm" radius="sm" withBorder style={{ padding: "8px 16px 8px" }}>

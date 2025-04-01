@@ -33,5 +33,19 @@ export const mergeModules: Record<string, ModuleMetadata> = {
                 default: 2
             }
         }
+    },
+    'DotOp': {
+        label: 'Dot Product',
+        description: 'Performs dot product (matrix multiplication) between two tensors',
+        category: 'Math',
+        paramFields: {
+        }
+    },
+    'CrossOp': {
+        label: 'Cross Product',
+        description: 'Computes the cross product of two 3-dimensional vectors',
+        category: 'Math',
+        paramFields: {
+        }
     }
 };
