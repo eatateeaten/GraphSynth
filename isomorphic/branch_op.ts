@@ -94,97 +94,6 @@ export abstract class BranchOp extends GraphNode {
     }
 }
 
-export class MapOp extends BranchOp {
-    constructor(
-        id: string,
-        inShape: number[],
-        target: string,
-        opType: string,
-        params: Record<string, any>
-    ) {
-        super(id, inShape, target, opType, params);
-    }
-
-    protected computeOutShapes(): number[][] {
-        const numOutputs = this._params.numOutputs || 1;
-        const outShapes: number[][] = [];
-        
-        for (let i = 0; i < numOutputs; i++) {
-            outShapes.push([...this._inShape]);
-        }
-        
-        return outShapes;
-    }
-
-    to_torch_functional(inputs: string[], outputs: string[]): string {
-        const op = this._opType.toLowerCase();
-        const numOutputs = this._params.numOutputs || 1;
-        
-        if (numOutputs === 1) {
-            return `${inputs[0]} = ${inputs[0]}`;
-        }
-        
-        const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
-        
-        return assignments;
-    }
-
-    get next(): GraphNode | null {
-        return this._nexts.length > 0 ? this._nexts[0] : null;
-    }
-
-    set next(node: GraphNode | null) {
-        this._nexts = [];
-        if (node !== null) {
-            this._nexts.push(node);
-        }
-    }
-}
-
-export class Broadcast extends BranchOp {
-    constructor(
-        id: string,
-        inShape: number[],
-        target: string,
-        params: { numOutputs: number }
-    ) {
-        super(id, inShape, target, "Broadcast", params);
-    }
-
-    protected computeOutShapes(): number[][] {
-        const numOutputs = this._params.numOutputs;
-        const outShapes: number[][] = [];
-        
-        for (let i = 0; i < numOutputs; i++) {
-            outShapes.push([...this._inShape]);
-        }
-        
-        return outShapes;
-    }
-
-    to_torch_functional(inputs: string[], outputs: string[]): string {
-        const numOutputs = this._params.numOutputs;
-        
-        if (numOutputs === 1) {
-            return `${inputs[0]} = ${inputs[0]}`;
-        }
-        
-        const assignments = outputs.map((output, i) => `${output} = ${inputs[0]}`).join('\n');
-        
-        return assignments;
-    }
-
-    get next(): GraphNode | null {
-        return this._nexts.length > 0 ? this._nexts[0] : null;
-    }
-
-    set next(node: GraphNode | null) {
-        this._nexts = [];
-        if (node !== null) {
-            this._nexts.push(node);
-        }
-    }
-}
 
 export class Split extends BranchOp {
     constructor(
@@ -256,3 +165,75 @@ export class Split extends BranchOp {
         super.addNext(next, indexSelf, indexNext);
     }
 } 
+
+/**
+ * Copy operation creates multiple identical outputs from a single input.
+ * Each output has the same shape as the input.
+ */
+export class Copy extends BranchOp {
+    constructor(
+        id: string,
+        inShape: number[],
+        target: string,
+        params: { copies: number }
+    ) {
+        super(id, inShape, target, "Copy", params);
+    }
+
+    protected computeOutShapes(): number[][] {
+        const { copies } = this._params;
+        if (!Number.isInteger(copies) || copies < 1) {
+            throw new Error(`Copy operation requires a positive integer number of copies, got: ${copies}`);
+        }
+        
+        // Create 'copies' number of identical output shapes
+        const outShapes: number[][] = [];
+        for (let i = 0; i < copies; i++) {
+            outShapes.push([...this._inShape]);
+        }
+        
+        return outShapes;
+    }
+
+    to_torch_functional(inputs: string[], outputs: string[]): string {
+        // Simple implementation that just assigns the same input to all outputs
+        if (outputs.length === 1) {
+            return `${outputs[0]} = ${inputs[0]}`;
+        }
+        
+        return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
+    }
+
+    get next(): GraphNode | null {
+        return this._nexts.length > 0 ? this._nexts[0] : null;
+    }
+
+    set next(node: GraphNode | null) {
+        this._nexts = [];
+        if (node !== null) {
+            this._nexts.push(node);
+        }
+    }
+
+    get nexts(): GraphNode[] {
+        return this._nexts;
+    }
+
+    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+        if (indexSelf === undefined) {
+            // Find the first empty slot or add to the end
+            indexSelf = this._nexts.findIndex(n => !n);
+            if (indexSelf === -1) {
+                indexSelf = this._nexts.length;
+                if (indexSelf >= this._outShapes.length) {
+                    // If we need more outputs than specified, expand the copies parameter
+                    this._params.copies = indexSelf + 1;
+                    this._outShapes = this.computeOutShapes();
+                }
+            }
+        }
+        
+        super.addNext(next, indexSelf, indexNext);
+    }
+} 
+

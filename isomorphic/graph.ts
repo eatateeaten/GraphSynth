@@ -4,9 +4,9 @@ import { Op } from './op';
 import { BranchOp } from './branch_op';
 import { MergeOp} from './merge_op';
 import { Concat} from './reduce_op';
-import { Split } from './branch_op';
+import { Split, Copy } from './branch_op';
 
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp };
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy };
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -74,6 +74,16 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 node = new Concat(id, target, params.concatParams);
                 break;
                 
+            case "Copy":
+                if (!params.inShape) {
+                    throw new Error("inShape parameter is required for Copy");
+                }
+                if (!params.copyParams || params.copyParams.copies === undefined) {
+                    throw new Error("copyParams with copies is required for Copy");
+                }
+                node = new Copy(id, params.inShape, target, params.copyParams);
+                break;
+                
             default:
                 throw new Error(`Unknown GraphNode type: ${type}`);
         }
@@ -114,25 +124,6 @@ export class Graph {
         this._sinks = new Set();
         this._pendingNodes = new Map();
         this._edges = [];
-    }
-
-    /**
-     * Adds a node to the pending collection
-     * @private
-     */
-    private _addPendingNode<T extends GraphNode>(node: T): PendingNode<T> {
-        // Check if the node already exists in pending nodes or main graph
-        if (this._pendingNodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} already exists in pending nodes`);
-        }
-        if (this._nodes.has(node.id)) {
-            throw new Error(`Node with id ${node.id} already exists in the graph`);
-        }
-        
-        // Wrap and add node to pending nodes
-        const pendingNode = new PendingNode<T>(node);
-        this._pendingNodes.set(node.id, pendingNode as PendingNode<GraphNode>);
-        return pendingNode;
     }
 
     /**
@@ -332,7 +323,7 @@ export class Graph {
             }
             
             sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect");
-            
+        
             // Get specific input shape
             const inShapeArray = sink.inShape as number[][];
             if (!inShapeArray[sinkIndex]) {
@@ -342,12 +333,19 @@ export class Graph {
         }
         
         // For nodes with multiple inputs but not static (Concat, Product, etc.)
-        if (GraphNode.multipleInputs(sink) && !GraphNode.multipleStaticInputs(sink)) {
+        if (GraphNode.multipleInputs(sink) && GraphNode.inShapeInferred(sink)) {
             // These nodes handle shape validation themselves
-            // Will call specific shapeCheck function when adding
-            return null; // Skip shape check
+            if (sinkIndex === undefined) {
+                throw new Error("When connecting to a node with multiple inputs, an input index must be specified");
+            }
+            if (!sink.inShape) {
+                throw new Error(`Node with id ${sink.id} must have defined input shape`);
+            }
+            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect");
+            return null //return null shape it can be cascaded and checked for shape consistancy for other ports 
         }
-        
+
+        //---------------
         // For nodes with single input and not inShapeInferred (Tensor)
         if (GraphNode.singleInput(sink) && !GraphNode.inShapeInferred(sink)) {
             if (!sink.inShape) {
@@ -415,7 +413,7 @@ export class Graph {
         //---------------------------------------------------------
         // Establish bidirectional connections
         // Let each node handle its own connection logic
-        sink.addPrev(source, sinkIndex, sourceIndex);
+        sink.addPrev(source, sourceOutShape, sinkIndex, sourceIndex);  ///this is where inShapeInferred Nodes must check for validity of inferring inshape from prev outShape 
         source.addNext(sink, sourceIndex, sinkIndex);
 
         // Add the connection to our edge list with a unique ID
@@ -439,47 +437,22 @@ export class Graph {
         this._refreshNodeSinkSourceStatus(sink);
     }
 
-    /**
-     * Disconnects two nodes.
-     * 
-     * This method breaks the connection between two nodes in the main graph using the tracked edge list.
-     * Both nodes must exist in the main graph (not in pending nodes).
-     * 
-     * @param edgeId - ID of the edge to disconnect, or
-     * @param sourceId - ID of the source node
-     * @param sinkId - ID of the sink node
-     * @param sourceIndex - Index for the source node output (for nodes with multiple outputs)
-     * @param sinkIndex - Index for the sink node input (for nodes with multiple inputs)
-     * @throws Error if nodes don't exist or are not properly connected
-     */
-    disconnect(edgeIdOrSourceId: string): void {
-        // If only one  is provided, assume it's an edge ID
-        const edgeId = edgeIdOrSourceId;
-        const edgeIndex = this._edges.findIndex(edge => edge.edgeId === edgeId);
-        
-        if (edgeIndex === -1) {
-            throw new Error(`No connection found with edge ID ${edgeId}`);
-        }
-        
-        const edge = this._edges[edgeIndex];
-        const source = this._nodes.get(edge.sourceId);
-        const sink = this._nodes.get(edge.sinkId);
-        
-        if (!source || !sink) {
-            throw new Error(`Edge ${edgeId} refers to nodes that no longer exist`);
-        }
-        
-        // Break connections using node methods
-        sink.deletePrev(edge.sinkIndex);
-        source.deleteNext(edge.sourceIndex);
-            
-        // Remove the edge from our list
-        this._edges.splice(edgeIndex, 1);
-            
+    
+    disconnect(sourceId: string, sinkId: string, sourceIndex: number, sinkIndex: number): void {        
+        const source = this._nodes.get(sourceId);
+        const sink = this._nodes.get(sinkId);
+
+        if(!source) throw new Error(`No source with ID ${sourceId}`);
+        if(!sink) throw new Error(`No sink with ID ${sinkId}`);
+
+        sink.deletePrev(sinkIndex);
+        source.deleteNext(sourceIndex);
+
         // Update graph status
-        this._refreshNodeSinkSourceStatus(source!);
-        this._refreshNodeSinkSourceStatus(sink!);
+        this._refreshNodeSinkSourceStatus(source);
+        this._refreshNodeSinkSourceStatus(sink);
     }
+
 
     private _refreshNodeSinkSourceStatus(node: GraphNode): void {
         // Check source status (no incoming connections)

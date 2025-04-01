@@ -29,7 +29,7 @@ export abstract class GraphNode {
     abstract get params(): Record<string, any>;
     abstract set params(params: Record<string, any>);
 
-    abstract addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void;
+    abstract addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void;
     abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
     abstract deletePrev(indexSelf?: number): void;
     abstract deleteNext(indexSelf?: number): void;
@@ -66,25 +66,6 @@ export abstract class GraphNode {
                (!className.includes('Tensor') && !className.includes('Module'));
     }
 
-    /**
-     * Checks if the node can have multiple inputs
-     * @param node The graph node to check
-     * @returns true if the node can have multiple inputs
-     */
-    static multipleInputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        return className.includes('MergeOp') || className.includes('Module');
-    }
-    
-    /**
-     * Checks if the node can have arbitray amount of outputs 
-     * @param node The graph node to check
-     * @returns true if the node can have arbitrary amount of ouputs 
-     */
-    static multipleNotStaticOutputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        return className.includes('BranchOp');
-    }
 
     /**
      * Checks if the node can have multiple static inputs
@@ -95,6 +76,27 @@ export abstract class GraphNode {
         const className = node.constructor.name;
         return className.includes('Module');
     }
+
+    /**
+     * Checks if the node can have multiple inputs
+     * @param node The graph node to check
+     * @returns true if the node can have multiple inputs
+     */
+    static multipleOutputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('BranchOp') || className.includes('Module');
+    }
+    
+    /**
+     * Checks if the node can have multiple inputs
+     * @param node The graph node to check
+     * @returns true if the node can have multiple inputs
+     * By default we won't be supporting arbitrary length of input 
+     */
+    static multipleInputs(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className.includes('MergeOp') || className.includes('Module');
+    }
     
     /**
      * Checks if the node can have multiple static outputs
@@ -103,7 +105,7 @@ export abstract class GraphNode {
      */
     static multipleStaticOutputs(node: GraphNode): boolean {
         const className = node.constructor.name;
-        return className.includes('Module');
+        return className.includes('Module') || className.includes('Split') || className.includes('Copy');
     }
 
     /**
@@ -128,7 +130,7 @@ export abstract class GraphNode {
         const className = node.constructor.name;
         return className.includes('Op') || 
                className.includes('Tensor') || 
-               className.includes('Merge') || 
+               className.includes('MergeOp') || 
                (!className.includes('BranchOp') && !className.includes('Module'));
     }
 

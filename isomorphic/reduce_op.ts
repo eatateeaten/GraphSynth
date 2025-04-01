@@ -25,64 +25,62 @@ import { MergeOp } from './merge_op';
 import { getElementwiseOpCode } from './torch_nn_module_op';
 import { GraphNode } from './graph_node';
 
-export class ReduceOp extends MergeOp {
+export abstract class ReduceOp extends MergeOp {
+    protected _inShape: number[][];
+    protected _outShape: number[]| null;
+    public _prevs: GraphNode[] = [];
+    protected _next: GraphNode | null = null;
+    protected readonly _opType: string;
+    protected readonly _params: Record<string, any>;
+    public _numberOfMerges: number; 
+
     constructor(
         id: string,
         target: string,
         opType: string,
-        params: Record<string, any> = {}
+        params: Record<string, any> = {}, 
+        numberOfMerges: number 
     ) {
-        super(id, target, opType, params);
+        super(id, target);
+        this._inShape = Array(numberOfMerges).fill(null)
+        this._opType = opType;
+        this._params = params;
+        this._outShape = null; 
+        this._numberOfMerges = numberOfMerges
+    }
+    
+    protected abstract computeOutShape(): number[];
+    protected abstract checkIncomingShapeMatch(shape: number[]): void; 
+    abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
+    
+
+    // Getters and setters
+    get inShape(): number[][] { return this._inShape; }
+    get outShape(): number[] | null { return this._outShape; }
+    get next(): GraphNode | null { return this._next; }
+    set next(node: GraphNode | null) { this._next = node; }
+    get opType(): string { return this._opType; }
+    get params(): Record<string, any> { return { ...this._params }; }
+    set params(params: Record<string, any>) {
+        // Make a deep copy to avoid modifying the original object
+        (this._params as Record<string, any>) = { ...params };
+        // Recalculate output shape
+        this._outShape = this.computeOutShape();
     }
 
-    protected computeOutShape(): number[] {
-        if (this._inShape.length < 1) {
-            throw new Error("ReduceOp requires at least 1 input tensor");
-        }
-
-        const referenceShape = [...this._inShape[0]];
-        
-        for (let i = 1; i < this._inShape.length; i++) {
-            const shape = this._inShape[i];
-            if (!GraphNode.shapeMatch(referenceShape, shape)) {
-                throw new Error(`For reduction operations, all input shapes must match. Shape at index ${i} [${shape}] doesn't match reference shape [${referenceShape}]`);
-            }
-        }
-
-        return referenceShape;
-    }
-
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
-        if (inputs.length < 1) {
-            throw new Error("ReduceOp requires at least 1 input");
-        }
-
-        const op = this._opType.toLowerCase();
-        
-        if (inputs.length === 1) {
-            return `${inputs[0]} = ${inputs[0]}`;
-        }
-        
-        let code = inputs[0];
-        for (let i = 1; i < inputs.length; i++) {
-            code = `torch.${op}(${code}, ${inputs[i]})`;
-        }
-        
-        return `${inputs[0]} = ${code}`;
-    }
-
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
-            indexSelf = this._prevs.findIndex(p => !p);
-            if (indexSelf === -1) {
-                indexSelf = this._prevs.length;
-                if (indexSelf >= this._inShape.length) {
-                    this._inShape.push([...this._inShape[0]]);
-                }
-            }
+            throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
+        } 
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
+        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
+            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
         }
-        
-        super.addPrev(prev, indexSelf, indexPrev);
+        //-------------------------------------------------------
+        this.checkIncomingShapeMatch(prevOutShape); 
+        this._numberOfMerges
+        this.computeOutShape; 
+        this._prevs[validatedIndex] = prev;
     }
 }
 

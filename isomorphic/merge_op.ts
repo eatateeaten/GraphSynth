@@ -1,34 +1,39 @@
 import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode } from './pointwise_op_map';
 
+
 export abstract class MergeOp extends GraphNode {
     protected _inShape: number[][];
-    protected _outShape: number[];
+    protected _outShape: number[]| null;
     public _prevs: GraphNode[] = [];
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
     protected readonly _params: Record<string, any>;
-    
+    public _numberOfMerges: number; 
 
     constructor(
         id: string,
         target: string,
         opType: string,
-        params: Record<string, any> = {}
+        params: Record<string, any> = {}, 
+        numberOfMerges: number 
     ) {
         super(id, target);
-        this._inShape = [];
+        this._inShape = Array(numberOfMerges).fill(null)
         this._opType = opType;
         this._params = params;
-        this._outShape = this.computeOutShape();
+        this._outShape = null; 
+        this._numberOfMerges = numberOfMerges
     }
     
     protected abstract computeOutShape(): number[];
+    protected abstract checkIncomingShapeMatch(shape: number[]): void; 
     abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
+    
 
     // Getters and setters
     get inShape(): number[][] { return this._inShape; }
-    get outShape(): number[] { return this._outShape; }
+    get outShape(): number[] | null { return this._outShape; }
     get next(): GraphNode | null { return this._next; }
     set next(node: GraphNode | null) { this._next = node; }
     get opType(): string { return this._opType; }
@@ -36,29 +41,17 @@ export abstract class MergeOp extends GraphNode {
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
         (this._params as Record<string, any>) = { ...params };
-        
         // Recalculate output shape
-        try {
-            this._outShape = this.computeOutShape();
-        } catch (err: any) {
-            // If shape inference fails, we keep the existing output shape
-            console.warn(`Failed to update output shape after params change: ${err.message}`);
-        }
+        this._outShape = this.computeOutShape();
     }
 
-    addPrev(prev: GraphNode, indexSelf?: number, indexPrev?: number): void {
-        if (indexSelf === undefined) {
-            throw new Error("MergeOp.addPrev requires an input index");
-        }
-        
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev");
-        
-        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
-            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`);
-        }
-        
-        this._prevs[validatedIndex] = prev;
-    }
+    // addPrev 
+    // Super(addPrev) 
+    // main class addPrev should only take care of checkingIncomingShapeValidity. And this can be done for most Merge Operations 
+    // For Reduceable Op, at any this stage they can compute an outShape (Reduceable Op's computeOutShape can be just an operation over the existing outShape)
+    // However, For non-reduceable Op, they will have to check that they have filled all the requireed inputs before they can compute and outShape 
+
+    abstract addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void;
 
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
         if (this._next !== null) {
@@ -74,7 +67,6 @@ export abstract class MergeOp extends GraphNode {
             this._prevs.fill(null as unknown as GraphNode);
             return;
         }
-        
         const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.deletePrev");
         
         this._prevs[validatedIndex] = null as unknown as GraphNode;
@@ -106,10 +98,16 @@ export abstract class PointwiseOp extends MergeOp {
         id: string,
         target: string,
         opType: string,
-        params: Record<string, any> = {}
+        params: Record<string, any> = {},
+        inputSize: number = 2
     ) {
-        super(id, target, opType, params);
+        super(id, target, opType, params, inputSize);
     }
+
+    protected checkIncomingShapeMatch(shape number[]): number[] {
+        
+    }
+
 
     protected computeOutShape(): number[] {
         if (this._prevs.length !== 2) {
