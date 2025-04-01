@@ -1,5 +1,5 @@
 import { GraphNode } from './graph_node';
-import { getDifferentiablePointWiseOpCode } from './pointwise_op_map';
+import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
 
 
 export abstract class MergeOp extends GraphNode {
@@ -96,41 +96,41 @@ export abstract class PointwiseOp extends MergeOp {
         id: string,
         target: string,
         opType: string,
-        params: Record<string, any> = {},
-        inputSize: number = 2
+        params: Record<string, any> = {}
     ) {
-        super(id, target, opType, params, inputSize);
+        super(id, target, opType, params, 2); // Always 2 inputs for pointwise ops
     }
 
-    protected checkIncomingShapeMatch(shape: number[]): number[] {
-        /* sophia: implement this */
-        return [];
+    protected checkIncomingShapeMatch(shape: number[]): void {
+        if (!this._inShape.some(s => s !== null)) {
+            return; // First shape, no need to check
+        }
+
+        const referenceShape = this._inShape.find(s => s !== null);
+        if (!referenceShape) return;
+
+        if (shape.length !== referenceShape.length) {
+            throw new Error(`Shape rank mismatch: expected ${referenceShape.length}, got ${shape.length}`);
+        }
+
+        for (let i = 0; i < shape.length; i++) {
+            if (shape[i] !== referenceShape[i]) {
+                throw new Error(`Shape mismatch at dim ${i}: expected ${referenceShape[i]}, got ${shape[i]}`);
+            }
+        }
     }
 
     protected computeOutShape(): number[] {
         if (this._prevs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
-        if (!this._prevs[0] || !this._prevs[1]) {
-            throw new Error("PointwiseOp requires both inputs");
+
+        const shape = this._prevs[0]?.outShape;
+        if (!shape) {
+            throw new Error("PointwiseOp requires first input to have defined shape");
         }
-        
-        const shape0 = this._prevs[0].outShape;
-        const shape1 = this._prevs[1].outShape;
-        
-        if (!shape0 || !shape1) {
-            throw new Error("PointwiseOp requires both inputs to have defined shapes");
-        }
-        
-        // Convert to number[] if needed
-        const shape0Array = (Array.isArray(shape0) ? shape0 : [shape0]) as number[];
-        const shape1Array = (Array.isArray(shape1) ? shape1 : [shape1]) as number[];
-        
-        if (!GraphNode.shapeMatch(shape0Array, shape1Array)) {
-            throw new Error("PointwiseOp requires input shapes to match");
-        }
-        
-        return [...shape0Array];
+
+        return Array.isArray(shape) ? shape as number[] : [shape as number];
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {
@@ -138,28 +138,8 @@ export abstract class PointwiseOp extends MergeOp {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
 
-        const opCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
-        return `${inputs[0]} = ${opCode}(${inputs[0]}, ${inputs[1]})`;
-    }
-
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
-        if (indexSelf === undefined) {
-            throw new Error("PointwiseOp.addPrev requires an input index");
-        }
-        
-        if (indexSelf < 0 || indexSelf >= 2) {
-            throw new Error(`PointwiseOp can only have 2 inputs. Invalid index: ${indexSelf}`);
-        }
-        
-        if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
-            throw new Error(`PointwiseOp already has a connection at input ${indexSelf}, disconnect first`);
-        }m
-
-        // Initialize _prevs array if needed
-        if (this._prevs.length < 2) {
-            this._prevs = new Array(2).fill(null);
-        }
-
-        this._prevs[indexSelf] = prev;
+        const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
+        const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, this._target);
+        return `${inputs[0]} = ${diffOpCode}(${inputs[0]}, ${inputs[1]})`;
     }
 }
