@@ -69,23 +69,7 @@ export abstract class BranchOp extends GraphNode {
         this._prev = prev; 
     }
 
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (indexSelf === undefined) {
-            indexSelf = this._nexts.findIndex(n => !n);
-            if (indexSelf === -1) {
-                indexSelf = this._nexts.length;
-                if (!this._inShape || !this._outShape) {
-                    throw new Error("Input and output shapes must be defined to add new outputs");
-                }
-                if (indexSelf >= this._outShape.length) {
-                    const lastShape = [...this._inShape];
-                    lastShape[this._params.dim] = 1;
-                    this._outShape.push(lastShape);
-                    this._params.sections.push(1);
-                }
-            }
-        }
-        
+    addNext(next: GraphNode, indexSelf: number, indexNext?: number): void {
         if (this._nexts[indexSelf] !== null) {
             throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
         }

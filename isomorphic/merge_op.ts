@@ -32,6 +32,8 @@ export abstract class MergeOp extends GraphNode {
     
 
     // Getters and setters
+    get prev(): GraphNode | null { return null; }
+    set prev(node: GraphNode | null) { /* Do nothing */ }
     get inShape(): number[][] { return this._inShape; }
     get outShape(): number[] | null { return this._outShape; }
     get next(): GraphNode | null { return this._next; }

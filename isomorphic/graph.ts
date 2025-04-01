@@ -2,10 +2,9 @@ import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
-import { MergeOp, PointwiseOp, DotOp, CrossOp, ElementwiseOp } from './merge_op';
+import { MergeOp, PointwiseOp, DotOp, CrossOp} from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
 import { Split, Copy } from './branch_op';
-
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp, ElementwiseOp };
 
 /**
@@ -98,7 +97,7 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.opType) {
                     throw new Error("opType parameter is required for PointwiseOp");
                 }
-                node = new ElementwiseOp(id, target, params.opType, params.opParams || {});
+                node = new PointwiseOp(id, target, params.opType, params.opParams || {});
                 break;
 
             case "DotOp":
