@@ -203,16 +203,40 @@ export class Concat extends ReduceOp {
         }
         
         const referenceShape = this._inShape[referenceShapeIndex];
+        if (!referenceShape) {
+            throw new Error("Reference shape is null");
+        }
+
+        // Validate concatenation dimension
         const dim = this._params.dim;
+        if (dim === undefined || dim < 0 || dim >= referenceShape.length) {
+            throw new Error(`Invalid concatenation dimension ${dim} for shape of length ${referenceShape.length}`);
+        }
         
         // Create the output shape as a copy of the reference shape
         const outShape = [...referenceShape];
         
         // Sum up the sizes along the concatenation dimension
-        outShape[dim] = this._inShape.reduce((sum, shape) => 
-            shape ? sum + shape[dim] : sum, 0
-        );
+        let totalSize = 0;
+        for (const shape of this._inShape) {
+            if (!shape) continue;
+            
+            // Validate shape compatibility
+            if (shape.length !== referenceShape.length) {
+                throw new Error(`Shape rank mismatch: expected ${referenceShape.length}, got ${shape.length}`);
+            }
+            
+            // Check all dimensions except concat dimension match
+            for (let i = 0; i < shape.length; i++) {
+                if (i !== dim && shape[i] !== referenceShape[i]) {
+                    throw new Error(`Shape mismatch at dimension ${i}: expected ${referenceShape[i]}, got ${shape[i]}`);
+                }
+            }
+            
+            totalSize += shape[dim];
+        }
         
+        outShape[dim] = totalSize;
         return outShape;
     }
 
