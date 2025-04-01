@@ -1,5 +1,6 @@
 import { Workspace } from './Workspace';
-import { Sidebar } from './Sidebar';
+import { NodeEditor } from './NodeEditor';
+import { CodeWindow } from './CodeWindow';
 import { Topbar } from './Topbar';
 
 function App() {
@@ -13,7 +14,8 @@ function App() {
                     <Workspace />
                 </div>
                 <div className="sidebar-container">
-                    <Sidebar />
+                    <div className="node-editor-container"><NodeEditor /></div>
+                    <div className="code-window-container"><CodeWindow /></div>
                 </div>
             </main>
         </div>

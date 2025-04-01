@@ -48,7 +48,7 @@ interface GraphActions {
     setSelectedId: (id: string | null) => void;
     updateNodes: (nodes: FlowNode[]) => void;
     updateEdges: (edges: FlowEdge[]) => void;
-    addEdge: (edge: FlowEdge, sourceIndex?: number, sinkIndex?: number) => void;
+    addEdge: (edge: FlowEdge, sourceHandleIndex?: number, targetHandleIndex?: number) => void;
     updateNodeParams: (id: string, params: Record<string, any>) => void;
     makeTensorSource: (id: string) => void;
 }
@@ -182,7 +182,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
 
         updateEdges: (edges) => set({ edges }),
 
-        addEdge: (edge: FlowEdge, sourceIndex = 0, sinkIndex = 0) => {
+        addEdge: (edge: FlowEdge, sourceHandleIndex = 0, targetHandleIndex = 0) => {
             // Clear any existing errors
             setNodeError(edge.source, {});
             setNodeError(edge.target, {});
@@ -198,8 +198,8 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 get().checkerGraph.connect(
                     edge.source,
                     edge.target,
-                    sourceIndex,
-                    sinkIndex
+                    sourceHandleIndex,
+                    targetHandleIndex
                 );
             } catch(e: any) {
                 setNodeError(edge.source, { output: e.message });
@@ -258,9 +258,15 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                                 const connectedNode = get().checkerGraph.getNode(conn.id);
                                 if (connectedNode) {
                                     if (connections.sources.some(s => s.id === conn.id)) {
-                                        get().checkerGraph.disconnect(conn.id, id, conn.sourceIndex || 0, conn.targetIndex || 0);
+                                        // Convert handle IDs to integers
+                                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
+                                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                                        get().checkerGraph.disconnect(conn.id, id, sourceIndex, targetIndex);
                                     } else {
-                                        get().checkerGraph.disconnect(id, conn.id, conn.sourceIndex || 0, conn.targetIndex || 0);
+                                        // Convert handle IDs to integers
+                                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
+                                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                                        get().checkerGraph.disconnect(id, conn.id, sourceIndex, targetIndex);
                                     }
                                 }
                             }
@@ -312,7 +318,11 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 // Try to reconnect
                 connections.sources.forEach(conn => {
                     try {
-                        get().checkerGraph.connect(conn.id, id, conn.sourceIndex, conn.targetIndex);
+                        // Parse source and target indices
+                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
+                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                        
+                        get().checkerGraph.connect(conn.id, id, sourceIndex, targetIndex);
                     } catch (e) {
                         console.warn('Error reconnecting source:', e);
                     }
@@ -320,7 +330,11 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 
                 connections.targets.forEach(conn => {
                     try {
-                        get().checkerGraph.connect(id, conn.id, conn.sourceIndex, conn.targetIndex);
+                        // Parse source and target indices
+                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
+                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                        
+                        get().checkerGraph.connect(id, conn.id, sourceIndex, targetIndex);
                     } catch (e) {
                         console.warn('Error reconnecting target:', e);
                     }

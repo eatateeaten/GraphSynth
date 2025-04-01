@@ -51,7 +51,6 @@ export function LayerBox({ data, id }: LayerBoxProps) {
         // Multiple inputs (MergeOp)
         if (Array.isArray(inShape[0]) || isMergeNode) {
             const shapes = inShape as number[][];
-            console.log(shapes);
             return shapes.map((shape, idx) => (
                 <LayerHandle
                     key={`in-${idx}`}

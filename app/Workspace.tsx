@@ -47,16 +47,22 @@ export function Workspace() {
     const targetNode = nodes.find(n => n.id === params.target);
     if (!sourceNode || !targetNode) return;
 
+    // Parse handle IDs to integers for the graph connection
+    const sourceHandleIndex = params.sourceHandle ? parseInt(params.sourceHandle, 10) : 0;
+    const targetHandleIndex = params.targetHandle ? parseInt(params.targetHandle, 10) : 0;
+
     // Create the edge
     const newEdge: FlowEdge = {
-      id: `${sourceNode.id}-${targetNode.id}`,
+      id: `${sourceNode.id}-${targetNode.id}-${sourceHandleIndex}-${targetHandleIndex}`,
       source: sourceNode.id,
       target: targetNode.id,
-      sourceHandle: params.sourceHandle || undefined,
-      targetHandle: params.targetHandle || undefined,
+      sourceHandle: params.sourceHandle,
+      targetHandle: params.targetHandle,
       type: 'default'
     };
-    addEdge(newEdge);
+    
+    // Pass the numeric indices to addEdge
+    addEdge(newEdge, sourceHandleIndex, targetHandleIndex);
   }, [nodes, addEdge]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: ReactFlowNode) => {

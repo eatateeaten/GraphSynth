@@ -28,8 +28,21 @@ main {
 }
 
 .sidebar-container {
-  flex: 0 0 300px;
+  flex: 0 0 400px;
   border-left: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-editor-container {
+  height: 50%;
+  overflow-y: scroll;
+}
+
+.code-window-container {
+  height: 50%;
+  max-width: 400px;
+  border-top: 1px solid #ccc;
 }
 
 @container (max-width: 900px) {
@@ -39,7 +52,7 @@ main {
   }
 
   .sidebar-container {
-    flex: 1 0 300px;
+    flex: 1 0 400px;
     border-top: 1px solid #ccc;
   }
 }

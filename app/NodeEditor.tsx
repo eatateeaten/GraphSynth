@@ -58,7 +58,7 @@ const LAYER_TYPE_OPTIONS = (() => {
     return out;
 })();
 
-export function Sidebar() {
+export function NodeEditor() {
     const [moduleKey, setModuleKey] = useState<string | null>(null);
     const [params, setParams] = useState<Record<string, any>>({});
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
