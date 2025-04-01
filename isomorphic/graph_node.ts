@@ -107,7 +107,7 @@ export abstract class GraphNode {
         const className = node.constructor.name;
         return className.includes('Module') || className.includes('Split') || className.includes('Copy');
     }
-
+    
     /**
      * Checks if the node can only have a single input
      * @param node The graph node to check
@@ -179,7 +179,7 @@ export abstract class GraphNode {
     static hasInputs(node: GraphNode): boolean {
         if (node.constructor.name.includes('MergeOp')) {
             // @ts-ignore: Accessing protected property
-            return !node._prevs.every(p => !p);
+            return node._prevs && node._prevs.some(p => p !== null && p !== undefined);
         } else {
             return node.prev !== null;
         }
@@ -193,9 +193,25 @@ export abstract class GraphNode {
     static hasOutputs(node: GraphNode): boolean {
         if (node.constructor.name.includes('BranchOp')) {
             // @ts-ignore: Accessing protected property
-            return !node._nexts.every(n => !n);
+            return node._nexts && node._nexts.some(n => n !== null && n !== undefined);
         } else {
             return node.next !== null;
         }
+    }
+
+
+    /**
+     * Check if node has multiple inputs with inferred shapes
+     * This is specifically for nodes like Concat, PointwiseReduce, DotOp, and CrossOp
+     * that have multiple inputs and infer their shapes from those inputs
+     * @param node The node to check
+     * @returns True if the node has multiple inputs with inferred shapes
+     */
+    static multiInputsShapeInferred(node: GraphNode): boolean {
+        const className = node.constructor.name;
+        return className === 'Concat' ||
+               className === 'PointwiseReduce' ||
+               className === 'DotOp' ||
+               className === 'CrossOp';
     }
 } 
