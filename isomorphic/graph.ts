@@ -568,6 +568,15 @@ export class Graph {
             throw new Error("Graph has no sink nodes");
         }
         
+        // Recompute sources and sinks to ensure they're correctly identified
+        // This fixes potential issues with BranchOp and other node types
+        this._refreshAllNodesSourceSinkStatus();
+        
+        // Re-check for sinks after refreshing
+        if (this._sinks.size === 0) {
+            throw new Error("Graph has no sink nodes after refresh");
+        }
+        
         // Check that all source nodes are Tensors
         const sourceNodes = Array.from(this._sources);
         for (const source of sourceNodes) {
@@ -604,7 +613,8 @@ export class Graph {
                     queue.push(node.next);
                 }
             } else if (node instanceof BranchOp) {
-                for (const nextNode of (node as BranchOp)._nexts) {
+                // For BranchOp, check all non-null nexts
+                for (const nextNode of node._nexts) {
                     if (nextNode) {
                         queue.push(nextNode);
                     }
@@ -634,6 +644,9 @@ export class Graph {
         
         // Check for cycles
         this._checkForCycles();
+        
+        // Log the graph structure as an adjacency list
+        this._logGraphStructure();
     }
     
     private _checkForCycles(): void {
@@ -789,7 +802,7 @@ export class Graph {
         
             // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
             // We'll do: `outVar = that_snippet`
-            code += `${outVar} = ${node.to_torch_functional(inputs, [outVar])}\n`;
+            code += `${node.to_torch_functional(inputs, [outVar])}\n`;
         
             // Pass outVar to this node's children
             const nextNodes = this._getNextNodes(node);
@@ -824,7 +837,7 @@ export class Graph {
             const outVar = newVar();
             usedNames.add(outVar);
         
-            code += `${outVar} = ${node.to_torch_functional(inputs, [outVar])}\n`;
+            code += `${node.to_torch_functional(inputs, [outVar])}\n`;
         
             // Pass output var to children
             const nextNodes = this._getNextNodes(node);
@@ -974,6 +987,104 @@ export class Graph {
             const v = c === 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
         });
+    }
+
+    private _refreshAllNodesSourceSinkStatus(): void {
+        // Clear existing collections
+        this._sources.clear();
+        this._sinks.clear();
+        
+        // Recompute status for all nodes
+        for (const node of this._nodes.values()) {
+            const isSource = !GraphNode.hasInputs(node);
+            const isSink = !GraphNode.hasOutputs(node);
+            
+            // For BranchOp, check if any _nexts are null - if ALL are null, it's a sink
+            if (node instanceof BranchOp) {
+                const hasSomeOutputs = node._nexts.some(n => n !== null);
+                if (isSource) {
+                    this._sources.add(node);
+                }
+                if (!hasSomeOutputs) {
+                    this._sinks.add(node);
+                }
+            } else {
+                // For other node types
+                if (isSource) {
+                    this._sources.add(node);
+                }
+                if (isSink) {
+                    this._sinks.add(node);
+                }
+            }
+        }
+    }
+
+    private _logGraphStructure(): void {
+        console.log("========== GRAPH STRUCTURE ==========");
+        
+        // Create adjacency list representation
+        const adjList: Record<string, {
+            type: string,
+            id: string,
+            outEdges: {id: string, type: string, index?: number}[]
+        }> = {};
+        
+        // Build the adjacency list
+        for (const [id, node] of this._nodes.entries()) {
+            const nodeType = node.constructor.name;
+            adjList[id] = {
+                type: nodeType,
+                id: id,
+                outEdges: []
+            };
+            
+            // Add outgoing edges
+            if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {
+                if (node.next) {
+                    adjList[id].outEdges.push({
+                        id: node.next.id,
+                        type: node.next.constructor.name
+                    });
+                }
+            } else if (node instanceof BranchOp) {
+                // For BranchOp, add all non-null nexts with their indices
+                node._nexts.forEach((nextNode, index) => {
+                    if (nextNode) {
+                        adjList[id].outEdges.push({
+                            id: nextNode.id,
+                            type: nextNode.constructor.name,
+                            index: index
+                        });
+                    }
+                });
+            }
+        }
+        
+        // Log sources and sinks
+        console.log("Sources:", Array.from(this._sources).map(node => ({
+            id: node.id,
+            type: node.constructor.name
+        })));
+        
+        console.log("Sinks:", Array.from(this._sinks).map(node => ({
+            id: node.id,
+            type: node.constructor.name
+        })));
+        
+        // Log the full adjacency list
+        console.log("Adjacency List:");
+        for (const [nodeId, nodeInfo] of Object.entries(adjList)) {
+            const outEdgesStr = nodeInfo.outEdges.map(edge => 
+                edge.index !== undefined 
+                    ? `${edge.type}[${edge.id}] (at index ${edge.index})` 
+                    : `${edge.type}[${edge.id}]`
+            ).join(", ");
+            
+            console.log(`${nodeInfo.type}[${nodeId}] → ${outEdgesStr || "(no outgoing edges)"}`);
+        }
+        
+        console.log("======================================");
     }
 }
 

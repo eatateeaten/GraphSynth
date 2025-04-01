@@ -137,6 +137,7 @@ export class Split extends BranchOp {
         }
         return outShapes;
     }
+    
 
     to_torch_functional(inputs: string[], outputs: string[]): string {
         const { dim, sections } = this._params;
@@ -178,11 +179,6 @@ export class Copy extends BranchOp {
     }
 
     to_torch_functional(inputs: string[], outputs: string[]): string {
-        // Simple implementation that just assigns the same input to all outputs
-        if (outputs.length === 1) {
-            return `${outputs[0]} = ${inputs[0]}`;
-        }
-        
         return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
     }
 } 
