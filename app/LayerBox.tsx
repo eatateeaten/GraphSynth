@@ -1,8 +1,7 @@
 import { Position, type NodeProps } from 'reactflow';
-import { Card, Text, Group, Pill } from '@mantine/core';
+import { Card, Text, Group } from '@mantine/core';
 import { LayerHandle } from './LayerHandle';
 import { useStore } from './store';
-import { stat } from 'fs';
 import { PendingNode } from '../isomorphic/graph';
 
 interface LayerBoxProps extends NodeProps {

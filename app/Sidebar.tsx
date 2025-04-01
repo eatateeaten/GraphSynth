@@ -2,19 +2,27 @@ import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
 import { useStore } from './store';
 import { NodeType, ParamFieldMetadata, Shape } from './registry/types';
-import { ModuleRegistry, getMeta, validateParams } from './registry/index';
+import { allModules, getMeta, validateParams } from './registry/index';
 
 /* Build layer type options from available modules */
 const LAYER_TYPE_OPTIONS = (() => {
-    // Create a list of all operation types
-    const opTypes = Object.keys(ModuleRegistry.op)
+    // Create lists of all operation types
+    const opTypes = Object.keys(allModules)
         .filter(key => key.startsWith('Op:'))
         .map(key => key.slice(3));
+    
+    const branchTypes = Object.keys(allModules)
+        .filter(key => key.startsWith('Branch:'))
+        .map(key => key.slice(7));
+    
+    const mergeTypes = Object.keys(allModules)
+        .filter(key => key.startsWith('Merge:'))
+        .map(key => key.slice(6));
 
     let out = [{ group: 'Tensor', items: [{ value: 'Tensor', label: 'Tensor' }] }];
 
+    // Add Op types
     out.push(...opTypes.reduce((groups, type) => {
-        // Get metadata for this operation
         const metadata = getMeta('Op', type);
         const category = metadata.category;
         const item = { value: type, label: metadata.label };
@@ -29,6 +37,36 @@ const LAYER_TYPE_OPTIONS = (() => {
         return groups;
     }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
 
+    // Add Branch types
+    out.push(...branchTypes.reduce((groups, type) => {
+        const metadata = getMeta('Branch', type);
+        const item = { value: type, label: metadata.label };
+        
+        const existingGroup = groups.find(g => g.group === 'Flow');
+        if (existingGroup) {
+            existingGroup.items.push(item);
+        } else {
+            groups.push({ group: 'Flow', items: [item] });
+        }
+
+        return groups;
+    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
+
+    // Add Merge types
+    out.push(...mergeTypes.reduce((groups, type) => {
+        const metadata = getMeta('Merge', type);
+        const item = { value: type, label: metadata.label };
+        
+        const existingGroup = groups.find(g => g.group === 'Flow');
+        if (existingGroup) {
+            existingGroup.items.push(item);
+        } else {
+            groups.push({ group: 'Flow', items: [item] });
+        }
+
+        return groups;
+    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
+
     return out;
 })();
 
@@ -38,6 +76,7 @@ export function Sidebar() {
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
     const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
+
     const addNode = useStore(state => state.addNode);
     const selectedId = useStore(state => state.selectedId);
     const updateNodeParams = useStore(state => state.updateNodeParams);
@@ -221,8 +260,22 @@ export function Sidebar() {
             return;
         }
         
-        // Validate parameters for op nodes
-        const validationError = validateModuleParams(params, opType);
+        // Determine node type based on opType prefix
+        let nodeType: NodeType;
+        let actualOpType = opType;
+        
+        if (opType.startsWith('Branch:')) {
+            nodeType = 'Branch';
+            actualOpType = opType.slice(7);
+        } else if (opType.startsWith('Merge:')) {
+            nodeType = 'Merge';
+            actualOpType = opType.slice(6);
+        } else {
+            nodeType = 'Op';
+        }
+        
+        // Validate parameters
+        const validationError = validateModuleParams(params, actualOpType);
         if (validationError) {
             setError(validationError);
             return;
@@ -233,8 +286,8 @@ export function Sidebar() {
             
             addNode({
                 id,
-                type: 'Op' as NodeType,
-                opType,
+                type: nodeType,
+                opType: actualOpType,
                 params
             });
             
@@ -252,7 +305,21 @@ export function Sidebar() {
     useEffect(() => {
         if (selectedId && selectedNodeData) {
             // Get data from the store's nodes array
-            setOpType(selectedNodeData.data.type === 'Tensor' ? 'Tensor' : selectedNodeData.data.opType || null);
+            const type = selectedNodeData.data.type;
+            const opType = selectedNodeData.data.opType;
+            
+            let displayType: string | null = null;
+            if (type === 'Tensor') {
+                displayType = 'Tensor';
+            } else if (type === 'Branch') {
+                displayType = `Branch:${opType}`;
+            } else if (type === 'Merge') {
+                displayType = `Merge:${opType}`;
+            } else {
+                displayType = opType || null;
+            }
+            
+            setOpType(displayType);
             setParams(selectedNodeData.data.params || {});
             setRawInputs(paramsToRawInputs(selectedNodeData.data.params || {}));
             setError(null);

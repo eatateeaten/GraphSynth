@@ -7,6 +7,8 @@ import { linearModules } from './linear';
 import { poolingModules } from './pooling';
 import { dropoutModules } from './dropout';
 import { reshapeModules } from './reshape';
+import { mergeModules } from './merge';
+import { branchModules } from './branch';
 
 // Re-export types
 
@@ -41,19 +43,9 @@ export const allModules: Record<string, ModuleMetadata> = {
   ...Object.entries(dropoutModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(poolingModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
   ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  // Flow nodes
-  'Merge': {
-    label: 'Merge',
-    description: 'Combines multiple inputs into a single output',
-    category: 'Flow',
-    paramFields: {}
-  },
-  'Branch': {
-    label: 'Branch',
-    description: 'Splits a single input into multiple outputs',
-    category: 'Flow',
-    paramFields: {}
-  }
+  /* Merge and branch */
+  ...Object.entries(mergeModules).reduce((acc, [key, value]) => ({ ...acc, [`Merge:${key}`]: value }), {}),
+  ...Object.entries(branchModules).reduce((acc, [key, value]) => ({ ...acc, [`Branch:${key}`]: value }), {}),
 };
 
 // Get metadata for any node type and operation
@@ -74,8 +66,3 @@ export function validateParams(opType: string, params: Record<string, any>): str
     return e.message;
   }
 }
-
-/* category -> opType -> metadata */
-export const ModuleRegistry = {
-    "op": allModules
-};

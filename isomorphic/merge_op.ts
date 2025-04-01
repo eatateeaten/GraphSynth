@@ -57,7 +57,7 @@ export abstract class MergeOp extends GraphNode {
         if (this._next !== null) {
             throw new Error("MergeOp already has a sink connection");
         }
-        
+
         // Just set our next reference - Graph handles all validation and connections
         this._next = next;
     }
@@ -68,7 +68,7 @@ export abstract class MergeOp extends GraphNode {
             return;
         }
         const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.deletePrev");
-        
+
         this._prevs[validatedIndex] = null as unknown as GraphNode;
     }
 
