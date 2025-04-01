@@ -22,7 +22,7 @@
  */
 
 import { MergeOp } from './merge_op';
-import { getElementwiseOpCode } from './torch_nn_module_op';
+import { getPointWiseReduceOpCode } from './torch_pointwise_reduce_op';
 import { GraphNode } from './graph_node';
 
 export abstract class ReduceOp extends MergeOp {
@@ -96,50 +96,47 @@ export class PointwiseReduce extends ReduceOp {
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
-        /* sophia: implement this */
+        // Skip check if this is the first shape
+        const hasExistingShape = this._inShape.some(s => s !== null);
+        if (!hasExistingShape) {
+            return;
+        }
+        // Get reference shape (first non-null shape)
+        const referenceShape = this._inShape.find(s => s !== null);
+        if (!referenceShape) {
+            return; // Shouldn't happen if hasExistingShape is true, but satisfies TypeScript
+        }
+        // Validate rank (number of dimensions)
+        if (shape.length !== referenceShape.length) {
+            throw new Error(
+                `Shape mismatch: expected rank ${referenceShape.length}, got ${shape.length}`
+            );
+        }
+        // Validate each dimension
+        const mismatchedDimension = shape.findIndex((dim, i) => dim !== referenceShape[i]);
+        if (mismatchedDimension !== -1) {
+            throw new Error(
+                `Shape mismatch at dimension ${mismatchedDimension}: ` + 
+                `expected ${referenceShape[mismatchedDimension]}, got ${shape[mismatchedDimension]}`
+            );
+        }
     }
 
     protected computeOutShape(): number[] {
-        if (this._inShape.length < 2) {
-            throw new Error("PointwiseReduce requires at least 2 input tensors");
+        // Find the first defined input shape
+        const referenceShapeIndex = this._inShape.findIndex(s => s !== null);
+        if (referenceShapeIndex === -1) {
+            return []; // This part most likely cannot be reached? 
         }
-
-        let resultShape = [...this._inShape[0]];
-
-        for (let i = 1; i < this._inShape.length; i++) {
-            const currentShape = this._inShape[i];
-            
-            if (currentShape.length !== resultShape.length) {
-                throw new Error(`Input shapes must have the same rank. Shape at index ${i} has rank ${currentShape.length}, expected ${resultShape.length}`);
-            }
-            
-            resultShape = resultShape.map((dim, j) => {
-                const otherDim = currentShape[j];
-                
-                if (dim === otherDim) {
-                    return dim;
-                }
-                if (dim === 1) {
-                    return otherDim;
-                }
-                if (otherDim === 1) {
-                    return dim;
-                }
-                throw new Error(
-                    `Incompatible shapes for broadcasting at dimension ${j}: ` +
-                    `${dim} and ${otherDim}. Dimensions must be equal or one must be 1.`
-                );
-            });
-        }
-
-        return resultShape;
+        // Return a copy of the reference shape
+        return [...this._inShape[referenceShapeIndex]];
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 2) {
             throw new Error("PointwiseReduce requires at least 2 inputs");
         }
-        const opCode = getElementwiseOpCode(this._opType);
+        const opCode = getPointWiseReduceOpCode(this._opType);
         
         const result = inputs.reduce((acc, curr) => 
             acc ? `${opCode}(${acc}, ${curr})` : curr
@@ -154,36 +151,67 @@ export class Concat extends ReduceOp {
         id: string,
         target: string,
         params: { dim: number },
-        numberOfMerges: number
+        numberOfMerges: number 
     ) {
         super(id, target, "Concat", params, numberOfMerges);
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
-        /* sophia: implement this */
+        // Skip check if this is the first shape
+        const hasExistingShape = this._inShape.some(s => s !== null);
+        if (!hasExistingShape) {
+            return;
+        }
+        
+        // Get concat dimension from params
+        const concatDim = this._params.dim;
+        if (concatDim < 0 || concatDim >= shape.length) {
+            throw new Error(
+                `Invalid concatenation dimension ${concatDim} for input shape of length ${shape.length}`
+            );
+        }
+        
+        // Get reference shape (first non-null shape)
+        const referenceShape = this._inShape.find(s => s !== null);
+        if (!referenceShape) {
+            return; // Shouldn't happen if hasExistingShape is true, but satisfies TypeScript
+        }
+        
+        // Validate rank (number of dimensions)
+        if (shape.length !== referenceShape.length) {
+            throw new Error(
+                `Rank mismatch: expected rank ${referenceShape.length}, got ${shape.length}`
+            );
+        }
+        
+        // Validate each dimension except concat dimension
+        for (let i = 0; i < shape.length; i++) {
+            if (i !== concatDim && shape[i] !== referenceShape[i]) {
+                throw new Error(
+                    `Shape mismatch at dimension ${i}: expected ${referenceShape[i]}, got ${shape[i]}`
+                );
+            }
+        }
     }
 
     protected computeOutShape(): number[] {
+        // Find the first defined input shape
+        const referenceShapeIndex = this._inShape.findIndex(s => s !== null);
+        if (referenceShapeIndex === -1) {
+            return []; // No shapes yet
+        }
+        
+        const referenceShape = this._inShape[referenceShapeIndex];
         const dim = this._params.dim;
-        if (dim < 0 || dim >= this._inShape[0].length) {
-            throw new Error(`Invalid concatenation dimension ${dim} for input shape of length ${this._inShape[0].length}`);
-        }
-
-        const referenceShape = this._inShape[0];
-        for (let i = 1; i < this._inShape.length; i++) {
-            const shape = this._inShape[i];
-            if (shape.length !== referenceShape.length) {
-                throw new Error(`For concatenation, all input shapes must have the same rank. Shape at index ${i} has rank ${shape.length}, expected ${referenceShape.length}`);
-            }
-            for (let j = 0; j < shape.length; j++) {
-                if (j !== dim && shape[j] !== referenceShape[j]) {
-                    throw new Error(`For concatenation, input shapes must match on all dimensions except the concatenation dimension. Mismatch at shape index ${i}, dimension ${j}: got ${shape[j]}, expected ${referenceShape[j]}`);
-                }
-            }
-        }
-
+        
+        // Create the output shape as a copy of the reference shape
         const outShape = [...referenceShape];
-        outShape[dim] = this._inShape.reduce((sum, shape) => sum + shape[dim], 0);
+        
+        // Sum up the sizes along the concatenation dimension
+        outShape[dim] = this._inShape.reduce((sum, shape) => 
+            shape ? sum + shape[dim] : sum, 0
+        );
+        
         return outShape;
     }
 

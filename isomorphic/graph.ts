@@ -3,10 +3,10 @@ import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
 import { MergeOp} from './merge_op';
-import { Concat} from './reduce_op';
+import { Concat, PointwiseReduce } from './reduce_op';
 import { Split, Copy } from './branch_op';
 
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy };
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce };
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -71,8 +71,10 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                 if (!params.concatParams || params.concatParams.dim === undefined) {
                     throw new Error("concatParams with dim is required for Concat");
                 }
-                /* sophia: it's probably not always 2. find a way */
-                node = new Concat(id, target, params.concatParams, 2);
+                if (!params.numberOfMerges || params.numberOfMerges < 2) {
+                    throw new Error("numberOfMerges parameter must be at least 2 for Concat");
+                }
+                node = new Concat(id, target, params.concatParams, params.numberOfMerges);
                 break;
                 
             case "Copy":
@@ -83,6 +85,16 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
                     throw new Error("copyParams with copies is required for Copy");
                 }
                 node = new Copy(id, params.inShape, target, params.copyParams);
+                break;
+                
+            case "PointwiseReduce":
+                if (!params.opType) {
+                    throw new Error("opType parameter is required for PointwiseReduce");
+                }
+                if (!params.numberOfMerges || params.numberOfMerges < 2) {
+                    throw new Error("numberOfMerges parameter must be at least 2 for PointwiseReduce");
+                }
+                node = new PointwiseReduce(id, target, params.opType, params.reduceParams || {}, params.numberOfMerges);
                 break;
                 
             default:
