@@ -1,5 +1,5 @@
 import { validateParams as validateTorchParams } from '../../isomorphic/torch_nn_module_op';
-import { NodeType, ModuleMetadata } from './types';
+import { ModuleMetadata } from './types';
 import { convolutionalModules } from './convolutional';
 import { activationModules } from './activation';
 import { normalizationModules } from './normalization';

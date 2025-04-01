@@ -79,8 +79,7 @@ export abstract class ReduceOp extends MergeOp {
         }
         //-------------------------------------------------------
         this.checkIncomingShapeMatch(prevOutShape); 
-        this._numberOfMerges
-        this.computeOutShape; 
+        this.computeOutShape();
         this._prevs[validatedIndex] = prev;
     }
 }
@@ -155,6 +154,8 @@ export class Concat extends ReduceOp {
         numberOfMerges: number 
     ) {
         super(id, target, "Concat", params, numberOfMerges);
+        console.log("in shape:", this._inShape);
+        console.log("out shapes:", this._outShape);
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
