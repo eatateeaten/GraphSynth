@@ -1,33 +1,35 @@
 import { GraphNode } from './graph_node';
 
 export abstract class BranchOp extends GraphNode {
-    protected _inShape: number[];
-    protected _outShapes: number[][];
+    protected _inShape: number[] | null;
+    protected _outShape: number[][] | null;
     protected _prev: GraphNode | null = null;
     public _nexts: GraphNode[] = [];
     protected readonly _opType: string;
     protected readonly _params: Record<string, any>;
+    protected readonly _numberOfBranches: number;
 
     constructor(
         id: string,
-        inShape: number[],
         target: string,
         opType: string,
-        params: Record<string, any>
+        params: Record<string, any>, 
+        numberOfBranches: number, 
     ) {
         super(id, target);
-        this._inShape = inShape;
+        this._inShape = null;
         this._opType = opType;
         this._params = params;
-        this._outShapes = this.computeOutShapes();
+        this._outShape = null;
+        this._numberOfBranches = numberOfBranches;
     }
 
-    protected abstract computeOutShapes(): number[][];
+    protected abstract computeOutShape(): number[][];
     abstract to_torch_functional(inputs: string[], outputs: string[]): string;
 
     // Getters and setters 
-    get inShape(): number[] { return this._inShape; }
-    get outShape(): number[][] { return this._outShapes; }
+    get inShape(): number[] | null { return this._inShape; }
+    get outShape(): number[][] | null { return this._outShape; }
     get prev(): GraphNode | null { return this._prev; }
     set prev(node: GraphNode | null) { this._prev = node; }
     get next(): GraphNode | null { return null; }
@@ -41,7 +43,7 @@ export abstract class BranchOp extends GraphNode {
         
         // Recalculate output shapes
         try {
-            this._outShapes = this.computeOutShapes();
+            this._outShape = this.computeOutShape();
         } catch (err: any) {
             // If shape inference fails, we keep the existing output shapes
             console.warn(`Failed to update output shapes after params change: ${err.message}`);
@@ -50,33 +52,42 @@ export abstract class BranchOp extends GraphNode {
 
     addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (this._prev !== null) {
-            throw new Error("BranchOp already has a source connection");
+            throw new Error("Branch already has a source connection");
         }
-        // Just set our prev reference - Graph handles all validation and connections
-        this._prev = prev;
+        // Get the output shape from the source node        
+        // Set inShape and compute outShape
+        this._inShape = [...prevOutShape];
+        
+        try {
+            this._outShape = this.computeOutShape();
+        } catch (err: any) {
+            // Reset inShape if shape inference fails
+            this._inShape = null;
+            throw err;
+        }
+        // Set our prev reference
+        this._prev = prev; 
     }
 
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        // For BranchOp, indexSelf (output index) is required
-        if (indexSelf === undefined) {
-            throw new Error("BranchOp.addNext requires an output index");
-        }
-        
+    addNext(next: GraphNode, indexSelf: number, indexNext?: number): void {
+        //at this point we already know outShape is not none and indexSelf is validated from _validateSourceAndGetOutShape
         // Validate and normalize index
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._outShapes.length, "BranchOp.addNext");
         
         // Check if a connection already exists at this output
-        if (this._nexts[validatedIndex] !== null && this._nexts[validatedIndex] !== undefined) {
-            throw new Error(`BranchOp already has a connection at output ${validatedIndex}`);
+        if (this._nexts[indexSelf] !== null) {
+            throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
         }
-        
         // Set the connection
-        this._nexts[validatedIndex] = next;
+        this._nexts[indexSelf] = next;
     }
 
     deletePrev(indexSelf?: number): void {
-        // Just clear our reference
-        this._prev = null;
+        if (this._prev) {
+            // Just clear our reference and reset shapes
+            this._prev = null;
+            this._inShape = null;
+            this._outShape = null;
+        }
     }
 
     deleteNext(indexSelf?: number): void {
@@ -87,7 +98,7 @@ export abstract class BranchOp extends GraphNode {
         }
         
         // Validate index
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._outShapes.length, "BranchOp.deleteNext");
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._numberOfBranches, "BranchOp.deleteNext");
         
         // Clear the specific connection
         this._nexts[validatedIndex] = null as unknown as GraphNode;
@@ -100,12 +111,12 @@ export class Split extends BranchOp {
         id: string,
         inShape: number[],
         target: string,
-        params: { dim: number, sections: number[] }
+        params: { dim: number, sections: number[]}
     ) {
-        super(id, inShape, target, "Split", params);
+        super(id, inShape, target, "Split", params, len(sections));
     }
 
-    protected computeOutShapes(): number[][] {
+    protected computeOutShape(): number[][] {
         const { dim, sections } = this._params;
         const outShapes: number[][] = [];
         
@@ -150,12 +161,12 @@ export class Split extends BranchOp {
             indexSelf = this._nexts.findIndex(n => !n);
             if (indexSelf === -1) {
                 indexSelf = this._nexts.length;
-                if (indexSelf >= this._outShapes.length) {
+                if (indexSelf >= this._outShape.length) {
                     // This is not ideal for Split since output shapes depend on sections
                     // But we'll allow it for flexibility
                     const lastShape = [...this._inShape];
                     lastShape[this._params.dim] = 1; // Default to size 1 for new sections
-                    this._outShapes.push(lastShape);
+                    this._outShape.push(lastShape);
                     // Update sections parameter
                     this._params.sections.push(1);
                 }
@@ -173,25 +184,18 @@ export class Split extends BranchOp {
 export class Copy extends BranchOp {
     constructor(
         id: string,
-        inShape: number[],
         target: string,
         params: { copies: number }
     ) {
-        super(id, inShape, target, "Copy", params);
+        super(id, target, "Copy", params, params.copies);
     }
 
-    protected computeOutShapes(): number[][] {
+    protected computeOutShape(): number[][] {
         const { copies } = this._params;
-        if (!Number.isInteger(copies) || copies < 1) {
-            throw new Error(`Copy operation requires a positive integer number of copies, got: ${copies}`);
-        }
-        
-        // Create 'copies' number of identical output shapes
         const outShapes: number[][] = [];
         for (let i = 0; i < copies; i++) {
             outShapes.push([...this._inShape]);
-        }
-        
+        } 
         return outShapes;
     }
 
@@ -202,38 +206,6 @@ export class Copy extends BranchOp {
         }
         
         return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
-    }
-
-    get next(): GraphNode | null {
-        return this._nexts.length > 0 ? this._nexts[0] : null;
-    }
-
-    set next(node: GraphNode | null) {
-        this._nexts = [];
-        if (node !== null) {
-            this._nexts.push(node);
-        }
-    }
-
-    get nexts(): GraphNode[] {
-        return this._nexts;
-    }
-
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (indexSelf === undefined) {
-            // Find the first empty slot or add to the end
-            indexSelf = this._nexts.findIndex(n => !n);
-            if (indexSelf === -1) {
-                indexSelf = this._nexts.length;
-                if (indexSelf >= this._outShapes.length) {
-                    // If we need more outputs than specified, expand the copies parameter
-                    this._params.copies = indexSelf + 1;
-                    this._outShapes = this.computeOutShapes();
-                }
-            }
-        }
-        
-        super.addNext(next, indexSelf, indexNext);
     }
 } 
 

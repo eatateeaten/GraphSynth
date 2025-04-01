@@ -51,20 +51,17 @@ export abstract class MergeOp extends GraphNode {
     // For Reduceable Op, at any this stage they can compute an outShape (Reduceable Op's computeOutShape can be just an operation over the existing outShape)
     // However, For non-reduceable Op, they will have to check that they have filled all the requireed inputs before they can compute and outShape 
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
-        if (indexSelf === undefined) {
-            throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
-        } 
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
-        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
-            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf: number, indexPrev?: number): void {
+        // calling this from Graph.ts's connect 
+        if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
+            throw new Error(`MergeOp already has a connection at input ${indexSelf}`); // a bit redundant 
         }
         //-------------------------------------------------------
         this.checkIncomingShapeMatch(prevOutShape); 
         if( this._numberOfMerges === this._prevs.filter(x => x != null).length + 1) {
             this.computeOutShape(); 
         }
-        this._prevs[validatedIndex] = prev;
+        this._prevs[indexSelf] = prev;
     }
 
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
@@ -76,30 +73,17 @@ export abstract class MergeOp extends GraphNode {
         this._next = next;
     }
 
-    deletePrev(indexSelf?: number): void {
-        if (indexSelf === undefined) {
-            this._prevs.fill(null as unknown as GraphNode);
-            return;
-        }
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.deletePrev");
-
-        this._prevs[validatedIndex] = null as unknown as GraphNode;
+    deletePrev(indexSelf: number): void {
+        //at this point we have already check that indexSelf is valid from the function calling deletePrev
+        this._prevs[indexSelf] = null as unknown as GraphNode;
+            // Just clear our reference and reset shapes 
+        this._inShape[indexSelf] = null as unknown as number[]; 
+        this._outShape = null; 
     }
 
     deleteNext(indexSelf?: number): void {
         // Just clear our next reference
         this._next = null;
-    }
-
-    get prev(): GraphNode | null {
-        return this._prevs.length > 0 ? this._prevs[0] : null;
-    }
-
-    set prev(node: GraphNode | null) {
-        this._prevs = [];
-        if (node !== null) {
-            this._prevs.push(node);
-        }
     }
 }
 
@@ -169,7 +153,7 @@ export abstract class PointwiseOp extends MergeOp {
         
         if (this._prevs[indexSelf] !== null && this._prevs[indexSelf] !== undefined) {
             throw new Error(`PointwiseOp already has a connection at input ${indexSelf}, disconnect first`);
-        }
+        }m
 
         // Initialize _prevs array if needed
         if (this._prevs.length < 2) {
