@@ -64,7 +64,7 @@ export abstract class ReduceOp extends MergeOp {
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
-        (this._params as Record<string, any>) = { ...params };
+        (this._params) = { ...params };
         // Recalculate output shape
         this._outShape = this.computeOutShape();
     }
@@ -136,8 +136,8 @@ export class PointwiseReduce extends ReduceOp {
             if (prevWithShape && prevWithShape.outShape) {
                 // Use the shape from the first connected prev node
                 return Array.isArray(prevWithShape.outShape) ? 
-                       [...prevWithShape.outShape as number[]] : 
-                       [prevWithShape.outShape as number];
+                    [...prevWithShape.outShape as number[]] : 
+                    [prevWithShape.outShape as number];
             }
             return []; // No valid shapes found anywhere
         }

@@ -40,7 +40,7 @@ export abstract class BranchOp extends GraphNode {
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
-        (this._params as Record<string, any>) = { ...params };
+        (this._params) = { ...params };
         
         // Recalculate output shapes
         try {

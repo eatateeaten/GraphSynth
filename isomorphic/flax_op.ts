@@ -399,75 +399,75 @@ export function forwardShapeInference(moduleType: string, inShape: number[], par
 // Function to get Flax elementwise operation code
 export function getFlaxElementwiseOpCode(opType: string): string {
     switch (opType.toLowerCase()) {
-        // Math operations
-        case 'add':
-            return 'jnp.add';
-        case 'sub':
-            return 'jnp.subtract';
-        case 'mul':
-            return 'jnp.multiply';
-        case 'div':
-            return 'jnp.divide';
-        case 'pow':
-            return 'jnp.power';
-        case 'abs':
-            return 'jnp.abs';
-        case 'sqrt':
-            return 'jnp.sqrt';
-        case 'square':
-            return 'jnp.square';
-        case 'exp':
-            return 'jnp.exp';
-        case 'log':
-            return 'jnp.log';
-        case 'sin':
-            return 'jnp.sin';
-        case 'cos':
-            return 'jnp.cos';
-        case 'tan':
-            return 'jnp.tan';
-        case 'asin':
-            return 'jnp.arcsin';
-        case 'acos':
-            return 'jnp.arccos';
-        case 'atan':
-            return 'jnp.arctan';
+    // Math operations
+    case 'add':
+        return 'jnp.add';
+    case 'sub':
+        return 'jnp.subtract';
+    case 'mul':
+        return 'jnp.multiply';
+    case 'div':
+        return 'jnp.divide';
+    case 'pow':
+        return 'jnp.power';
+    case 'abs':
+        return 'jnp.abs';
+    case 'sqrt':
+        return 'jnp.sqrt';
+    case 'square':
+        return 'jnp.square';
+    case 'exp':
+        return 'jnp.exp';
+    case 'log':
+        return 'jnp.log';
+    case 'sin':
+        return 'jnp.sin';
+    case 'cos':
+        return 'jnp.cos';
+    case 'tan':
+        return 'jnp.tan';
+    case 'asin':
+        return 'jnp.arcsin';
+    case 'acos':
+        return 'jnp.arccos';
+    case 'atan':
+        return 'jnp.arctan';
         
         // Min/max operations
-        case 'min':
-            return 'jnp.minimum';
-        case 'max':
-            return 'jnp.maximum';
+    case 'min':
+        return 'jnp.minimum';
+    case 'max':
+        return 'jnp.maximum';
         
         // Logical operations
-        case 'and':
-            return 'jnp.logical_and';
-        case 'or':
-            return 'jnp.logical_or';
-        case 'xor':
-            return 'jnp.logical_xor';
-        case 'not':
-            return 'jnp.logical_not';
+    case 'and':
+        return 'jnp.logical_and';
+    case 'or':
+        return 'jnp.logical_or';
+    case 'xor':
+        return 'jnp.logical_xor';
+    case 'not':
+        return 'jnp.logical_not';
         
         // Comparison operations
-        case 'eq':
-            return 'jnp.equal';
-        case 'ne':
-            return 'jnp.not_equal';
-        case 'lt':
-            return 'jnp.less';
-        case 'le':
-            return 'jnp.less_equal';
-        case 'gt':
-            return 'jnp.greater';
-        case 'ge':
-            return 'jnp.greater_equal';
+    case 'eq':
+        return 'jnp.equal';
+    case 'ne':
+        return 'jnp.not_equal';
+    case 'lt':
+        return 'jnp.less';
+    case 'le':
+        return 'jnp.less_equal';
+    case 'gt':
+        return 'jnp.greater';
+    case 'ge':
+        return 'jnp.greater_equal';
             
         // Identity function
-        case 'identity':
-            return 'lambda x: x';
+    case 'identity':
+        return 'lambda x: x';
             
-        default:
-            throw new Error(`Unknown Flax elementwise operation: ${opType}`);
+    default:
+        throw new Error(`Unknown Flax elementwise operation: ${opType}`);
     }
 } 

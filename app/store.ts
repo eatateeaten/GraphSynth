@@ -55,54 +55,54 @@ interface GraphActions {
 
 const makePendingParams = (type: NodeType, op_type: string | null, params: Record<string, any>): Record<string, any> => {
     switch (type) {
-        case 'Tensor':
-            return {
-                shape: params.shape,
-                variableName: params.variableName || null
-            };
-        case 'Op':
-            return {
-                opType: op_type,
-                opParams: params
-            };
-        case 'Split':
-            return {
-                splitParams: {
-                    dim: params.dim || 0,
-                    sections: params.sections || [1, 1]
-                }
-            };
-        case 'Copy':
-            return {
-                copyParams: {
-                    copies: params.copies || 2
-                }
-            };
-        case 'Concat':
-            return {
-                concatParams: {
-                    dim: params.dim || 0
-                },
-                numberOfMerges: params.numberOfMerges || 2
-            };
-        case 'PointwiseReduce':
-            return {
-                opType: params.opType || 'add',
-                reduceParams: params.reduceParams || {},
-                numberOfMerges: params.numberOfMerges || 2
-            };
-        case 'DotOp':
-            return {
-                opType: params.opType || 'matmul',
-                opParams: params.opParams || {}
-            };
-        case 'CrossOp':
-            return {
-                opType: params.opType || 'cross',
-                opParams: params.opParams || {}
-            };
-        default:
-            throw new Error(`Unknown node type: ${type}`);
+    case 'Tensor':
+        return {
+            shape: params.shape,
+            variableName: params.variableName || null
+        };
+    case 'Op':
+        return {
+            opType: op_type,
+            opParams: params
+        };
+    case 'Split':
+        return {
+            splitParams: {
+                dim: params.dim || 0,
+                sections: params.sections || [1, 1]
+            }
+        };
+    case 'Copy':
+        return {
+            copyParams: {
+                copies: params.copies || 2
+            }
+        };
+    case 'Concat':
+        return {
+            concatParams: {
+                dim: params.dim || 0
+            },
+            numberOfMerges: params.numberOfMerges || 2
+        };
+    case 'PointwiseReduce':
+        return {
+            opType: params.opType || 'add',
+            reduceParams: params.reduceParams || {},
+            numberOfMerges: params.numberOfMerges || 2
+        };
+    case 'DotOp':
+        return {
+            opType: params.opType || 'matmul',
+            opParams: params.opParams || {}
+        };
+    case 'CrossOp':
+        return {
+            opType: params.opType || 'cross',
+            opParams: params.opParams || {}
+        };
+    default:
+        throw new Error(`Unknown node type: ${type}`);
     }
 };
 

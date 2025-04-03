@@ -43,7 +43,7 @@ export abstract class MergeOp extends GraphNode {
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
-        (this._params as Record<string, any>) = { ...params };
+        (this._params) = { ...params };
         // Recalculate output shape
         this._outShape = this.computeOutShape();
     }
@@ -85,7 +85,7 @@ export abstract class MergeOp extends GraphNode {
     deletePrev(indexSelf: number): void {
         //at this point we have already check that indexSelf is valid from the function calling deletePrev
         this._prevs[indexSelf] = null as unknown as GraphNode;
-            // Just clear our reference and reset shapes 
+        // Just clear our reference and reset shapes 
         this._inShape[indexSelf] = null as unknown as number[]; 
         this._outShape = null; 
     }

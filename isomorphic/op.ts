@@ -10,7 +10,7 @@ export class Op extends GraphNode {
     protected _prev: GraphNode | null = null;
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
-    protected readonly _params: Record<string, any>;
+    protected _params: Record<string, any>;
 
     constructor(
         id: string,
@@ -85,7 +85,7 @@ export class Op extends GraphNode {
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // We need to make a deep copy to avoid modifying the original object
-        (this._params as Record<string, any>) = { ...params };
+        (this._params) = { ...params };
         
         // Recalculate output shape if input shape is available
         if (this._inShape) {
@@ -142,4 +142,4 @@ export class Op extends GraphNode {
         // Just clear our next reference
         this._next = null;
     }
-} 
+}

@@ -42,78 +42,78 @@ export class PendingNode<T extends GraphNode> extends GraphNode {
         let node: GraphNode;
 
         switch (type) {
-            case "Tensor":
-                if (!params.shape) {
-                    throw new Error("Shape parameter is required for Tensor");
-                }
-                node = new Tensor(id, params.shape, target, params.variableName || null);
-                break;
+        case "Tensor":
+            if (!params.shape) {
+                throw new Error("Shape parameter is required for Tensor");
+            }
+            node = new Tensor(id, params.shape, target, params.variableName || null);
+            break;
                 
-            case "Op":
-                if (!params.opType) {
-                    throw new Error("opType parameter is required for Op");
-                }
-                node = new Op(id, target, params.opType, params.opParams || {});
-                break;
+        case "Op":
+            if (!params.opType) {
+                throw new Error("opType parameter is required for Op");
+            }
+            node = new Op(id, target, params.opType, params.opParams || {});
+            break;
 
-            case "Split":
-                if (!params.splitParams || params.splitParams.dim === undefined || !params.splitParams.sections) {
-                    throw new Error("splitParams with dim and sections is required for Split");
-                }
-                node = new Split(id, target, params.splitParams);
-                node = new Split(id, target, params.splitParams);
-                break;
+        case "Split":
+            if (!params.splitParams || params.splitParams.dim === undefined || !params.splitParams.sections) {
+                throw new Error("splitParams with dim and sections is required for Split");
+            }
+            node = new Split(id, target, params.splitParams);
+            node = new Split(id, target, params.splitParams);
+            break;
 
-            case "Concat":
-                if (!params.concatParams || params.concatParams.dim === undefined) {
-                    throw new Error("concatParams with dim is required for Concat");
-                }
-                if (!params.numberOfMerges || params.numberOfMerges < 2) {
-                    throw new Error("numberOfMerges parameter must be at least 2 for Concat");
-                }
-                node = new Concat(id, target, params.concatParams, params.numberOfMerges);
-                break;
+        case "Concat":
+            if (!params.concatParams || params.concatParams.dim === undefined) {
+                throw new Error("concatParams with dim is required for Concat");
+            }
+            if (!params.numberOfMerges || params.numberOfMerges < 2) {
+                throw new Error("numberOfMerges parameter must be at least 2 for Concat");
+            }
+            node = new Concat(id, target, params.concatParams, params.numberOfMerges);
+            break;
 
-            case "Copy":
-                if (!params.copyParams || params.copyParams.copies === undefined) {
-                    throw new Error("copyParams with copies is required for Copy");
-                }
-                node = new Copy(id, target, params.copyParams);
-                break;
+        case "Copy":
+            if (!params.copyParams || params.copyParams.copies === undefined) {
+                throw new Error("copyParams with copies is required for Copy");
+            }
+            node = new Copy(id, target, params.copyParams);
+            break;
 
-            case "PointwiseReduce":
-                if (!params.opType) {
-                    throw new Error("opType parameter is required for PointwiseReduce");
-                }
-                if (!params.numberOfMerges || params.numberOfMerges < 2) {
-                    throw new Error("numberOfMerges parameter must be at least 2 for PointwiseReduce");
-                }
-                node = new PointwiseReduce(id, target, params.opType, params.reduceParams || {}, params.numberOfMerges);
-                break;
+        case "PointwiseReduce":
+            if (!params.opType) {
+                throw new Error("opType parameter is required for PointwiseReduce");
+            }
+            if (!params.numberOfMerges || params.numberOfMerges < 2) {
+                throw new Error("numberOfMerges parameter must be at least 2 for PointwiseReduce");
+            }
+            node = new PointwiseReduce(id, target, params.opType, params.reduceParams || {}, params.numberOfMerges);
+            break;
 
-            case "PointwiseOp":
-                if (!params.opType) {
-                    throw new Error("opType parameter is required for PointwiseOp");
-                }
-                node = new PointwiseOp(id, target, params.opType, params.opParams || {});
-                break;
+        case "PointwiseOp":
+            if (!params.opType) {
+                throw new Error("opType parameter is required for PointwiseOp");
+            }
+            node = new PointwiseOp(id, target, params.opType, params.opParams || {});
+            break;
 
-            case "DotOp":
-                if (!params.opType) {
-                    throw new Error("opType parameter is required for DotOp");
-                }
-                node = new DotOp(id, target, params.opType, params.opParams || {}) as DotOp;
-                break;
+        case "DotOp":
+            if (!params.opType) {
+                throw new Error("opType parameter is required for DotOp");
+            }
+            node = new DotOp(id, target, params.opType, params.opParams || {});
+            break;
 
-            case "CrossOp":
-                if (!params.opType) {
-                    throw new Error("opType parameter is required for CrossOp");
-                }
-                node = new CrossOp(id, target, params.opType, params.opParams || {}) as CrossOp;
-                break;
+        case "CrossOp":
+            if (!params.opType) {
+                throw new Error("opType parameter is required for CrossOp");
+            }
+            node = new CrossOp(id, target, params.opType, params.opParams || {});
+            break;
                 
-            default:
-                throw new Error(`Unknown GraphNode type: ${type}`);
+        default:
+            throw new Error(`Unknown GraphNode type: ${type}`);
         }
         
         return new PendingNode(node);
@@ -546,7 +546,7 @@ export class Graph {
     }
 
     getPendingNode(id: string): PendingNode<GraphNode> | undefined {
-        return this._pendingNodes.get(id) as PendingNode<GraphNode> | undefined;
+        return this._pendingNodes.get(id);
     }
 
     getSources(): Set<GraphNode> {
@@ -682,7 +682,7 @@ export class Graph {
                 this._dfsCheckCycle(node.next, visiting, visited);
             }
         } else if (node instanceof BranchOp) {
-            for (const nextNode of (node as BranchOp)._nexts) {
+            for (const nextNode of (node)._nexts) {
                 if (nextNode) {
                     this._dfsCheckCycle(nextNode, visiting, visited);
                 }
@@ -715,7 +715,7 @@ export class Graph {
         // 3) A variable counter to produce unique variable names
         let varCounter = 0;
         function newVar(): string {
-          return `Var${varCounter++}`;
+            return `Var${varCounter++}`;
         }
       
         // Track which variable names we've used (just in case you need to avoid collision with user-provided ones)
@@ -730,7 +730,7 @@ export class Graph {
         
         // Helper function to update the variable mapping for a node
         const updateNodeVar = (nodeId: string, varName: string) => {
-          nodeToVarMap.set(nodeId, varName);
+            nodeToVarMap.set(nodeId, varName);
         };
       
         // 5) A map for multi-input nodes that collects partial inputs until all are available.
@@ -739,50 +739,50 @@ export class Graph {
       
         // 6) Assign variable names for source Tensors, push them onto the stack
         for (const source of this._sources) {
-          // We already enforce that sources are Tensors in validate_graph()
-          const tensorSource = source as Tensor;
+            // We already enforce that sources are Tensors in validate_graph()
+            const tensorSource = source as Tensor;
           
-          // Use a user-defined variableName if present, else generate one
-          let varName = tensorSource.variableName ?? newVar();
-          while (usedNames.has(varName)) {
-            varName = newVar();
-          }
-          usedNames.add(varName);
-        
-          // Track the source variable in our map
-          updateNodeVar(source.id, varName);
-          console.log(`Mapped source node ${source.id} to variable ${varName}`);
-          
-          // Send this var to the source's children
-          const nextNodes = this._getNextNodes(source);
-          for (const nxt of nextNodes) {
-            if (!nxt) continue;
-            
-            // Count how many inputs the child has
-            const inDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
-            const singleIn = GraphNode.singleInput(nxt);
-        
-            if (singleIn && inDegree <= 1) {
-              // Single-input node, safe to push directly
-              stack.push({ node: nxt, inputs: [varName] });
-            } else {
-              // Multi-input node → partially fill in waiting
-              let partialInputs = waiting.get(nxt);
-              if (!partialInputs) {
-                partialInputs = new Array(inDegree).fill("");
-              }
-              // Find the correct index for this edge
-              const idx = this._getPrevNodeIndex(nxt, source);
-              partialInputs[idx] = varName;
-              waiting.set(nxt, partialInputs);
-        
-              // If all inputs are now filled, push the node onto stack
-              if (partialInputs.every(v => v !== "")) {
-                stack.push({ node: nxt, inputs: partialInputs });
-                waiting.delete(nxt);
-              }
+            // Use a user-defined variableName if present, else generate one
+            let varName = tensorSource.variableName ?? newVar();
+            while (usedNames.has(varName)) {
+                varName = newVar();
             }
-          }
+            usedNames.add(varName);
+        
+            // Track the source variable in our map
+            updateNodeVar(source.id, varName);
+            console.log(`Mapped source node ${source.id} to variable ${varName}`);
+          
+            // Send this var to the source's children
+            const nextNodes = this._getNextNodes(source);
+            for (const nxt of nextNodes) {
+                if (!nxt) continue;
+            
+                // Count how many inputs the child has
+                const inDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+                const singleIn = GraphNode.singleInput(nxt);
+        
+                if (singleIn && inDegree <= 1) {
+                    // Single-input node, safe to push directly
+                    stack.push({ node: nxt, inputs: [varName] });
+                } else {
+                    // Multi-input node → partially fill in waiting
+                    let partialInputs = waiting.get(nxt);
+                    if (!partialInputs) {
+                        partialInputs = new Array(inDegree).fill("");
+                    }
+                    // Find the correct index for this edge
+                    const idx = this._getPrevNodeIndex(nxt, source);
+                    partialInputs[idx] = varName;
+                    waiting.set(nxt, partialInputs);
+        
+                    // If all inputs are now filled, push the node onto stack
+                    if (partialInputs.every(v => v !== "")) {
+                        stack.push({ node: nxt, inputs: partialInputs });
+                        waiting.delete(nxt);
+                    }
+                }
+            }
         }
       
         // 7) Keep track of visited nodes so we don't generate code twice
@@ -790,305 +790,305 @@ export class Graph {
       
         // 8) DFS: pop from the stack, generate code, push outputs forward
         while (stack.length > 0) {
-          const { node, inputs } = stack.pop()!;
+            const { node, inputs } = stack.pop()!;
         
-          if (visited.has(node)) {
+            if (visited.has(node)) {
             // Already handled this node
-            continue;
-          }
-          visited.add(node);
+                continue;
+            }
+            visited.add(node);
         
-          // Determine node "type" by singleInput/singleOutput
-          const singleIn = GraphNode.singleInput(node);
-          const singleOut = GraphNode.singleOutput(node);
+            // Determine node "type" by singleInput/singleOutput
+            const singleIn = GraphNode.singleInput(node);
+            const singleOut = GraphNode.singleOutput(node);
         
-          if (singleIn && singleOut) {
+            if (singleIn && singleOut) {
             // =============== Op or Tensor (single in, single out) ===============
             // (e.g. ReLU, any standard unary/binary op, or an in-graph Tensor)
-            const outVar = newVar();
-            usedNames.add(outVar);
+                const outVar = newVar();
+                usedNames.add(outVar);
         
-            // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
-            // We'll do: `outVar = that_snippet`
-            code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+                // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
+                // We'll do: `outVar = that_snippet`
+                code += `${node.to_torch_functional(inputs, [outVar])}\n`;
             
-            // Track the output variable for this node
-            updateNodeVar(node.id, outVar);
+                // Track the output variable for this node
+                updateNodeVar(node.id, outVar);
         
-            // Pass outVar to this node's children
-            const nextNodes = this._getNextNodes(node);
-            for (const nxt of nextNodes) {
-              if (!nxt) continue;
-              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
-              const childSingleIn = GraphNode.singleInput(nxt);
+                // Pass outVar to this node's children
+                const nextNodes = this._getNextNodes(node);
+                for (const nxt of nextNodes) {
+                    if (!nxt) continue;
+                    const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+                    const childSingleIn = GraphNode.singleInput(nxt);
               
-              if (childSingleIn && childInDegree <= 1) {
-                stack.push({ node: nxt, inputs: [outVar] });
-              } else {
-                // Multi-input child
-                let partialInputs = waiting.get(nxt);
-                if (!partialInputs) {
-                  partialInputs = new Array(childInDegree).fill("");
-                }
-                const idx = this._getPrevNodeIndex(nxt, node);
-                partialInputs[idx] = outVar;
-                waiting.set(nxt, partialInputs);
+                    if (childSingleIn && childInDegree <= 1) {
+                        stack.push({ node: nxt, inputs: [outVar] });
+                    } else {
+                        // Multi-input child
+                        let partialInputs = waiting.get(nxt);
+                        if (!partialInputs) {
+                            partialInputs = new Array(childInDegree).fill("");
+                        }
+                        const idx = this._getPrevNodeIndex(nxt, node);
+                        partialInputs[idx] = outVar;
+                        waiting.set(nxt, partialInputs);
         
-                if (partialInputs.every(v => v !== "")) {
-                  stack.push({ node: nxt, inputs: partialInputs });
-                  waiting.delete(nxt);
+                        if (partialInputs.every(v => v !== "")) {
+                            stack.push({ node: nxt, inputs: partialInputs });
+                            waiting.delete(nxt);
+                        }
+                    }
                 }
-              }
-            }
         
-          } else if (!singleIn && singleOut) {
+            } else if (!singleIn && singleOut) {
             // =============== Op (multi in, single out) ===============
             // e.g. Add, Concat, most ops with 2+ inputs but single output
-            const outVar = newVar();
-            usedNames.add(outVar);
+                const outVar = newVar();
+                usedNames.add(outVar);
         
-            // Generate code as described above
-            code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+                // Generate code as described above
+                code += `${node.to_torch_functional(inputs, [outVar])}\n`;
             
-            // Track the output variable for this node
-            updateNodeVar(node.id, outVar);
+                // Track the output variable for this node
+                updateNodeVar(node.id, outVar);
         
-            // Pass the new single output to node's children
-            const nextNodes = this._getNextNodes(node);
-            for (const nxt of nextNodes) {
-              if (!nxt) continue;
-              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
-              const childSingleIn = GraphNode.singleInput(nxt);
+                // Pass the new single output to node's children
+                const nextNodes = this._getNextNodes(node);
+                for (const nxt of nextNodes) {
+                    if (!nxt) continue;
+                    const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+                    const childSingleIn = GraphNode.singleInput(nxt);
         
-              if (childSingleIn && childInDegree <= 1) {
-                stack.push({ node: nxt, inputs: [outVar] });
-              } else {
-                let partialInputs = waiting.get(nxt);
-                if (!partialInputs) {
-                  partialInputs = new Array(childInDegree).fill("");
+                    if (childSingleIn && childInDegree <= 1) {
+                        stack.push({ node: nxt, inputs: [outVar] });
+                    } else {
+                        let partialInputs = waiting.get(nxt);
+                        if (!partialInputs) {
+                            partialInputs = new Array(childInDegree).fill("");
+                        }
+                        const idx = this._getPrevNodeIndex(nxt, node);
+                        partialInputs[idx] = outVar;
+                        waiting.set(nxt, partialInputs);
+        
+                        if (partialInputs.every(v => v !== "")) {
+                            stack.push({ node: nxt, inputs: partialInputs });
+                            waiting.delete(nxt);
+                        }
+                    }
                 }
-                const idx = this._getPrevNodeIndex(nxt, node);
-                partialInputs[idx] = outVar;
-                waiting.set(nxt, partialInputs);
         
-                if (partialInputs.every(v => v !== "")) {
-                  stack.push({ node: nxt, inputs: partialInputs });
-                  waiting.delete(nxt);
-                }
-              }
-            }
-        
-          } else if (singleIn && !singleOut) {
+            } else if (singleIn && !singleOut) {
             // =============== Branch (single input, multiple outputs) ===============
             // e.g. Split, Copy, or any node that fans out multiple paths
             // The node's `outShape` typically has the # of outputs.
-            const branchOp = node as BranchOp;  // or a node that acts like Branch
+                const branchOp = node as BranchOp;  // or a node that acts like Branch
             
-            // DEBUG: Log the _nexts array structure
-            console.log(`DEBUG: BranchOp ${branchOp.id} _nexts array:`, 
-                branchOp._nexts.map((n, i) => n ? `[${i}]: ${n.constructor.name}[${n.id}]` : `[${i}]: null`));
+                // DEBUG: Log the _nexts array structure
+                console.log(`DEBUG: BranchOp ${branchOp.id} _nexts array:`, 
+                    branchOp._nexts.map((n, i) => n ? `[${i}]: ${n.constructor.name}[${n.id}]` : `[${i}]: null`));
             
-            let numOutputs: number;
-            try {
-                if (!branchOp.outShape) {
-                    console.error(`ERROR: BranchOp ${branchOp.id} has no outShape defined!`);
-                    throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
-                }
+                let numOutputs: number;
+                try {
+                    if (!branchOp.outShape) {
+                        console.error(`ERROR: BranchOp ${branchOp.id} has no outShape defined!`);
+                        throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
+                    }
                 
-                console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShape);
-                numOutputs = branchOp.outShape.length;
-                console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp._nexts.length} next slots`);
-            } catch (error: any) {
-                console.error(`ERROR in output shape for ${branchOp.id}:`, error);
-                throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
-            }
-        
-            // Get output variables
-            const outVars: string[] = [];
-            for (let i = 0; i < numOutputs; i++) {
-              const v = newVar();
-              usedNames.add(v);
-              outVars.push(v);
-              console.log(`Generated output var ${v} for branch ${i} of ${branchOp.id}`);
-            }
-            
-            console.log(`Generated output variables for ${branchOp.id}: ${outVars.join(', ')}`);
-        
-            // Generate the torch functional code
-            const branchCode = branchOp.to_torch_functional(inputs, outVars);
-            console.log(`Generated branch code for ${branchOp.id}:\n${branchCode}`);
-            code += `${branchCode}\n`;
-            
-            // Track the generated code to diagnose issues
-            console.log(`Code so far:\n${code}`);
-            
-            // Track each output variable for this branch node
-            for (let i = 0; i < outVars.length; i++) {
-              // For branch nodes, track variables by output index
-              // Use a unique key format: nodeId_outputIndex
-              updateNodeVar(`${branchOp.id}_${i}`, outVars[i]);
-              console.log(`Mapped branch output: ${branchOp.id}_${i} -> ${outVars[i]}`);
-            }
-            
-            // IMPORTANT: Don't use filtered nextNodes - use the actual _nexts array with its indices
-            // This ensures we match the correct output variable to each branch output
-            for (let i = 0; i < branchOp._nexts.length; i++) {
-              const nxt = branchOp._nexts[i];
-              if (!nxt) {
-                console.log(`Next node at index ${i} is null for ${branchOp.id}`);
-                continue;
-              }
-              
-              // Make sure we don't go out of bounds in outVars array
-              if (i >= outVars.length) {
-                console.error(`ERROR: Index ${i} is out of bounds for outVars array of length ${outVars.length}`);
-                continue;
-              }
-              
-              const varToPass = outVars[i];
-              console.log(`Connecting output ${i} (${varToPass}) of ${branchOp.id} to ${nxt.id}`);
-              
-              const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
-              const childSingleIn = GraphNode.singleInput(nxt);
-              
-              if (childSingleIn && childInDegree <= 1) {
-                console.log(`Pushing single-input node ${nxt.id} to stack with input [${varToPass}]`);
-                stack.push({ node: nxt, inputs: [varToPass] });
-              } else {
-                let partialInputs = waiting.get(nxt);
-                if (!partialInputs) {
-                  partialInputs = new Array(childInDegree).fill("");
+                    console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShape);
+                    numOutputs = branchOp.outShape.length;
+                    console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp._nexts.length} next slots`);
+                } catch (error: any) {
+                    console.error(`ERROR in output shape for ${branchOp.id}:`, error);
+                    throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
                 }
-                const idx = this._getPrevNodeIndex(nxt, branchOp);
-                console.log(`Setting partial input at index ${idx} for node ${nxt.id} to ${varToPass}`);
-                partialInputs[idx] = varToPass;
-                waiting.set(nxt, partialInputs);
+        
+                // Get output variables
+                const outVars: string[] = [];
+                for (let i = 0; i < numOutputs; i++) {
+                    const v = newVar();
+                    usedNames.add(v);
+                    outVars.push(v);
+                    console.log(`Generated output var ${v} for branch ${i} of ${branchOp.id}`);
+                }
+            
+                console.log(`Generated output variables for ${branchOp.id}: ${outVars.join(', ')}`);
+        
+                // Generate the torch functional code
+                const branchCode = branchOp.to_torch_functional(inputs, outVars);
+                console.log(`Generated branch code for ${branchOp.id}:\n${branchCode}`);
+                code += `${branchCode}\n`;
+            
+                // Track the generated code to diagnose issues
+                console.log(`Code so far:\n${code}`);
+            
+                // Track each output variable for this branch node
+                for (let i = 0; i < outVars.length; i++) {
+                    // For branch nodes, track variables by output index
+                    // Use a unique key format: nodeId_outputIndex
+                    updateNodeVar(`${branchOp.id}_${i}`, outVars[i]);
+                    console.log(`Mapped branch output: ${branchOp.id}_${i} -> ${outVars[i]}`);
+                }
+            
+                // IMPORTANT: Don't use filtered nextNodes - use the actual _nexts array with its indices
+                // This ensures we match the correct output variable to each branch output
+                for (let i = 0; i < branchOp._nexts.length; i++) {
+                    const nxt = branchOp._nexts[i];
+                    if (!nxt) {
+                        console.log(`Next node at index ${i} is null for ${branchOp.id}`);
+                        continue;
+                    }
+              
+                    // Make sure we don't go out of bounds in outVars array
+                    if (i >= outVars.length) {
+                        console.error(`ERROR: Index ${i} is out of bounds for outVars array of length ${outVars.length}`);
+                        continue;
+                    }
+              
+                    const varToPass = outVars[i];
+                    console.log(`Connecting output ${i} (${varToPass}) of ${branchOp.id} to ${nxt.id}`);
+              
+                    const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
+                    const childSingleIn = GraphNode.singleInput(nxt);
+              
+                    if (childSingleIn && childInDegree <= 1) {
+                        console.log(`Pushing single-input node ${nxt.id} to stack with input [${varToPass}]`);
+                        stack.push({ node: nxt, inputs: [varToPass] });
+                    } else {
+                        let partialInputs = waiting.get(nxt);
+                        if (!partialInputs) {
+                            partialInputs = new Array(childInDegree).fill("");
+                        }
+                        const idx = this._getPrevNodeIndex(nxt, branchOp);
+                        console.log(`Setting partial input at index ${idx} for node ${nxt.id} to ${varToPass}`);
+                        partialInputs[idx] = varToPass;
+                        waiting.set(nxt, partialInputs);
                 
-                if (partialInputs.every(v => v !== "")) {
-                  console.log(`All inputs filled for ${nxt.id}, pushing to stack with inputs [${partialInputs.join(', ')}]`);
-                  stack.push({ node: nxt, inputs: partialInputs });
-                  waiting.delete(nxt);
+                        if (partialInputs.every(v => v !== "")) {
+                            console.log(`All inputs filled for ${nxt.id}, pushing to stack with inputs [${partialInputs.join(', ')}]`);
+                            stack.push({ node: nxt, inputs: partialInputs });
+                            waiting.delete(nxt);
+                        }
+                    }
                 }
-              }
-            }
         
-          } else {
-            throw new Error(
-              `Unsupported node type (likely multi-in & multi-out) for node ID ${node.id} (${node.constructor.name}).`
-            );
-          }
+            } else {
+                throw new Error(
+                    `Unsupported node type (likely multi-in & multi-out) for node ID ${node.id} (${node.constructor.name}).`
+                );
+            }
         }
       
         // return statement for sink Tensors
         const sinkVars: string[] = [];
         for (const sink of this._sinks) {
-          console.log(`Processing sink node: ${sink.id} (${sink.constructor.name})`);
+            console.log(`Processing sink node: ${sink.id} (${sink.constructor.name})`);
           
-          // Check if we have direct mapping for this sink
-          if (nodeToVarMap.has(sink.id)) {
-            sinkVars.push(nodeToVarMap.get(sink.id)!);
-          } else {
+            // Check if we have direct mapping for this sink
+            if (nodeToVarMap.has(sink.id)) {
+                sinkVars.push(nodeToVarMap.get(sink.id)!);
+            } else {
             // If not, find incoming connections to this sink
-            console.log(`  No direct mapping found for sink ${sink.id}, searching incoming connections...`);
-            
-            // Find nodes that connect to this sink
-            const incomingNodes = [];
-            for (const [nodeId, node] of this._nodes.entries()) {
-              if (node instanceof BranchOp) {
-                // Check each branch output
-                for (let i = 0; i < node._nexts.length; i++) {
-                  if (node._nexts[i] === sink) {
-                    incomingNodes.push({ nodeId, outputIndex: i });
-                    console.log(`  Found incoming BranchOp connection: ${nodeId} at output ${i}`);
-                  }
+                console.log(`  No direct mapping found for sink ${sink.id}, searching incoming connections...`);
+
+                // Find nodes that connect to this sink
+                const incomingNodes = [];
+                for (const [nodeId, node] of this._nodes.entries()) {
+                    if (node instanceof BranchOp) {
+                        // Check each branch output
+                        for (let i = 0; i < node._nexts.length; i++) {
+                            if (node._nexts[i] === sink) {
+                                incomingNodes.push({ nodeId, outputIndex: i });
+                                console.log(`  Found incoming BranchOp connection: ${nodeId} at output ${i}`);
+                            }
+                        }
+                    } else if ((node instanceof Op || node instanceof MergeOp) && node.next === sink) {
+                        incomingNodes.push({ nodeId, outputIndex: 0 });
+                        console.log(`  Found incoming Op/MergeOp connection: ${nodeId}`);
+                    }
                 }
-              } else if ((node instanceof Op || node instanceof MergeOp) && node.next === sink) {
-                incomingNodes.push({ nodeId, outputIndex: 0 });
-                console.log(`  Found incoming Op/MergeOp connection: ${nodeId}`);
-              }
-            }
             
-            // Now look for mapped variables for these connections
-            let foundVar = false;
-            for (const { nodeId, outputIndex } of incomingNodes) {
-              const branchKey = `${nodeId}_${outputIndex}`;
-              if (nodeToVarMap.has(branchKey)) {
-                const varName = nodeToVarMap.get(branchKey)!;
-                console.log(`  Found branch mapping for incoming connection: ${branchKey} -> ${varName}`);
-                sinkVars.push(varName);
-                foundVar = true;
-                break;
-              } else if (nodeToVarMap.has(nodeId)) {
-                const varName = nodeToVarMap.get(nodeId)!;
-                console.log(`  Found node mapping for incoming connection: ${nodeId} -> ${varName}`);
-                sinkVars.push(varName);
-                foundVar = true;
-                break;
-              }
-            }
+                // Now look for mapped variables for these connections
+                let foundVar = false;
+                for (const { nodeId, outputIndex } of incomingNodes) {
+                    const branchKey = `${nodeId}_${outputIndex}`;
+                    if (nodeToVarMap.has(branchKey)) {
+                        const varName = nodeToVarMap.get(branchKey)!;
+                        console.log(`  Found branch mapping for incoming connection: ${branchKey} -> ${varName}`);
+                        sinkVars.push(varName);
+                        foundVar = true;
+                        break;
+                    } else if (nodeToVarMap.has(nodeId)) {
+                        const varName = nodeToVarMap.get(nodeId)!;
+                        console.log(`  Found node mapping for incoming connection: ${nodeId} -> ${varName}`);
+                        sinkVars.push(varName);
+                        foundVar = true;
+                        break;
+                    }
+                }
             
-            // Fallback if no mappings found
-            if (!foundVar) {
-              // Create clean names for output tensors
-              const tensorName = sink instanceof Tensor && sink.variableName ? 
-                                sink.variableName : 
-                                `output${sinkVars.length + 1}`;
-              console.log(`  No incoming connections found, using fallback name: ${tensorName}`);
-              sinkVars.push(tensorName);
+                // Fallback if no mappings found
+                if (!foundVar) {
+                    // Create clean names for output tensors
+                    const tensorName = sink instanceof Tensor && sink.variableName ? 
+                        sink.variableName : 
+                        `output${sinkVars.length + 1}`;
+                    console.log(`  No incoming connections found, using fallback name: ${tensorName}`);
+                    sinkVars.push(tensorName);
+                }
             }
-          }
         }
       
         // Return statement with all sink variables 
         if (sinkVars.length === 1) {
-          code += `return ${sinkVars[0]}`;
+            code += `return ${sinkVars[0]}`;
         } else if (sinkVars.length > 1) {
-          code += `return ${sinkVars.join(", ")}`;
+            code += `return ${sinkVars.join(", ")}`;
         } else {
-          code += `return None`;
+            code += `return None`;
         }
       
         // 10) Return the entire generated code
         return code;
-      }
+    }
       
-      // Helper to safely get next nodes regardless of node type
-      private _getNextNodes(node: GraphNode): GraphNode[] {
+    // Helper to safely get next nodes regardless of node type
+    private _getNextNodes(node: GraphNode): GraphNode[] {
         if (node instanceof BranchOp) {
-          return (node as BranchOp)._nexts.filter(n => n !== null);
+            return (node)._nexts.filter(n => n !== null);
         } else {
-          return node.next ? [node.next] : [];
+            return node.next ? [node.next] : [];
         }
-      }
+    }
       
-      // Helper to safely get next nodes with their indices for BranchOp
-      private _getNextNodesWithIndices(node: GraphNode): Array<{node: GraphNode, index: number}> {
+    // Helper to safely get next nodes with their indices for BranchOp
+    private _getNextNodesWithIndices(node: GraphNode): Array<{node: GraphNode, index: number}> {
         if (node instanceof BranchOp) {
-          return (node as BranchOp)._nexts
-            .map((next, index) => ({node: next, index}))
-            .filter(item => item.node !== null);
+            return (node)._nexts
+                .map((next, index) => ({node: next, index}))
+                .filter(item => item.node !== null);
         } else {
-          return node.next ? [{node: node.next, index: 0}] : [];
+            return node.next ? [{node: node.next, index: 0}] : [];
         }
-      }
+    }
       
-      // Helper to safely get previous nodes regardless of node type
-      private _getPrevNodes(node: GraphNode): GraphNode[] {
+    // Helper to safely get previous nodes regardless of node type
+    private _getPrevNodes(node: GraphNode): GraphNode[] {
         if (node instanceof MergeOp) {
-          return (node as MergeOp)._prevs.filter(p => p !== null);
+            return (node)._prevs.filter(p => p !== null);
         } else {
-          return node.prev ? [node.prev] : [];
+            return node.prev ? [node.prev] : [];
         }
-      }
+    }
       
-      // Helper to find the index of a prev node
-      private _getPrevNodeIndex(node: GraphNode, prevNode: GraphNode): number {
+    // Helper to find the index of a prev node
+    private _getPrevNodeIndex(node: GraphNode, prevNode: GraphNode): number {
         if (node instanceof MergeOp) {
-          return (node as MergeOp)._prevs.findIndex(p => p && p.id === prevNode.id);
+            return (node)._prevs.findIndex(p => p && p.id === prevNode.id);
         } else {
-          return 0; // For single-input nodes
+            return 0; // For single-input nodes
         }
-      }
+    }
 
     // Add a helper method to generate UUIDs
     /**

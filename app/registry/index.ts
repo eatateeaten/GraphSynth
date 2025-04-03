@@ -14,54 +14,54 @@ import { branchModules } from './branch';
 
 // Combine all module metadata
 export const allModules: Record<string, ModuleMetadata> = {
-  // Tensor nodes
-  'Tensor': {
-    label: 'Tensor',
-    description: 'Represents input data or intermediate results',
-    category: 'Basic',
-    paramFields: {
-      shape: {
-        label: 'Shape',
-        description: 'Dimensions of the tensor (comma-separated)',
-        type: 'shape',
-        default: [3, 64, 64],
-        allowNegativeOne: false
-      },
-      isInput: {
-        label: 'Input Node',
-        description: 'Make this tensor an input node',
-        type: 'boolean',
-        default: false
-      }
-    }
-  },
-  // Operation nodes
-  ...Object.entries(linearModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(convolutionalModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(reshapeModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(activationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(dropoutModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(poolingModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
-  /* Branch and Merge nodes */
-  ...branchModules,
-  ...mergeModules
+    // Tensor nodes
+    'Tensor': {
+        label: 'Tensor',
+        description: 'Represents input data or intermediate results',
+        category: 'Basic',
+        paramFields: {
+            shape: {
+                label: 'Shape',
+                description: 'Dimensions of the tensor (comma-separated)',
+                type: 'shape',
+                default: [3, 64, 64],
+                allowNegativeOne: false
+            },
+            isInput: {
+                label: 'Input Node',
+                description: 'Make this tensor an input node',
+                type: 'boolean',
+                default: false
+            }
+        }
+    },
+    // Operation nodes
+    ...Object.entries(linearModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(convolutionalModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(reshapeModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(activationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(dropoutModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(poolingModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    ...Object.entries(normalizationModules).reduce((acc, [key, value]) => ({ ...acc, [`Op:${key}`]: value }), {}),
+    /* Branch and Merge nodes */
+    ...branchModules,
+    ...mergeModules
 };
 
 // Get metadata for any module by key
 export function getMeta(key: string): ModuleMetadata {
-  if (!allModules[key]) {
-    throw new Error(`No metadata found for module key ${key}`);
-  }
-  return allModules[key];
+    if (!allModules[key]) {
+        throw new Error(`No metadata found for module key ${key}`);
+    }
+    return allModules[key];
 }
 
 // Validate parameters for an operation
 export function validateParams(opType: string, params: Record<string, any>): string | null {
-  try {
-    validateTorchParams(opType, params);
-    return null;
-  } catch (e: any) {
-    return e.message;
-  }
+    try {
+        validateTorchParams(opType, params);
+        return null;
+    } catch (e: any) {
+        return e.message;
+    }
 }

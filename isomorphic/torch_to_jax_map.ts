@@ -8,52 +8,52 @@ import { nn_module_metadata } from './torch_nn_module_op';
 // Maps torch elementwise operations to JAX operations
 export function getJaxElementwiseOpCode(opType: string, input?: string): string {
     switch (opType.toLowerCase()) {
-        // Math operations
-        case 'add':
-            return 'jnp.add';
-        case 'sub':
-            return 'jnp.subtract';
-        case 'mul':
-            return 'jnp.multiply';
-        case 'div':
-            return 'jnp.divide';
-        case 'pow':
-            return 'jnp.power';
-        case 'min':
-            return 'jnp.minimum';
-        case 'max':
-            return 'jnp.maximum';
+    // Math operations
+    case 'add':
+        return 'jnp.add';
+    case 'sub':
+        return 'jnp.subtract';
+    case 'mul':
+        return 'jnp.multiply';
+    case 'div':
+        return 'jnp.divide';
+    case 'pow':
+        return 'jnp.power';
+    case 'min':
+        return 'jnp.minimum';
+    case 'max':
+        return 'jnp.maximum';
         
         // Logical operations
-        case 'and':
-            return 'jnp.logical_and';
-        case 'or':
-            return 'jnp.logical_or';
-        case 'xor':
-            return 'jnp.logical_xor';
-        case 'not':
-            return 'jnp.logical_not';
+    case 'and':
+        return 'jnp.logical_and';
+    case 'or':
+        return 'jnp.logical_or';
+    case 'xor':
+        return 'jnp.logical_xor';
+    case 'not':
+        return 'jnp.logical_not';
         
         // Comparison operations
-        case 'eq':
-            return 'jnp.equal';
-        case 'ne':
-            return 'jnp.not_equal';
-        case 'lt':
-            return 'jnp.less';
-        case 'le':
-            return 'jnp.less_equal';
-        case 'gt':
-            return 'jnp.greater';
-        case 'ge':
-            return 'jnp.greater_equal';
+    case 'eq':
+        return 'jnp.equal';
+    case 'ne':
+        return 'jnp.not_equal';
+    case 'lt':
+        return 'jnp.less';
+    case 'le':
+        return 'jnp.less_equal';
+    case 'gt':
+        return 'jnp.greater';
+    case 'ge':
+        return 'jnp.greater_equal';
         
         // Identity function
-        case 'identity':
-            return input ? input : 'lambda x: x';
+    case 'identity':
+        return input ? input : 'lambda x: x';
         
-        default:
-            throw new Error(`Unknown elementwise operation type for JAX conversion: ${opType}`);
+    default:
+        throw new Error(`Unknown elementwise operation type for JAX conversion: ${opType}`);
     }
 }
 
@@ -74,80 +74,80 @@ export function getTorchToFlaxCode(module_type: string, params: Record<string, a
     };
 
     switch (module_type) {
-        // Linear layers
-        case 'Linear':
-            return `nn.Dense(features=${params['output_features']}, use_bias=${params['bias'] ?? true})`;
+    // Linear layers
+    case 'Linear':
+        return `nn.Dense(features=${params['output_features']}, use_bias=${params['bias'] ?? true})`;
         
         // Convolutional layers
-        case 'Conv1D':
-            const conv1d = convertCommonParams(params);
-            return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv1d.kernel_size},), strides=(${conv1d.strides},), padding=${conv1d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
+    case 'Conv1D':
+        const conv1d = convertCommonParams(params);
+        return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv1d.kernel_size},), strides=(${conv1d.strides},), padding=${conv1d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
         
-        case 'Conv2D':
-            const conv2d = convertCommonParams(params);
-            return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv2d.kernel_size}, ${conv2d.kernel_size}), strides=(${conv2d.strides}, ${conv2d.strides}), padding=${conv2d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
+    case 'Conv2D':
+        const conv2d = convertCommonParams(params);
+        return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv2d.kernel_size}, ${conv2d.kernel_size}), strides=(${conv2d.strides}, ${conv2d.strides}), padding=${conv2d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
         
-        case 'Conv3D':
-            const conv3d = convertCommonParams(params);
-            return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv3d.kernel_size}, ${conv3d.kernel_size}, ${conv3d.kernel_size}), strides=(${conv3d.strides}, ${conv3d.strides}, ${conv3d.strides}), padding=${conv3d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
+    case 'Conv3D':
+        const conv3d = convertCommonParams(params);
+        return `nn.Conv(features=${params['out_channels']}, kernel_size=(${conv3d.kernel_size}, ${conv3d.kernel_size}, ${conv3d.kernel_size}), strides=(${conv3d.strides}, ${conv3d.strides}, ${conv3d.strides}), padding=${conv3d.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
         
         // Transposed convolutions
-        case 'ConvTranspose1D':
-        case 'ConvTranspose2D':
-        case 'ConvTranspose3D':
-            const convT = convertCommonParams(params);
-            const dimensions = module_type === 'ConvTranspose1D' ? 1 : 
-                              (module_type === 'ConvTranspose2D' ? 2 : 3);
+    case 'ConvTranspose1D':
+    case 'ConvTranspose2D':
+    case 'ConvTranspose3D':
+        const convT = convertCommonParams(params);
+        const dimensions = module_type === 'ConvTranspose1D' ? 1 : 
+            (module_type === 'ConvTranspose2D' ? 2 : 3);
             
-            let kernel_size_str = '';
-            let strides_str = '';
+        let kernel_size_str = '';
+        let strides_str = '';
             
-            for (let i = 0; i < dimensions; i++) {
-                kernel_size_str += `${convT.kernel_size}, `;
-                strides_str += `${convT.strides}, `;
-            }
+        for (let i = 0; i < dimensions; i++) {
+            kernel_size_str += `${convT.kernel_size}, `;
+            strides_str += `${convT.strides}, `;
+        }
             
-            // Remove trailing commas
-            kernel_size_str = kernel_size_str.slice(0, -2);
-            strides_str = strides_str.slice(0, -2);
+        // Remove trailing commas
+        kernel_size_str = kernel_size_str.slice(0, -2);
+        strides_str = strides_str.slice(0, -2);
             
-            return `nn.ConvTranspose(features=${params['out_channels']}, kernel_size=(${kernel_size_str}), strides=(${strides_str}), padding=${convT.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
+        return `nn.ConvTranspose(features=${params['out_channels']}, kernel_size=(${kernel_size_str}), strides=(${strides_str}), padding=${convT.padding_str}, kernel_init=nn.initializers.lecun_normal())`;
         
         // Pooling layers
-        case 'MaxPool1D':
-            return `nn.max_pool(window_shape=(${params['kernel_size']},), strides=(${params['stride'] ?? params['kernel_size']},), padding='VALID')`;
+    case 'MaxPool1D':
+        return `nn.max_pool(window_shape=(${params['kernel_size']},), strides=(${params['stride'] ?? params['kernel_size']},), padding='VALID')`;
         
-        case 'MaxPool2D':
-            return `nn.max_pool(window_shape=(${params['kernel_size']}, ${params['kernel_size']}), strides=(${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}), padding='VALID')`;
+    case 'MaxPool2D':
+        return `nn.max_pool(window_shape=(${params['kernel_size']}, ${params['kernel_size']}), strides=(${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}), padding='VALID')`;
         
-        case 'MaxPool3D':
-            return `nn.max_pool(window_shape=(${params['kernel_size']}, ${params['kernel_size']}, ${params['kernel_size']}), strides=(${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}), padding='VALID')`;
+    case 'MaxPool3D':
+        return `nn.max_pool(window_shape=(${params['kernel_size']}, ${params['kernel_size']}, ${params['kernel_size']}), strides=(${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}, ${params['stride'] ?? params['kernel_size']}), padding='VALID')`;
         
         // Activation functions
-        case 'ReLU':
-            return `nn.relu`;
+    case 'ReLU':
+        return `nn.relu`;
         
-        case 'LeakyReLU':
-            return `nn.leaky_relu(negative_slope=${params['negative_slope'] ?? 0.01})`;
+    case 'LeakyReLU':
+        return `nn.leaky_relu(negative_slope=${params['negative_slope'] ?? 0.01})`;
         
-        case 'Sigmoid':
-            return `nn.sigmoid`;
+    case 'Sigmoid':
+        return `nn.sigmoid`;
         
-        case 'Tanh':
-            return `nn.tanh`;
+    case 'Tanh':
+        return `nn.tanh`;
         
         // Normalization
-        case 'BatchNorm1D':
-        case 'BatchNorm2D':
-        case 'BatchNorm3D':
-            return `nn.BatchNorm(use_running_average=not training, momentum=${params['momentum'] ?? 0.9}, epsilon=${params['eps'] ?? 1e-5})`;
+    case 'BatchNorm1D':
+    case 'BatchNorm2D':
+    case 'BatchNorm3D':
+        return `nn.BatchNorm(use_running_average=not training, momentum=${params['momentum'] ?? 0.9}, epsilon=${params['eps'] ?? 1e-5})`;
         
         // Dropout
-        case 'Dropout':
-            return `nn.Dropout(rate=${params['p'] ?? 0.5}, deterministic=not training)`;
+    case 'Dropout':
+        return `nn.Dropout(rate=${params['p'] ?? 0.5}, deterministic=not training)`;
         
-        default:
-            throw new Error(`Unsupported module type for JAX/Flax conversion: ${module_type}`);
+    default:
+        throw new Error(`Unsupported module type for JAX/Flax conversion: ${module_type}`);
     }
 }
 
@@ -191,7 +191,7 @@ export function torchToJaxCode(torchCode: string): string {
 export function to_jax(opType: string, params: Record<string, any> = {}, inputCode?: string): string {
     // Handle elementwise operations
     if (['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'and', 'or', 'xor', 'not', 
-         'eq', 'ne', 'lt', 'le', 'gt', 'ge', 'identity'].includes(opType.toLowerCase())) {
+        'eq', 'ne', 'lt', 'le', 'gt', 'ge', 'identity'].includes(opType.toLowerCase())) {
         return getJaxElementwiseOpCode(opType, inputCode);
     }
     
