@@ -51,7 +51,7 @@ export abstract class BranchOp extends GraphNode {
         }
     }
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[]): void {
         if (this._prev !== null) {
             throw new Error("Branch already has a source connection");
         }
@@ -70,7 +70,7 @@ export abstract class BranchOp extends GraphNode {
         this._prev = prev; 
     }
 
-    addNext(next: GraphNode, indexSelf: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf: number): void {
         if (this._nexts[indexSelf] !== null) {
             console.log("index" + indexSelf)
             throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
@@ -78,7 +78,7 @@ export abstract class BranchOp extends GraphNode {
         this._nexts[indexSelf] = next; 
     }
 
-    deletePrev(indexSelf?: number): void {
+    deletePrev(): void {
         if (this._prev) {
             // Just clear our reference and reset shapes
             this._prev = null;

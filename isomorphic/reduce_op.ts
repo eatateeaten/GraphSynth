@@ -69,7 +69,7 @@ export abstract class ReduceOp extends MergeOp {
         this._outShape = this.computeOutShape();
     }
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number): void {
         if (indexSelf === undefined) {
             throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
         } 

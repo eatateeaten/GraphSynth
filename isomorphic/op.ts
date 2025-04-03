@@ -41,7 +41,7 @@ export class Op extends GraphNode {
         throw new Error(`No shape inference implementation available for target '${this._target}' and operation '${this._opType}'`);
     }
 
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
+    to_torch_functional(inputs: string[], outputs: string[]): string {
         if (this._target !== "torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
@@ -52,7 +52,7 @@ export class Op extends GraphNode {
         
         // No fallback - either get the module code or error out
         const moduleCode = getTorchCode(this._opType, this._params);
-        return `${inputs[0]} = ${moduleCode}(${inputs[0]})`;
+        return `${outputs[0]} = ${moduleCode}(${inputs[0]})`;
     }
 
     /**
@@ -98,7 +98,7 @@ export class Op extends GraphNode {
         }
     }
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[]): void {
         if (this._prev !== null) {
             throw new Error("Op already has a source connection");
         }
@@ -121,7 +121,7 @@ export class Op extends GraphNode {
         this._prev = prev;
     }
 
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode): void {
         if (this._next !== null) {
             throw new Error("Op already has a sink connection");
         }
@@ -129,7 +129,7 @@ export class Op extends GraphNode {
         this._next = next;
     }
 
-    deletePrev(indexSelf?: number): void {
+    deletePrev(): void {
         if (this._prev) {
             // Just clear our reference and reset shapes
             this._prev = null;
@@ -138,7 +138,7 @@ export class Op extends GraphNode {
         }
     }
 
-    deleteNext(indexSelf?: number): void {
+    deleteNext(): void {
         // Just clear our next reference
         this._next = null;
     }

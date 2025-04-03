@@ -41,7 +41,7 @@ export class Tensor extends GraphNode {
         }
     }
 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode): void {
         if (this._prev !== null) {
             throw new Error("Tensor already has a source connection");
         }
@@ -49,7 +49,7 @@ export class Tensor extends GraphNode {
         this._prev = prev;
     }
 
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode): void {
         if (this._next !== null) {
             throw new Error("Tensor already has a sink connection");
         }
@@ -57,12 +57,12 @@ export class Tensor extends GraphNode {
         this._next = next;
     }
 
-    deletePrev(indexSelf?: number): void {
+    deletePrev(): void {
         // Just clear our reference
         this._prev = null;
     }
 
-    deleteNext(indexSelf?: number): void {
+    deleteNext(): void {
         // Just clear our reference
         this._next = null;
     }

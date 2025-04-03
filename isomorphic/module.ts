@@ -1,4 +1,5 @@
 import { GraphNode } from './graph_node';
+import { Tensor } from './tensor';
 
 /**
  * Module represents a neural network module that can have multiple inputs and outputs.
@@ -11,6 +12,8 @@ export abstract class Module extends GraphNode {
     protected _nexts: GraphNode[] = [];
     protected readonly _opType: string;
     protected _params: Record<string, any>;
+    private _inputs: Tensor[] = [];
+    private _outputs: Tensor[] = [];
 
     constructor(
         id: string,
@@ -25,68 +28,20 @@ export abstract class Module extends GraphNode {
         this._params = params;
     }
 
-    /**
-     * Returns the module's input shapes (required by GraphNode)
-     */
-    get inShape(): number[][] {
-        return this._inShape;
-    }
+    // Shape getters
+    get inShape(): number[][] { return this._inShape; }
+    get outShape(): number[][] { return this._outShape; }
+    get inShapes(): number[][] { return this._inShape; }
+    get outShapes(): number[][] { return this._outShape; }
 
-    /**
-     * Returns the module's output shapes (required by GraphNode)
-     */
-    get outShape(): number[][] {
-        return this._outShape;
-    }
+    // Tensor getters
+    get inputs(): Tensor[] { return this._inputs; }
+    get outputs(): Tensor[] { return this._outputs; }
 
-    /**
-     * Returns the module's input shapes
-     */
-    get inShapes(): number[][] {
-        return this._inShape;
-    }
-
-    /**
-     * Returns the module's output shapes
-     */
-    get outShapes(): number[][] {
-        return this._outShape;
-    }
-
-    /**
-     * Returns the module's input nodes
-     */
-    get inNodes(): GraphNode[] {
-        return this._prevs;
-    }
-
-    /**
-     * Returns the module's output nodes
-     */
-    get outNodes(): GraphNode[] {
-        return this._nexts;
-    }
-
-    /**
-     * Returns the module's operation type
-     */
-    get opType(): string {
-        return this._opType;
-    }
-
-    /**
-     * Returns the module's parameters
-     */
-    get params(): Record<string, any> {
-        return { ...this._params };
-    }
-
-    /**
-     * Sets the module's parameters
-     */
-    set params(params: Record<string, any>) {
-        this._params = { ...params };
-    }
+    // Operation and parameter getters/setters
+    get opType(): string { return this._opType; }
+    get params(): Record<string, any> { return { ...this._params }; }
+    set params(params: Record<string, any>) { this._params = { ...params }; }
 
     /**
      * Abstract method to compute output shapes based on input shapes
@@ -138,7 +93,7 @@ export abstract class Module extends GraphNode {
     /**
      * Adds a next node to this module (implements GraphNode.addNext)
      */
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
+    addNext(next: GraphNode, indexSelf?: number): void {
         if (indexSelf === undefined) {
             this._nexts.push(next);
         } else {
