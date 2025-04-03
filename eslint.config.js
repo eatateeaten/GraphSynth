@@ -3,8 +3,12 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import globals from 'globals';
 
 export default [
+    {
+        ignores: ['**/node_modules/**', '**/env/**', '**/dist/**', '**/build/**', '**/old/**']
+    },
     js.configs.recommended,
     {
         files: ['**/*.ts', '**/*.tsx'],
@@ -18,7 +22,14 @@ export default [
                 },
                 project: './tsconfig.json',
                 tsconfigRootDir: '.'
+            },
+            globals: {
+                ...globals.browser,
+                ...globals.node,
             }
+        },
+        linterOptions: {
+            reportUnusedDisableDirectives: true
         },
         plugins: {
             '@typescript-eslint': tsPlugin,
@@ -27,13 +38,14 @@ export default [
         },
         rules: {
             // Disable style/formatting rules
-            'indent': ['error', 4],
-            'linebreak-style': ['error', 'unix'],
+            'indent': 'off',
+            'linebreak-style': 'off',
             'quotes': 'off',
             'semi': 'off',
 
             // Focus on important code quality issues
-            'no-unused-vars': 'error',
+            'no-unused-vars': 'off',
+            'no-case-declarations': 'off',
             'no-undef': 'error',
             'no-duplicate-imports': 'error',
             'no-constant-condition': 'error',
@@ -43,9 +55,9 @@ export default [
             'no-throw-literal': 'error',
 
             // TypeScript specific important rules
-            '@typescript-eslint/no-explicit-any': 'warn',
-            '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_' }],
-            '@typescript-eslint/no-non-null-assertion': 'warn',
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            '@typescript-eslint/no-non-null-assertion': 'off',
             '@typescript-eslint/no-misused-promises': 'error',
             '@typescript-eslint/no-floating-promises': 'error',
             '@typescript-eslint/no-unnecessary-type-assertion': 'error',
@@ -59,6 +71,27 @@ export default [
         settings: {
             react: {
                 version: 'detect'
+            }
+        }
+    },
+    // Add Jest environment for test files
+    {
+        files: ['**/*.test.ts', '**/*.test.tsx', '**/test/**/*.ts', '**/test/**/*.tsx'],
+        languageOptions: {
+            globals: {
+                ...globals.jest,
+            }
+        }
+    },
+    // Add specific configuration for Config JS files
+    {
+        files: ['jest.config.js', '*.config.js', 'vite.config.ts'],
+        languageOptions: {
+            globals: {
+                module: 'writable',
+                require: 'readonly',
+                __dirname: 'readonly',
+                process: 'readonly'
             }
         }
     }

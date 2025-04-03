@@ -143,7 +143,7 @@ export function NodeEditor() {
                 return parsed;
             });
             return dims;
-        } catch (e) {
+        } catch {
             return null;
         }
     }, []);
@@ -155,65 +155,65 @@ export function NodeEditor() {
         const validationError = showError && moduleKey ? validateModuleParams(params, moduleKey) : undefined;
 
         switch (field.type) {
-            case 'boolean':
-                return (
-                    <Checkbox
-                        key={name}
-                        label={field.label}
-                        description={field.description}
-                        checked={value || false}
-                        onChange={(e) => handleParamChange(name, e.currentTarget.checked)}
-                    />
-                );
-            case 'shape':
-                return (
-                    <TextInput
-                        key={name}
-                        label={field.label}
-                        description={field.description}
-                        placeholder={field.allowNegativeOne ? '3,4,-1' : '3,8,3'}
-                        value={rawValue}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setRawInputs(p => ({ ...p, [name]: val }));
+        case 'boolean':
+            return (
+                <Checkbox
+                    key={name}
+                    label={field.label}
+                    description={field.description}
+                    checked={value || false}
+                    onChange={(e) => handleParamChange(name, e.currentTarget.checked)}
+                />
+            );
+        case 'shape':
+            return (
+                <TextInput
+                    key={name}
+                    label={field.label}
+                    description={field.description}
+                    placeholder={field.allowNegativeOne ? '3,4,-1' : '3,8,3'}
+                    value={rawValue}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        setRawInputs(p => ({ ...p, [name]: val }));
                             
-                            // Try to parse but don't prevent invalid input
-                            const shape = parseDimensions(val, field.allowNegativeOne);
-                            handleParamChange(name, shape || undefined);
-                        }}
-                        error={validationError}
-                        onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
-                    />
-                );
-            case 'number':
-                return (
-                    <TextInput
-                        key={name}
-                        label={field.label}
-                        description={field.description}
-                        placeholder="1"
-                        value={typeof value === 'number' ? value.toString() : ''}
-                        onChange={(e) => {
-                            const num = parseInt(e.target.value, 10);
-                            handleParamChange(name, !isNaN(num) && num > 0 ? num : undefined);
-                        }}
-                        error={validationError}
-                        onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
-                    />
-                );
-            case 'option':
-                return (
-                    <Select
-                        key={name}
-                        label={field.label}
-                        description={field.description}
-                        data={field.options || []}
-                        value={typeof value === 'string' ? value : null}
-                        onChange={(val) => handleParamChange(name, val)}
-                        error={validationError}
-                        onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
-                    />
-                );
+                        // Try to parse but don't prevent invalid input
+                        const shape = parseDimensions(val, field.allowNegativeOne);
+                        handleParamChange(name, shape || undefined);
+                    }}
+                    error={validationError}
+                    onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
+                />
+            );
+        case 'number':
+            return (
+                <TextInput
+                    key={name}
+                    label={field.label}
+                    description={field.description}
+                    placeholder="1"
+                    value={typeof value === 'number' ? value.toString() : ''}
+                    onChange={(e) => {
+                        const num = parseInt(e.target.value, 10);
+                        handleParamChange(name, !isNaN(num) && num > 0 ? num : undefined);
+                    }}
+                    error={validationError}
+                    onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
+                />
+            );
+        case 'option':
+            return (
+                <Select
+                    key={name}
+                    label={field.label}
+                    description={field.description}
+                    data={field.options || []}
+                    value={typeof value === 'string' ? value : null}
+                    onChange={(val) => handleParamChange(name, val)}
+                    error={validationError}
+                    onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
+                />
+            );
         }
     };
 

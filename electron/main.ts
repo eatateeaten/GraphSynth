@@ -28,26 +28,26 @@ const createWindow = () => {
     // Load the index.html of the app
     if (isDevelopment) {
         console.log('Loading from dev server:', DEV_SERVER_URL);
-        mainWindow.loadURL(DEV_SERVER_URL);
+        void mainWindow.loadURL(DEV_SERVER_URL);
         // Open DevTools in development mode
         mainWindow.webContents.openDevTools();
     } else {
         console.log('Loading from dist directory');
         // In production, load the built HTML file
-        mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+        void mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
     }
 };
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows
-app.whenReady().then(() => {
-    createWindow();
+void app.whenReady().then(() => {
+    void createWindow();
 
     app.on('activate', () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open
         if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
+            void createWindow();
         }
     });
 });

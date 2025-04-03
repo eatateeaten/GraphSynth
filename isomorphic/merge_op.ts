@@ -8,7 +8,7 @@ export abstract class MergeOp extends GraphNode {
     public _prevs: GraphNode[] = [];
     protected _next: GraphNode | null = null;
     protected readonly _opType: string;
-    protected readonly _params: Record<string, any>;
+    protected _params: Record<string, any>;
     public _numberOfMerges: number; 
 
     constructor(

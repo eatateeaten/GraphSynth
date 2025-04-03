@@ -8,7 +8,7 @@ describe('Code Generation Tests', () => {
 
         // Create input tensor
         const inputId = uuidv4();
-        const inputTensor = graph.createPendingNode('Tensor', inputId, {
+        graph.createPendingNode('Tensor', inputId, {
             shape: [1, 3, 32, 32],
             target: 'torch',
             variableName: 'x'
@@ -16,7 +16,7 @@ describe('Code Generation Tests', () => {
 
         // Create Conv2D layer
         const convId = uuidv4();
-        const convLayer = graph.createPendingNode('Op', convId, {
+        graph.createPendingNode('Op', convId, {
             opType: 'Conv2D',
             target: 'torch',
             opParams: {
@@ -31,7 +31,7 @@ describe('Code Generation Tests', () => {
 
         // Create ReLU layer
         const reluId = uuidv4();
-        const reluLayer = graph.createPendingNode('Op', reluId, {
+        graph.createPendingNode('Op', reluId, {
             opType: 'ReLU',
             target: 'torch',
             opParams: {
@@ -41,7 +41,7 @@ describe('Code Generation Tests', () => {
 
         // Create MaxPool2D layer
         const poolId = uuidv4();
-        const poolLayer = graph.createPendingNode('Op', poolId, {
+        graph.createPendingNode('Op', poolId, {
             opType: 'MaxPool2D',
             target: 'torch',
             opParams: {
@@ -53,7 +53,7 @@ describe('Code Generation Tests', () => {
 
         // Create output tensor
         const outputId = uuidv4();
-        const outputTensor = graph.createPendingNode('Tensor', outputId, {
+        graph.createPendingNode('Tensor', outputId, {
             shape: [1, 64, 16, 16], // Shape after Conv2D -> ReLU -> MaxPool2D
             target: 'torch',
             variableName: 'output'
