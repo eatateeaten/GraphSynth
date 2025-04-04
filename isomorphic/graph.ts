@@ -4,7 +4,8 @@ import { Op } from './op';
 import { BranchOp, Split, Copy } from './branch_op';
 import { MergeOp, PointwiseOp, DotOp, CrossOp } from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp};
+import { assert } from './utils';
+export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -17,250 +18,56 @@ interface Edge {
     sinkIndex?: number;
 }
 
-/**
- * A wrapper class for nodes that are not yet connected of the main graph. This is our way to maintain that all members of _nodes will be connected 
- * It delegates all GraphNode methods to the wrapped node.
- */
-export class PendingNode<T extends GraphNode> extends GraphNode {
-    private _wrappedNode: T;
-
-    constructor(node: T) {
-        super(node.id, node.target);
-        this._wrappedNode = node;
-    }
-    
-    /**
-     * Factory method to create a PendingNode with a new GraphNode of the specified type
-     * @param type Type of GraphNode to create ("Tensor", "Op", "Split", "Concat", etc.)
-     * @param id UUID for the node
-     * @param target Target framework ("torch", "jax", etc.)
-     * @param params Additional parameters required for node construction
-     * @returns A PendingNode wrapping the created GraphNode
-     */
-    static create(type: string, id: string, target: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
-        let node: GraphNode;
-
-        switch (type) {
-        case "Tensor":
-            if (!params.shape) {
-                throw new Error("Shape parameter is required for Tensor");
-            }
-            node = new Tensor(id, params.shape, target, params.variableName || null);
-            break;
-                
-        case "Op":
-            if (!params.opType) {
-                throw new Error("opType parameter is required for Op");
-            }
-            node = new Op(id, target, params.opType, params.opParams || {});
-            break;
-
-        case "Split":
-            if (!params.splitParams || params.splitParams.dim === undefined || !params.splitParams.sections) {
-                throw new Error("splitParams with dim and sections is required for Split");
-            }
-            node = new Split(id, target, params.splitParams);
-            node = new Split(id, target, params.splitParams);
-            break;
-
-        case "Concat":
-            if (!params.concatParams || params.concatParams.dim === undefined) {
-                throw new Error("concatParams with dim is required for Concat");
-            }
-            if (!params.numberOfMerges || params.numberOfMerges < 2) {
-                throw new Error("numberOfMerges parameter must be at least 2 for Concat");
-            }
-            node = new Concat(id, target, params.concatParams, params.numberOfMerges);
-            break;
-
-        case "Copy":
-            if (!params.copyParams || params.copyParams.copies === undefined) {
-                throw new Error("copyParams with copies is required for Copy");
-            }
-            node = new Copy(id, target, params.copyParams);
-            break;
-
-        case "PointwiseReduce":
-            if (!params.opType) {
-                throw new Error("opType parameter is required for PointwiseReduce");
-            }
-            if (!params.numberOfMerges || params.numberOfMerges < 2) {
-                throw new Error("numberOfMerges parameter must be at least 2 for PointwiseReduce");
-            }
-            node = new PointwiseReduce(id, target, params.opType, params.reduceParams || {}, params.numberOfMerges);
-            break;
-
-        case "PointwiseOp":
-            if (!params.opType) {
-                throw new Error("opType parameter is required for PointwiseOp");
-            }
-            node = new PointwiseOp(id, target, params.opType, params.opParams || {});
-            break;
-
-        case "DotOp":
-            if (!params.opType) {
-                throw new Error("opType parameter is required for DotOp");
-            }
-            node = new DotOp(id, target, params.opType, params.opParams || {});
-            break;
-
-        case "CrossOp":
-            if (!params.opType) {
-                throw new Error("opType parameter is required for CrossOp");
-            }
-            node = new CrossOp(id, target, params.opType, params.opParams || {});
-            break;
-                
-        default:
-            throw new Error(`Unknown GraphNode type: ${type}`);
-        }
-        
-        return new PendingNode(node);
-    }
-    // Delegating properties
-    get prev(): GraphNode | null { return this._wrappedNode.prev; }
-    set prev(node: GraphNode | null) { this._wrappedNode.prev = node; }
-    get next(): GraphNode | null { return this._wrappedNode.next; }
-    set next(node: GraphNode | null) { this._wrappedNode.next = node; }
-
-    // Implement shape and parameter accessors
-    get inShape(): number[] | null | number[][] { return this._wrappedNode.inShape; }
-    get outShape(): number[] | null | number[][] { return this._wrappedNode.outShape; }
-    get params(): Record<string, any> { return this._wrappedNode.params; }
-
-    // Delegating methods
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void { this._wrappedNode.addPrev(prev, prevOutShape, indexSelf, indexPrev); }
-    addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void { this._wrappedNode.addNext(next, indexSelf, indexNext); }
-    deletePrev(indexSelf?: number): void { this._wrappedNode.deletePrev(indexSelf); }
-    deleteNext(indexSelf?: number): void { this._wrappedNode.deleteNext(indexSelf); }
-    to_torch_functional(inputs: string[]): string { return this._wrappedNode.to_torch_functional(inputs); }
-    // Accessor for the wrapped node
-    unwrap(): T { return this._wrappedNode; }
-}
-
 export class Graph {
     private _nodes: Map<string, GraphNode>;
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
-    private _pendingNodes: Map<string, PendingNode<GraphNode>>;  // Changed to Map for O(1) lookups by ID
     private _edges: Edge[]; // Track all connections for easier disconnection
 
     constructor() {
         this._nodes = new Map();
         this._sources = new Set();
         this._sinks = new Set();
-        this._pendingNodes = new Map();
         this._edges = [];
     }
 
-    /**
-     * Creates a new node and adds it to the pending collection.
-     * 
-     * Pending nodes exist outside the main graph until they're connected to a node in the graph.
-     * This is the recommended way to create nodes for later use in the graph.
-     * 
-     * @param type - Type of node to create ("Tensor", "Op", "Split", "Concat")
-     * @param id - UUID for the node (must be in valid UUID v4 format)
-     * @param params - Parameters required for node construction:
-     *   - For "Tensor": { shape: number[], target?: string, variableName?: string }
-     *   - For "Op": { opType: string, opParams?: Record<string, any>, target?: string }
-     *   - For "Split": { inShape: number[], splitParams: { dim: number, sections: number[] }, target?: string }
-     *   - For "Concat": { inShapes: number[][], concatParams: { dim: number }, target?: string }
-     * @returns A PendingNode wrapping the created node
-     * 
-     * @example
-     * // Create a pending tensor
-     * const pendingTensor = graph.createPendingNode("Tensor", "550e8400-e29b-41d4-a716-446655440000", {
-     *   shape: [1, 3, 224, 224],
-     *   target: "torch",
-     *   variableName: "input_image"  // Optional name to use in generated code
-     * });
-     * 
-     * // Create a pending operation
-     * const pendingOp = graph.createPendingNode("Op", "550e8400-e29b-41d4-a716-446655440001", {
-     *   opType: "relu",
-     *   target: "torch"
-     * });
-     */
-    createPendingNode(type: string, id: string, params: Record<string, any> = {}): PendingNode<GraphNode> {
-        // Check if the node already exists in pending nodes or main graph
-        //if (this._pendingNodes.has(id)) {
-        //    throw new Error(`Node with id ${id} already exists in pending nodes`);
-        //}
-        if (this._nodes.has(id)) {
-            throw new Error(`Node with id ${id} already exists in the graph`);
+    /** Add a node to the graph */
+    addNode(id: string, nodeType: string, params: Record<string, any>): void {
+        let node: GraphNode;
+        if(nodeType === "Tensor"){
+            assert(params.shape, "Shape is required for Tensor");
+            assert(params.variableName, "Variable name is required for Tensor");
+            node = new Tensor(id, params.shape, params.variableName);
+        }else if(nodeType === "Op"){
+            assert(params.opType, "No operation type provided");
+            node = new Op(id, params.opType, params);
+        }else if(nodeType === "Split"){
+            assert(params.dim, "Dimension is required for Split");
+            assert(params.sections, "Sections is required for Split");
+            node = new Split(id, params.dim, params.sections, params);
+        }else if(nodeType === "Concat"){
+            assert(params.dim, "Dimension is required for Concat");
+            assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for Concat");
+            node = new Concat(id, params.dim, params.numberOfMerges, params);
+        }else if(nodeType === "Copy"){
+            assert(params.copies, "Copies parameter is required for Copy");
+            node = new Copy(id, params.copies, params);
+        }else if(nodeType === "PointwiseReduce"){
+            assert(params.opType, "Operation type is required for PointwiseReduce");
+            assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for PointwiseReduce");
+            node = new PointwiseReduce(id, params.opType, params.numberOfMerges, params);
+        }else if(nodeType === "PointwiseOp"){
+            assert(params.opType, "Operation type is required for PointwiseOp");
+            node = new PointwiseOp(id, params.opType, params);
+        }else if(nodeType === "DotOp"){
+            node = new DotOp(id, params);
+        }else if(nodeType === "CrossOp"){
+            node = new CrossOp(id, params);
+        }else{
+            throw new Error(`Unknown GraphNode type: ${nodeType}`);
         }
-        
-        // Create a pending node of the specified type
-        const pendingNode = PendingNode.create(type, id, params.target || "torch", params);
-        this._pendingNodes.set(id, pendingNode);
-        return pendingNode;
-    }
-    
-    /**
-     * Removes a node from the pending collection.
-     * 
-     * This is useful for cleaning up pending nodes that are no longer needed.
-     * Only applies to nodes in the pending state; connected nodes are part of the main graph.
-     * 
-     * @param nodeId - ID of the pending node to remove
-     * @throws Error if the node doesn't exist in the pending collection
-     * 
-     * @example
-     * // Remove a pending node that's no longer needed
-     * graph.removePendingNode("550e8400-e29b-41d4-a716-446655440000");
-     */
-    removePendingNode(nodeId: string): void {
-        if (!this._pendingNodes.has(nodeId)) {
-            throw new Error(`Node with id ${nodeId} is not a pending node`);
-        }
-        
-        this._pendingNodes.delete(nodeId);
-    }
 
-    /**
-     * Promotes a pending Tensor node to a source node in the main graph.
-     * 
-     * This method allows adding an input tensor to the graph without requiring
-     * it to be connected to another node first. It will move the node from
-     * the pending collection to the main graph and mark it as a source.
-     * 
-     * @param nodeId - ID of the pending node to promote as a source
-     * @throws Error if the node doesn't exist in the pending collection
-     * @throws Error if the node is not a Tensor (only Tensors can be sources)
-     * 
-     * @example
-     * // Create a pending tensor
-     * const pendingTensor = graph.createPendingNode("Tensor", "input-tensor-id", {
-     *   shape: [1, 3, 224, 224],
-     *   target: "torch",
-     *   variableName: "input_image"
-     * });
-     * 
-     * // Promote it to a source node
-     * graph.makeTensorSource("input-tensor-id");
-     */
-    makeTensorSource(nodeId: string): void {
-        // Check if the node exists in pending nodes
-        if (!this._pendingNodes.has(nodeId)) {
-            throw new Error(`Node with id ${nodeId} is not a pending node`);
-        }
-        
-        // Get the pending node and unwrap it
-        const pendingNode = this._pendingNodes.get(nodeId)!;
-        const node = pendingNode.unwrap();
-        
-        // Verify that the node is a Tensor
-        if (!(node instanceof Tensor)) {
-            throw new Error(`Cannot make node with id ${nodeId} a source: only Tensor nodes can be sources`);
-        }
-        
-        // Remove from pending nodes and add to main graph
-        this._pendingNodes.delete(nodeId);
-        this._nodes.set(nodeId, node);
-        
-        // Add to sources
-        this._sources.add(node);
+        this._nodes.set(id, node);
     }
 
     /**
@@ -335,104 +142,31 @@ export class Graph {
         this._sinks.delete(node);
     }
 
-    private _nodeHasConnections(node: GraphNode): boolean {
-        if (node instanceof Tensor || node instanceof Op || node instanceof BranchOp) {if (node.prev !== null) return true;}
-        if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {if (node.next !== null) return true; }
-        if (node instanceof BranchOp && node._nexts.some(n => n !== null)) return true;
-        if (node instanceof MergeOp && node._prevs.some(p => p !== null)) return true;
-        return false;
-    }
-
     /**
      * Validates the source node's connection point and returns its output shape
      */
-    private _validateSourceAndGetOutShape(source: GraphNode, sourceIndex?: number): number[] {
-        // First, ensure the source has an output shape
-        if (!source.outShape) {
+    private _validateSourceAndGetOutShape(source: GraphNode, sourceIndex: number): number[] {
+        // SourceIndex must be in bounds of Source.outShape
+        sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShapes.length, "connect");
+        // Ensure the source has an output shape
+        if (!source.outShapes[sourceIndex]) {
             throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
         }
-        //------------------------------------------------------------------------------------------------
-        // For nodes with multiple static outputs (Module) - WITH TENTACLES EACH WITH AN OUTPUT SHAPE
-        if (GraphNode.multipleStaticOutputs(source)) {
-            // SourceIndex must be defined
-            if (sourceIndex === undefined) {
-                throw new Error("When connecting from a node with multiple static outputs, an output index must be specified");
-            }
-            // SourceIndex must be in bounds of Source.outShape
-            sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShape.length, "connect");
-            // Get specific output shape
-            const outShapeArray = source.outShape as number[][];
-            const outputShape = outShapeArray[sourceIndex];
-            // The indexed shape must be defined
-            if (outputShape === null || outputShape === undefined) {
-                throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id} at output ${sourceIndex}: output shape is undefined`);
-            }
-            return outputShape;
-        } 
-        //--------------------------------------------------------------------------------------------------
-        // For nodes with single output (Op, Tensor, Merge)
-        if (GraphNode.singleOutput(source)) {
-            // Source.outShape must be defined (already checked at the top)
-            return source.outShape as number[];
-        }
-        // Unknown node type
-        throw new Error(`Unknown source node type: ${source.constructor.name}`);
+        return source.outShapes[sourceIndex]!;
     }
-
    
     /**
-     * Validates the sink node's connection point and returns its input shape, returned value can be Null 
+     * Validates the sink node's connection point and returns its input shape, returned value can be null 
      */
-    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex?: number): number[] | null {
-        // For nodes with multiple static inputs (Module)
-        if (GraphNode.multipleStaticInputs(sink)) {
-            if (sinkIndex === undefined) {
-                throw new Error("When connecting to a node with multiple static inputs, an input index must be specified");
-            }
-            if (!sink.inShape) {
-                throw new Error(`Node with id ${sink.id} must have defined input shape`);
-            }
-            
-            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect");
-        
-            // Get specific input shape
-            const inShapeArray = sink.inShape as number[][];
-            if (!inShapeArray[sinkIndex]) {
-                throw new Error(`Node with id ${sink.id} must have defined input shape at index ${sinkIndex}`);
-            }
-            return inShapeArray[sinkIndex];
-        }
-        
-        // For nodes with multiple inputs but not static (Concat, Product, etc.)
-        if (GraphNode.multipleInputs(sink) && GraphNode.inShapeInferred(sink)) {
-            // These nodes handle shape validation themselves
-            if (sinkIndex === undefined) {
-                throw new Error("When connecting to a node with multiple inputs, an input index must be specified");
-            }
-            if (!sink.inShape) {
-                throw new Error(`Node with id ${sink.id} must have defined input shape`);
-            }
-            sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShape.length, "connect");
-            return null; //return null shape it can be cascaded and checked for shape consistancy for other ports 
-        }
+    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex: number): number[] | null {
+        // SourceIndex must be in bounds of Source.outShape
+        sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShapes.length, "connect");
+        const inShape = sink.inShapes[sinkIndex];
 
-        //---------------
-        // For nodes with single input and not inShapeInferred (Tensor)
-        if (GraphNode.singleInput(sink) && !GraphNode.inShapeInferred(sink)) {
-            if (!sink.inShape) {
-                throw new Error(`${sink.constructor.name} with id ${sink.id} must have defined input shape`);
-            }
-            return sink.inShape as number[];
-        }
-        
-        // For nodes with single input and inShapeInferred (Op)
-        if (GraphNode.singleInput(sink) && GraphNode.inShapeInferred(sink)) {
-            // These nodes infer their shape from the connection
-            return null; // Skip shape check
-        }
-        
-        // Unknown node type
-        throw new Error(`Unknown sink node type: ${sink.constructor.name}`);
+        if(inShape === null && !GraphNode.inShapeInferred(sink))
+            throw new Error(`Node with id ${sink.id} must have defined input shape`);
+
+        return inShape;
     }
 
     /**
@@ -457,19 +191,14 @@ export class Graph {
      * graph.connect("splitId", "opId", 0); // Connect from first output of split
      * graph.connect("opId", "concatId", undefined, 1); // Connect to second input of concat
      */
-    connect(sourceId: string, sinkId: string, sourceIndex?: number, sinkIndex?: number): void {
+    connect(sourceId: string, sinkId: string, sourceIndex: number, sinkIndex: number): void {
         // Get source node from main graph
         const source = this._nodes.get(sourceId);
-        if (!source) {throw new Error(`Source node with id ${sourceId} does not exist in graph`);}
+        if (!source) throw new Error(`Source node with id ${sourceId} does not exist in graph`);
         // Get sink node from either main graph or pending nodes
-        let sink = this._nodes.get(sinkId) || this._pendingNodes.get(sinkId);
-        if (!sink) {throw new Error(`Sink node with id ${sinkId} does not exist in graph or pending nodes`);}
-        // Determine if sink is pending and unwrap it if needed
-        const sinkIsPending = sink instanceof PendingNode;
-        if (sinkIsPending) {
-            sink = (sink as PendingNode<GraphNode>).unwrap();
-        }
-        //-------------------------------------------------------
+        let sink = this._nodes.get(sinkId);
+        if (!sink) throw new Error(`Sink node with id ${sinkId} does not exist in graph`);
+
         // Validate connection endpoints and get shapes
         const sourceOutShape = this._validateSourceAndGetOutShape(source, sourceIndex);
         const sinkInShape = this._validateSinkAndGetInShape(sink, sinkIndex);
@@ -481,6 +210,7 @@ export class Graph {
                 throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
             }
         }
+
         //---------------------------------------------------------
         // Establish bidirectional connections
         // Let each node handle its own connection logic
@@ -495,13 +225,7 @@ export class Graph {
             sourceIndex: sourceIndex,
             sinkIndex: sinkIndex
         });
-        
-        //---------------------------------------------------------
-        // Only if the connection was successful and sink was pending, move it to the main graph
-        if (sinkIsPending) {
-            this._pendingNodes.delete(sink.id);
-            this._nodes.set(sink.id, sink);
-        }
+
         //----------------------------------------------------------
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
@@ -542,10 +266,6 @@ export class Graph {
 
     getNode(id: string): GraphNode | undefined {
         return this._nodes.get(id);
-    }
-
-    getPendingNode(id: string): PendingNode<GraphNode> | undefined {
-        return this._pendingNodes.get(id);
     }
 
     getSources(): Set<GraphNode> {
@@ -605,26 +325,15 @@ export class Graph {
             }
             
             visited.add(node.id);
-            
+
             // Add next nodes to the queue
-            if (node instanceof Tensor || node instanceof Op) {
-                if (node.next) {
-                    queue.push(node.next);
-                }
-            } else if (node instanceof BranchOp) {
-                // For BranchOp, check all non-null nexts
-                for (const nextNode of node._nexts) {
-                    if (nextNode) {
-                        queue.push(nextNode);
-                    }
-                }
-            } else if (node instanceof MergeOp) {
-                if (node.next) {
-                    queue.push(node.next);
+            for (const nextNode of node.nexts) {
+                if (nextNode) {
+                    queue.push(nextNode);
                 }
             }
         }
-        
+
         // Check if any nodes are unreachable
         if (visited.size !== this._nodes.size) {
             const unreachable = Array.from(this._nodes.keys())
@@ -633,21 +342,21 @@ export class Graph {
             
             throw new Error(`Graph contains unreachable nodes: ${unreachable.join(', ')}`);
         }
-        
+
         // Check if all sinks are reachable
         for (const sink of sinkNodes) {
             if (!visited.has(sink.id)) {
                 throw new Error(`Sink node ${sink.id} is not reachable from any source`);
             }
         }
-        
+
         // Check for cycles
         this._checkForCycles();
-        
+
         // Log the graph structure as an adjacency list
         this._logGraphStructure();
     }
-    
+
     private _checkForCycles(): void {
         // Track nodes being processed in the current DFS path
         const visiting = new Set<string>();
@@ -660,44 +369,33 @@ export class Graph {
             this._dfsCheckCycle(source, visiting, visited);
         }
     }
-    
+
     private _dfsCheckCycle(node: GraphNode, visiting: Set<string>, visited: Set<string>): void {
         // If already fully processed, no need to check again
         if (visited.has(node.id)) {
             return;
         }
-        
+
         // If we're visiting this node in the current path, we found a cycle
         if (visiting.has(node.id)) {
             throw new Error(`Graph contains a cycle involving node ${node.id}`);
         }
-        
+
         // Mark node as being visited in current path
         visiting.add(node.id);
-        
+
         // Visit all next nodes
-        if (node instanceof Tensor || node instanceof Op) {
-            if (node.next) {
-                this._dfsCheckCycle(node.next, visiting, visited);
-            }
-        } else if (node instanceof BranchOp) {
-            for (const nextNode of (node)._nexts) {
-                if (nextNode) {
-                    this._dfsCheckCycle(nextNode, visiting, visited);
-                }
-            }
-        } else if (node instanceof MergeOp) {
-            if (node.next) {
-                this._dfsCheckCycle(node.next, visiting, visited);
+        for (const nextNode of node.nexts) {
+            if (nextNode) {
+                this._dfsCheckCycle(nextNode, visiting, visited);
             }
         }
-        
+
         // Mark node as fully processed
         visiting.delete(node.id);
         visited.add(node.id);
     }
-    
-    
+
     /**
      * Generates functional PyTorch code from the graph.
      * Uses a depth-first traversal strategy to respect computation order.
@@ -885,18 +583,18 @@ export class Graph {
             
                 // DEBUG: Log the _nexts array structure
                 console.log(`DEBUG: BranchOp ${branchOp.id} _nexts array:`, 
-                    branchOp._nexts.map((n, i) => n ? `[${i}]: ${n.constructor.name}[${n.id}]` : `[${i}]: null`));
+                    branchOp.nexts.map((n, i) => n ? `[${i}]: ${n.constructor.name}[${n.id}]` : `[${i}]: null`));
             
                 let numOutputs: number;
                 try {
-                    if (!branchOp.outShape) {
+                    if (!branchOp.outShapes[0]) {
                         console.error(`ERROR: BranchOp ${branchOp.id} has no outShape defined!`);
                         throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
                     }
                 
-                    console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShape);
-                    numOutputs = branchOp.outShape.length;
-                    console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp._nexts.length} next slots`);
+                    console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShapes);
+                    numOutputs = branchOp.outShapes.length;
+                    console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp.nexts.length} next slots`);
                 } catch (error: any) {
                     console.error(`ERROR in output shape for ${branchOp.id}:`, error);
                     throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
@@ -931,8 +629,8 @@ export class Graph {
             
                 // IMPORTANT: Don't use filtered nextNodes - use the actual _nexts array with its indices
                 // This ensures we match the correct output variable to each branch output
-                for (let i = 0; i < branchOp._nexts.length; i++) {
-                    const nxt = branchOp._nexts[i];
+                for (let i = 0; i < branchOp.nexts.length; i++) {
+                    const nxt = branchOp.nexts[i];
                     if (!nxt) {
                         console.log(`Next node at index ${i} is null for ${branchOp.id}`);
                         continue;
@@ -977,12 +675,12 @@ export class Graph {
                 );
             }
         }
-      
+
         // return statement for sink Tensors
         const sinkVars: string[] = [];
         for (const sink of this._sinks) {
             console.log(`Processing sink node: ${sink.id} (${sink.constructor.name})`);
-          
+
             // Check if we have direct mapping for this sink
             if (nodeToVarMap.has(sink.id)) {
                 sinkVars.push(nodeToVarMap.get(sink.id)!);
@@ -995,13 +693,13 @@ export class Graph {
                 for (const [nodeId, node] of this._nodes.entries()) {
                     if (node instanceof BranchOp) {
                         // Check each branch output
-                        for (let i = 0; i < node._nexts.length; i++) {
-                            if (node._nexts[i] === sink) {
+                        for (let i = 0; i < node.nexts.length; i++) {
+                            if (node.nexts[i] === sink) {
                                 incomingNodes.push({ nodeId, outputIndex: i });
                                 console.log(`  Found incoming BranchOp connection: ${nodeId} at output ${i}`);
                             }
                         }
-                    } else if ((node instanceof Op || node instanceof MergeOp) && node.next === sink) {
+                    } else if ((node instanceof Op || node instanceof MergeOp) && node.nexts[0] === sink) {
                         incomingNodes.push({ nodeId, outputIndex: 0 });
                         console.log(`  Found incoming Op/MergeOp connection: ${nodeId}`);
                     }
@@ -1053,40 +751,17 @@ export class Graph {
       
     // Helper to safely get next nodes regardless of node type
     private _getNextNodes(node: GraphNode): GraphNode[] {
-        if (node instanceof BranchOp) {
-            return (node)._nexts.filter(n => n !== null);
-        } else {
-            return node.next ? [node.next] : [];
-        }
-    }
-      
-    // Helper to safely get next nodes with their indices for BranchOp
-    private _getNextNodesWithIndices(node: GraphNode): Array<{node: GraphNode, index: number}> {
-        if (node instanceof BranchOp) {
-            return (node)._nexts
-                .map((next, index) => ({node: next, index}))
-                .filter(item => item.node !== null);
-        } else {
-            return node.next ? [{node: node.next, index: 0}] : [];
-        }
+        return node.nexts.filter(n => n !== null);
     }
       
     // Helper to safely get previous nodes regardless of node type
     private _getPrevNodes(node: GraphNode): GraphNode[] {
-        if (node instanceof MergeOp) {
-            return (node)._prevs.filter(p => p !== null);
-        } else {
-            return node.prev ? [node.prev] : [];
-        }
+        return node.prevs.filter(p => p !== null);
     }
       
     // Helper to find the index of a prev node
     private _getPrevNodeIndex(node: GraphNode, prevNode: GraphNode): number {
-        if (node instanceof MergeOp) {
-            return (node)._prevs.findIndex(p => p && p.id === prevNode.id);
-        } else {
-            return 0; // For single-input nodes
-        }
+        return node.prevs.findIndex(p => p && p.id === prevNode.id);
     }
 
     // Add a helper method to generate UUIDs
@@ -1113,24 +788,12 @@ export class Graph {
         for (const node of this._nodes.values()) {
             const isSource = !GraphNode.hasInputs(node);
             const isSink = !GraphNode.hasOutputs(node);
-            
-            // For BranchOp, check if any _nexts are null - if ALL are null, it's a sink
-            if (node instanceof BranchOp) {
-                const hasSomeOutputs = node._nexts.some(n => n !== null);
-                if (isSource) {
-                    this._sources.add(node);
-                }
-                if (!hasSomeOutputs) {
-                    this._sinks.add(node);
-                }
-            } else {
-                // For other node types
-                if (isSource) {
-                    this._sources.add(node);
-                }
-                if (isSink) {
-                    this._sinks.add(node);
-                }
+
+            if (isSource) {
+                this._sources.add(node);
+            }
+            if (isSink) {
+                this._sinks.add(node);
             }
         }
     }
@@ -1153,29 +816,18 @@ export class Graph {
                 id: id,
                 outEdges: []
             };
-            
-            // Add outgoing edges
-            if (node instanceof Tensor || node instanceof Op || node instanceof MergeOp) {
-                if (node.next) {
+
+            node.nexts.forEach((nextNode, index) => {
+                if (nextNode) {
                     adjList[id].outEdges.push({
-                        id: node.next.id,
-                        type: node.next.constructor.name
+                        id: nextNode.id,
+                        type: nextNode.constructor.name,
+                        index: index
                     });
                 }
-            } else if (node instanceof BranchOp) {
-                // For BranchOp, add all non-null nexts with their indices
-                node._nexts.forEach((nextNode, index) => {
-                    if (nextNode) {
-                        adjList[id].outEdges.push({
-                            id: nextNode.id,
-                            type: nextNode.constructor.name,
-                            index: index
-                        });
-                    }
-                });
-            }
+            });
         }
-        
+
         // Log sources and sinks
         console.log("Sources:", Array.from(this._sources).map(node => ({
             id: node.id,

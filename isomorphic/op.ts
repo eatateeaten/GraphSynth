@@ -1,55 +1,50 @@
 import { GraphNode } from './graph_node';
-import { getElementwiseOpCode, forwardShapeInference, getTorchCode } from './torch_nn_module_op';
-import { Tensor } from './tensor';
-import { BranchOp } from './branch_op';
-import { MergeOp } from './merge_op';
+import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
+import { g_GraphConfig } from './config';
 
 export class Op extends GraphNode {
-    protected _inShape: number[] | null = null;
-    protected _outShape: number[] | null = null;
-    protected _prev: GraphNode | null = null;
-    protected _next: GraphNode | null = null;
     protected readonly _opType: string;
-    protected _params: Record<string, any>;
 
     constructor(
         id: string,
-        target: string,
         opType: string,
-        params: Record<string, any> = {}
+        params: Record<string, any>
     ) {
-        super(id, target);
+        super(id, params);
+        this._inShapes = [null];
+        this._outShapes = [null];
+        this._prevs = [null];
+        this._nexts = [null];
         this._opType = opType;
-        this._params = params;
     }
 
     protected computeOutShape(): number[] {
-        if (!this._inShape) {
+        if (this._inShapes[0] === null) {
             throw new Error(`Cannot compute output shape without input shape for operation ${this._opType}`);
         }
-        
+
         // Use forwardShapeInference for torch operations
-        if (this._target === "torch") {
+        if (g_GraphConfig.target === "Torch") {
             try {
-                return forwardShapeInference(this._opType, this._inShape, this._params);
+                return forwardShapeInference(this._opType, this._inShapes[0], this._params);
             } catch (err: any) {
                 throw new Error(`Shape inference error for ${this._opType}: ${err.message}. Consider using a different set of parameters.`);
             }
         }
-        
+
         // For non-torch operations, throw an error
-        throw new Error(`No shape inference implementation available for target '${this._target}' and operation '${this._opType}'`);
+        throw new Error(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
     }
 
     to_torch_functional(inputs: string[], outputs: string[]): string {
-        if (this._target !== "torch") {
+        if (g_GraphConfig.target  !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
-        
-        if (this._inShape === null || this._outShape === null) {
+
+        if (this._inShapes[0] === null || this._outShapes[0] === null) {
             throw new Error("Cannot generate torch code: operation has undefined input or output shape");
         }
-        
+
         // No fallback - either get the module code or error out
         const moduleCode = getTorchCode(this._opType, this._params);
         return `${outputs[0]} = ${moduleCode}(${inputs[0]})`;
@@ -62,25 +57,19 @@ export class Op extends GraphNode {
      * @throws Error if the operation is not a PyTorch operation
      */
     to_torch(): string {
-        if (this._target !== "torch") {
+        if (g_GraphConfig.target !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
-        
+
         // No fallback - either get the module code or error out
         return getTorchCode(this._opType, this._params);
     }
 
     // Getters and setters
-    get inShape(): number[] | null { return this._inShape; }
     set inShape(shape: number[] | null) { 
         // inShape can only be set during connection
         throw new Error("Cannot directly set inShape for Op. Connect a source node instead.");
     }
-    get outShape(): number[] | null { return this._outShape; }
-    get prev(): GraphNode | null { return this._prev; }
-    set prev(node: GraphNode | null) { this._prev = node; }
-    get next(): GraphNode | null { return this._next; }
-    set next(node: GraphNode | null) { this._next = node; }
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
@@ -88,9 +77,9 @@ export class Op extends GraphNode {
         (this._params) = { ...params };
         
         // Recalculate output shape if input shape is available
-        if (this._inShape) {
+        if (this._inShapes[0]) {
             try {
-                this._outShape = this.computeOutShape();
+                this._outShapes[0] = this.computeOutShape();
             } catch (err: any) {
                 // If shape inference fails, we keep the existing output shape
                 console.warn(`Failed to update output shape after params change: ${err.message}`);
@@ -99,47 +88,42 @@ export class Op extends GraphNode {
     }
 
     addPrev(prev: GraphNode, prevOutShape: number[]): void {
-        if (this._prev !== null) {
+        if (this._prevs[0] !== null) {
             throw new Error("Op already has a source connection");
         }
         // Get the output shape from the source node        
-        if (!prev.outShape) {
+        if (!prev.outShapes[0]) {
             throw new Error(`Previous node ${prev.id} has no output shape defined`);
         }
-        
+
         // Set inShape and compute outShape
-        this._inShape = [...prevOutShape];
-        
+        this._inShapes = [[...prevOutShape]];
+
         try {
-            this._outShape = this.computeOutShape();
+            this._outShapes = [this.computeOutShape()];
         } catch (err: any) {
             // Reset inShape if shape inference fails
-            this._inShape = null;
+            this._inShapes = [null];
             throw err;
         }
         // Set our prev reference
-        this._prev = prev;
+        this._prevs[0] = prev;
     }
 
     addNext(next: GraphNode): void {
-        if (this._next !== null) {
+        if (this._nexts[0] !== null) {
             throw new Error("Op already has a sink connection");
         }
-        console.log('Op._next:', this._next);
-        this._next = next;
+        this._nexts[0] = next;
     }
 
     deletePrev(): void {
-        if (this._prev) {
-            // Just clear our reference and reset shapes
-            this._prev = null;
-            this._inShape = null;
-            this._outShape = null;
-        }
+        this._inShapes = [null];
+        this._outShapes = [null];
+        this._prevs = [null];
     }
 
     deleteNext(): void {
-        // Just clear our next reference
-        this._next = null;
+        this._nexts = [null];
     }
 }

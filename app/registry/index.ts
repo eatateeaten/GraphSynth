@@ -27,11 +27,11 @@ export const allModules: Record<string, ModuleMetadata> = {
                 default: [3, 64, 64],
                 allowNegativeOne: false
             },
-            isInput: {
-                label: 'Input Node',
-                description: 'Make this tensor an input node',
-                type: 'boolean',
-                default: false
+            variableName: {
+                label: 'Variable Name',
+                description: 'Name of this tensor',
+                type: 'string',
+                default: "tensor0"
             }
         }
     },

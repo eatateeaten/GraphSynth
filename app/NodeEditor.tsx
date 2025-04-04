@@ -70,7 +70,6 @@ export function NodeEditor() {
     const updateNodeParams = useStore(state => state.updateNodeParams);
     const nodes = useStore(state => state.nodes);
     const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
-    const makeTensorSource = useStore(state => state.makeTensorSource);
 
     // Get default params for a module
     const getDefaultParams = useCallback((moduleKey: string) => {
@@ -214,6 +213,19 @@ export function NodeEditor() {
                     onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
                 />
             );
+        case 'string':
+            return (
+                <TextInput
+                    key={name}
+                    label={field.label}
+                    description={field.description}
+                    placeholder={field.placeholder || ""}
+                    value={value || ""}
+                    onChange={(e) => handleParamChange(name, e.target.value)}
+                    error={validationError}
+                    onFocus={() => setTouchedFields(fields => new Set([...fields, name]))}
+                />
+            );
         }
     };
 
@@ -234,13 +246,8 @@ export function NodeEditor() {
                 addNode({
                     id,
                     type: 'Tensor',
-                    params: { shape }
+                    params
                 });
-                
-                // If this is an input tensor, make it a source
-                if (params.isInput) {
-                    makeTensorSource(id);
-                }
             } else if (moduleKey.startsWith('Op:')) {
                 // For Op types
                 const opType = moduleKey.slice(3);
@@ -251,12 +258,11 @@ export function NodeEditor() {
                     setError(validationError);
                     return;
                 }
-                
+
                 addNode({
                     id,
                     type: 'Op',
-                    opType,
-                    params
+                    params: {...params, opType}
                 });
             } else {
                 // For direct node types (Split, Copy, Concat, PointwiseReduce)
@@ -274,7 +280,7 @@ export function NodeEditor() {
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to create node');
         }
-    }, [moduleKey, params, addNode, validateModuleParams, makeTensorSource]);
+    }, [moduleKey, params, addNode, validateModuleParams]);
 
     // Get metadata for the selected module key
     const metadata = moduleKey ? getMeta(moduleKey) : null;

@@ -1,40 +1,33 @@
+import { assert } from 'console';
 import { GraphNode } from './graph_node';
 
 export class Tensor extends GraphNode {
-    protected _inShape: number[];
-    protected _outShape: number[];
-    protected _prev: GraphNode | null = null;
-    protected _next: GraphNode | null = null;
-    protected _variableName: string | null = null;
+    protected _variableName: string;
 
-    constructor(id: string, shape: number[], target: string, variableName: string | null = null) {
-        super(id, target);
-        this._inShape = shape;
-        this._outShape = shape;
+    constructor(id: string, shape: number[], variableName: string) {
+        super(id, {});
+        this._inShapes = [shape];
+        this._outShapes = [shape];
+        this._prevs = [null];
+        this._nexts = [null];
         this._variableName = variableName;
     }
 
     // Getters and setters
-    get inShape(): number[] { return this._inShape; }
-    get outShape(): number[] { return this._outShape; }
-    get prev(): GraphNode | null { return this._prev; }
-    set prev(node: GraphNode | null) { this._prev = node; }
-    get next(): GraphNode | null { return this._next; }
-    set next(node: GraphNode | null) { this._next = node; }
-    get variableName(): string | null { return this._variableName; }
-    set variableName(name: string | null) { this._variableName = name; }
+    get variableName(): string { return this._variableName; }
+    set variableName(name: string) { this._variableName = name; }
     
     // Implement params accessors
     get params(): Record<string, any> { 
-        return { 
-            shape: [...this._inShape],
+        return {
+            shape: [...this._inShapes],
             variableName: this._variableName
         }; 
     }
     set params(params: Record<string, any>) {
         if (params.shape) {
-            this._inShape = [...params.shape];
-            this._outShape = [...params.shape];
+            this._inShapes = [[...params.shape]];
+            this._outShapes = [[...params.shape]];
         }
         if ('variableName' in params) {
             this._variableName = params.variableName;
@@ -42,29 +35,30 @@ export class Tensor extends GraphNode {
     }
 
     addPrev(prev: GraphNode): void {
-        if (this._prev !== null) {
+        if (this._prevs[0] !== null) {
             throw new Error("Tensor already has a source connection");
         }
+
         // Just set our prev reference - Graph handles all validation and connections
-        this._prev = prev;
+        this._prevs[0] = prev;
     }
 
     addNext(next: GraphNode): void {
-        if (this._next !== null) {
+        if (this._nexts[0] !== null) {
             throw new Error("Tensor already has a sink connection");
         }
         // Just set our next reference - Graph handles all validation and connections
-        this._next = next;
+        this._nexts[0] = next;
     }
 
     deletePrev(): void {
         // Just clear our reference
-        this._prev = null;
+        this._prevs = [null];
     }
 
     deleteNext(): void {
         // Just clear our reference
-        this._next = null;
+        this._nexts = [null];
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {
@@ -75,4 +69,4 @@ export class Tensor extends GraphNode {
         const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
         return `${outVar} = ${inputs[0]}`;
     }
-} 
+}

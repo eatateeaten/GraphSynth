@@ -38,8 +38,6 @@ interface GraphState {
     edges: FlowEdge[];
     selectedId: string | null;
     checkerGraph: CheckerGraph;
-    // Track pending nodes that aren't in the main graph yet
-    pendingNodeIds: Set<string>;
 }
 
 interface GraphActions {
@@ -50,61 +48,7 @@ interface GraphActions {
     updateEdges: (edges: FlowEdge[]) => void;
     addEdge: (edge: FlowEdge, sourceHandleIndex?: number, targetHandleIndex?: number) => void;
     updateNodeParams: (id: string, params: Record<string, any>) => void;
-    makeTensorSource: (id: string) => void;
 }
-
-const makePendingParams = (type: NodeType, op_type: string | null, params: Record<string, any>): Record<string, any> => {
-    switch (type) {
-    case 'Tensor':
-        return {
-            shape: params.shape,
-            variableName: params.variableName || null
-        };
-    case 'Op':
-        return {
-            opType: op_type,
-            opParams: params
-        };
-    case 'Split':
-        return {
-            splitParams: {
-                dim: params.dim || 0,
-                sections: params.sections || [1, 1]
-            }
-        };
-    case 'Copy':
-        return {
-            copyParams: {
-                copies: params.copies || 2
-            }
-        };
-    case 'Concat':
-        return {
-            concatParams: {
-                dim: params.dim || 0
-            },
-            numberOfMerges: params.numberOfMerges || 2
-        };
-    case 'PointwiseReduce':
-        return {
-            opType: params.opType || 'add',
-            reduceParams: params.reduceParams || {},
-            numberOfMerges: params.numberOfMerges || 2
-        };
-    case 'DotOp':
-        return {
-            opType: params.opType || 'matmul',
-            opParams: params.opParams || {}
-        };
-    case 'CrossOp':
-        return {
-            opType: params.opType || 'cross',
-            opParams: params.opParams || {}
-        };
-    default:
-        throw new Error(`Unknown node type: ${type}`);
-    }
-};
 
 export const useStore = create<GraphState & GraphActions>((set, get) => {
     // Helper to set node error
@@ -130,32 +74,24 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         edges: [],
         selectedId: null,
         checkerGraph: new CheckerGraph(),
-        pendingNodeIds: new Set<string>(),
 
         // Actions
+        /* TODO: Pan to include all nodes when a node is added */
         addNode: (config) => {
-            // Create a pending node in ZophGraph
-            get().checkerGraph.createPendingNode(
-                config.type,
+            // Create a node in CheckerGraph
+            get().checkerGraph.addNode(
                 config.id,
-                {
-                    target: "torch",
-                    ...makePendingParams(config.type, config.opType || null, config.params)
-                }
+                config.type,
+                config.params
             );
-            
-            // Track this ID as pending
-            set(state => ({
-                pendingNodeIds: new Set([...state.pendingNodeIds, config.id])
-            }));
 
             // Create a visual node in React Flow
             const flowNode: FlowNode = {
                 id: config.id,
                 type: 'default',
-                data: { 
+                data: {
                     type: config.type,
-                    opType: config.opType,
+                    opType: config.params.opType,
                     params: config.params 
                 },
                 position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
@@ -166,16 +102,6 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         },
 
         deleteNode: (id) => {
-            const node = get().checkerGraph.getNode(id);
-            if(node){
-                get().checkerGraph.removeNode(id);
-            }else{
-                get().checkerGraph.removePendingNode(id);
-                set(state => ({
-                    pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== id))
-                }));
-            }
-
             // Clean up visual elements
             set(state => ({
                 nodes: state.nodes.filter(node => node.id !== id),
@@ -184,6 +110,8 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 ),
                 selectedId: state.selectedId === id ? null : state.selectedId
             }));
+
+            get().checkerGraph.removeNode(id);
         },
 
         setSelectedId: (id) => set({ selectedId: id }),
@@ -196,12 +124,6 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
             // Clear any existing errors
             setNodeError(edge.source, {});
             setNodeError(edge.target, {});
-
-            /* ok. first we need to check if the source is pending or not */
-            if(!get().checkerGraph.getNode(edge.source)){
-                setNodeError(edge.source, { output: "Source cannot be a pending node"});
-                return;
-            }
 
             /* now try to connect in the checker graph */
             try {
@@ -218,12 +140,9 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
 
             /* if it succeeded, connect in visual graph */
             set(state => ({ edges: [...state.edges, edge] }));
-            /* sink shouldn't be a pending node anymore */
-            set(state => ({
-                pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== edge.target))
-            }));
         },
 
+        /** TODO: This should be much shorter after we have setParams for every concrete type */
         updateNodeParams: (id, params) => {
             try {
                 // Get node from graph
@@ -289,33 +208,16 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                     get().checkerGraph.removeNode(id);
                 }
                 
-                // Track whether node was pending
-                const wasPending = get().pendingNodeIds.has(id);
-                
                 // Find node info from React Flow
                 const flowNode = get().nodes.find(n => n.id === id);
                 if (!flowNode) throw new Error("Node not found in React Flow");
-                
-                // Create a pending node with wrapped params
-                get().checkerGraph.createPendingNode(
-                    flowNode.data.type,
+
+                get().checkerGraph.addNode(
                     id,
-                    {
-                        target: "torch",
-                        ...makePendingParams(flowNode.data.type, flowNode.data.opType || null, {
-                            ...(flowNode.data.params || {}),
-                            ...params
-                        })
-                    }
+                    flowNode.data.type,
+                    params
                 );
-                
-                // Mark as pending if it wasn't already
-                if (!wasPending) {
-                    set(state => ({
-                        pendingNodeIds: new Set([...state.pendingNodeIds, id])
-                    }));
-                }
-                
+
                 // Update React Flow node
                 set(state => ({
                     nodes: state.nodes.map(n => 
@@ -324,7 +226,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                             : n
                     )
                 }));
-                
+
                 // Try to reconnect
                 connections.sources.forEach(conn => {
                     try {
@@ -357,17 +259,5 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 throw error;
             }
         },
-
-        makeTensorSource: (id: string) => {
-            try {
-                get().checkerGraph.makeTensorSource(id);
-                set(state => ({
-                    pendingNodeIds: new Set([...state.pendingNodeIds].filter(nid => nid !== id))
-                }));
-            } catch (e) {
-                console.error('Failed to make tensor source:', e);
-                throw e;
-            }
-        }
     };
 });

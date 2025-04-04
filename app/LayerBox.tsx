@@ -2,7 +2,7 @@ import { Position, type NodeProps } from 'reactflow';
 import { Card, Text, Group } from '@mantine/core';
 import { LayerHandle } from './LayerHandle';
 import { useStore } from './store';
-import { PendingNode } from '../isomorphic/graph';
+import { assert } from './utils';
 
 interface LayerBoxProps extends NodeProps {
     data: {
@@ -15,30 +15,24 @@ interface LayerBoxProps extends NodeProps {
 
 export function LayerBox({ data, id }: LayerBoxProps) {
     const { type, opType, inputError, outputError } = data;
-    let node = useStore(state => state.checkerGraph?.getNode(id) || state.checkerGraph?.getPendingNode(id));
-    const pending = node instanceof PendingNode;
+    const node = useStore(state => state.checkerGraph?.getNode(id));
+    assert(node, `No node in the graph with ID ${id}?? Something is very wrong`);
 
-    // Get shapes, handling all possible types (null, number[], number[][])
-    const inShape = node?.inShape;
-    const outShape = node?.outShape;
-    
-    // Use the node type to determine handle configuration
-    const isBranchNode = type === 'Split' || type === 'Copy';
-    const isMergeNode = type === 'Concat' || type === 'PointwiseReduce' || type == "DotOp" || type == "CrossOp";
+    const inShapes = node!.inShapes;
+    const outShapes = node!.outShapes;
 
     const card = (
         <Card shadow="sm" radius="sm" withBorder style={{ padding: "8px 16px 8px" }}>
             <Group>
                 <Text fw={500}>{opType || type}</Text>
-                {pending ? <Text c='rgba(194, 89, 89, 1)'>●</Text> : <></>}
             </Group>
         </Card>
     );
 
     // Render input handles based on node type
     const renderInputHandles = () => {
-        // No shape or pending split/copy (they don't know their input shape yet)
-        if (!inShape || (pending && isBranchNode)) return (
+        // No shapes defined yet
+        if (!inShapes.length) return (
             <LayerHandle
                 position={Position.Left}
                 type="target"
@@ -48,39 +42,25 @@ export function LayerBox({ data, id }: LayerBoxProps) {
             />
         );
 
-        // Multiple inputs (MergeOp)
-        if (Array.isArray(inShape[0]) || isMergeNode) {
-            const shapes = inShape as number[][];
-            return shapes.map((shape, idx) => (
-                <LayerHandle
-                    key={`in-${idx}`}
-                    position={Position.Left}
-                    type="target"
-                    dimensions={shape}
-                    error={inputError}
-                    id={idx.toString()}
-                    offset={idx}
-                    total={shapes.length}
-                />
-            ));
-        }
-
-        // Single input shape (Tensor, Op, BranchOp)
-        return (
+        // Render a handle for each input shape
+        return inShapes.map((shape, idx) => (
             <LayerHandle
+                key={`in-${idx}`}
                 position={Position.Left}
                 type="target"
-                id="0"
-                dimensions={inShape as number[]}
+                dimensions={shape === null ? undefined : shape}
                 error={inputError}
+                id={idx.toString()}
+                offset={idx}
+                total={inShapes.length}
             />
-        );
+        ));
     };
 
     // Render output handles based on node type
     const renderOutputHandles = () => {
-        // No shape
-        if (!outShape) return (
+        // No shapes defined yet
+        if (!outShapes.length) return (
             <LayerHandle
                 position={Position.Right}
                 type="source"
@@ -90,33 +70,19 @@ export function LayerBox({ data, id }: LayerBoxProps) {
             />
         );
 
-        // Multiple outputs (BranchOp)
-        if (Array.isArray(outShape[0]) || isBranchNode) {
-            const shapes = outShape as number[][];
-            return shapes.map((shape, idx) => (
-                <LayerHandle
-                    key={`out-${idx}`}
-                    position={Position.Right}
-                    type="source"
-                    dimensions={shape}
-                    error={outputError}
-                    id={idx.toString()}
-                    offset={idx}
-                    total={shapes.length}
-                />
-            ));
-        }
-
-        // Single output shape (Tensor, Op, MergeOp)
-        return (
+        // Render a handle for each output shape
+        return outShapes.map((shape, idx) => (
             <LayerHandle
+                key={`out-${idx}`}
                 position={Position.Right}
                 type="source"
-                id="0"
-                dimensions={outShape as number[]}
+                dimensions={shape === null ? undefined : shape}
                 error={outputError}
+                id={idx.toString()}
+                offset={idx}
+                total={outShapes.length}
             />
-        );
+        ));
     };
 
     return (

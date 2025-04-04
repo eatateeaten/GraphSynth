@@ -3,10 +3,11 @@ export type { NodeType } from '../types';
 export interface ParamFieldMetadata {
     label: string;
     description: string;
-    type: 'number' | 'shape' | 'option' | 'boolean';
+    type: 'number' | 'shape' | 'option' | 'boolean' | 'string';
     default?: any;
     options?: string[];
     allowNegativeOne?: boolean;
+    placeholder?: string;
 }
 
 export interface ModuleMetadata {

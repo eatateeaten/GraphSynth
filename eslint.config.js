@@ -3,6 +3,7 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 
 export default [
@@ -34,7 +35,8 @@ export default [
         plugins: {
             '@typescript-eslint': tsPlugin,
             'react': reactPlugin,
-            'react-hooks': reactHooksPlugin
+            'react-hooks': reactHooksPlugin,
+            'import': importPlugin
         },
         rules: {
             // Disable style/formatting rules
@@ -54,6 +56,14 @@ export default [
             'no-unsafe-optional-chaining': 'error',
             'no-throw-literal': 'error',
 
+            // Import/export rules
+            'import/no-unresolved': 'error',
+            'import/named': 'error',
+            'import/default': 'error',
+            'import/namespace': 'error',
+            'import/no-restricted-paths': 'error',
+            'import/no-cycle': 'error',
+
             // TypeScript specific important rules
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unused-vars': 'off',
@@ -69,6 +79,15 @@ export default [
             'react-hooks/exhaustive-deps': 'warn'
         },
         settings: {
+            'import/parsers': {
+                '@typescript-eslint/parser': ['.ts', '.tsx']
+            },
+            'import/resolver': {
+                typescript: {
+                    alwaysTryTypes: true,
+                    project: './tsconfig.json'
+                }
+            },
             react: {
                 version: 'detect'
             }

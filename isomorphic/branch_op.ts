@@ -1,152 +1,146 @@
 import { GraphNode } from './graph_node';
 
 export abstract class BranchOp extends GraphNode {
-    protected _inShape: number[] | null;
-    protected _outShape: number[][] | null;
-    protected _prev: GraphNode | null = null;
-    public _nexts: GraphNode[] = [];
     protected readonly _opType: string;
-    protected readonly _params: Record<string, any>;
     protected readonly _numberOfBranches: number;
 
     constructor(
         id: string,
-        target: string,
         opType: string,
-        params: Record<string, any>, 
-        numberOfBranches: number, 
+        numberOfBranches: number,
+        params: Record<string, any>,
     ) {
-        super(id, target);
-        this._inShape = null;
-        this._opType = opType;
-        this._params = params;
-        this._outShape = null;
-        this._numberOfBranches = numberOfBranches;
+        super(id, params);
+        
+        this._inShapes = [null];
+        this._outShapes = Array(numberOfBranches).fill(null);
+        this._prevs = [null];
         this._nexts = Array(numberOfBranches).fill(null);
+
+        this._opType = opType;
+        this._numberOfBranches = numberOfBranches;
     }
 
     protected abstract computeOutShape(): number[][];
     abstract to_torch_functional(inputs: string[], outputs: string[]): string;
 
     // Getters and setters 
-    get inShape(): number[] | null { return this._inShape; }
-    get outShape(): number[][] | null { return this._outShape; }
-    get prev(): GraphNode | null { return this._prev; }
-    set prev(node: GraphNode | null) { this._prev = node; }
-    get next(): GraphNode | null { return null; }
-    set next(node: GraphNode | null) { /* Do nothing */ }
-    get nexts(): GraphNode[] { return this._nexts; }
     get opType(): string { return this._opType; }
-    get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
         (this._params) = { ...params };
         
         // Recalculate output shapes
         try {
-            this._outShape = this.computeOutShape();
+            this._outShapes = this.computeOutShape();
         } catch (err: any) {
             // If shape inference fails, we keep the existing output shapes
-            console.warn(`Failed to update output shapes after params change: ${err.message}`);
+            throw new Error(`Failed to update output shapes after params change: ${err.message}`);
         }
     }
 
     addPrev(prev: GraphNode, prevOutShape: number[]): void {
-        if (this._prev !== null) {
+        if (this._prevs[0] !== null) {
             throw new Error("Branch already has a source connection");
         }
+
         // Get the output shape from the source node        
         // Set inShape and compute outShape
-        this._inShape = [...prevOutShape];
-        
+        this._inShapes[0] = [...prevOutShape];
+
         try {
-            this._outShape = this.computeOutShape();
+            this._outShapes = this.computeOutShape();
         } catch (err: any) {
             // Reset inShape if shape inference fails
-            this._inShape = null;
+            this._inShapes[0] = null;
             throw err;
         }
+
         // Set our prev reference
-        this._prev = prev; 
+        this._prevs[0] = prev; 
     }
 
     addNext(next: GraphNode, indexSelf: number): void {
         if (this._nexts[indexSelf] !== null) {
-            console.log("index" + indexSelf)
             throw new Error(`BranchOp already has a connection at output ${indexSelf}`);
         }
         this._nexts[indexSelf] = next; 
     }
 
     deletePrev(): void {
-        if (this._prev) {
-            // Just clear our reference and reset shapes
-            this._prev = null;
-            this._inShape = null;
-            this._outShape = null;
-        }
+        this._prevs = [null];
+        this._inShapes = [null];
+        this._outShapes = [null];
     }
 
     deleteNext(indexSelf?: number): void {
         if (indexSelf === undefined) {
             // Clear all next connections
-            this._nexts.fill(null as unknown as GraphNode);
+            this._nexts.fill(null);
             return;
         }
-        
+
         // Validate index
         const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._numberOfBranches, "BranchOp.deleteNext");
         
         // Clear the specific connection
-        this._nexts[validatedIndex] = null as unknown as GraphNode;
+        this._nexts[validatedIndex] = null;
     }
 }
 
 
 export class Split extends BranchOp {
+    private _dim: number;
+    private _sections: number[];
+
     constructor(
         id: string,
-        target: string,
-        params: { dim: number, sections: number[]}
+        dim: number,
+        sections: number[],
+        params: Record<string, any>
     ) {
-        super(id, target, "Split", params, params.sections.length);
+        super(id, "Split", sections.length, params);
+        this._dim = dim;
+        this._sections = sections;
     }
+
+    /* todo: reset dim and sections when params are set */
+    /* todo: setParams should probably be called from the constructor
+     * and should be mandatory for every non-abstract device? */
 
     protected computeOutShape(): number[][] {
         const { dim, sections } = this._params;
         const outShapes: number[][] = [];
         
-        if (!this._inShape) {
+        if (this._inShapes[0] === null) {
             throw new Error("Input shape must be defined to compute output shapes");
         }
-        
+
         let start = 0;
         for (const size of sections) {
-            const outShape = [...this._inShape];
+            const outShape = [...this._inShapes[0]];
             // Each section starts at 'start' and has length 'size'
             outShape[dim] = size;
             outShapes.push(outShape);
             start += size;
         }
 
-
-
         // Verify total size matches input shape
-        if (start !== this._inShape[dim]) {
-            throw new Error(`Total split size ${start} does not match input dimension ${this._inShape[dim]}`);
+        if (start !== this._inShapes[0][dim]) {
+            throw new Error(`Total split size ${start} does not match input dimension ${this._inShapes[0][dim]}`);
         }
         return outShapes;
     }
-    
 
     to_torch_functional(inputs: string[], outputs: string[]): string {
-        const { dim, sections } = this._params;
-        
+        const dim = this._dim;
+        const sections = this._sections;
+
         if (sections.length === 1) {
             // Only one section means just a simple copy
             return `${outputs[0]} = ${inputs[0]}`;
         }
-        
+
         // For multi-output splits with unpacking
         // torch.split returns a tuple that needs to be assigned to the output variables
         return `${outputs.join(', ')} = torch.split(${inputs[0]}, sections=${JSON.stringify(sections).replace('[', '(').replace(']', ')')}, dim=${dim})`;
@@ -160,22 +154,22 @@ export class Split extends BranchOp {
 export class Copy extends BranchOp {
     constructor(
         id: string,
-        target: string,
-        params: { copies: number }
+        copies: number,
+        params: Record<string, any>,
     ) {
-        super(id, target, "Copy", params, params.copies);
+        super(id, "Copy", copies, params);
     }
 
     protected computeOutShape(): number[][] {
         const { copies } = this._params;
         const outShapes: number[][] = []; 
         
-        if (!this._inShape) {
+        if (this._inShapes[0] === null) {
             throw new Error("Input shape must be defined to compute output shapes");
         }
     
         for (let i = 0; i < copies; i++) {
-            outShapes.push([...this._inShape]);
+            outShapes.push([...this._inShapes[0]]);
         } 
 
         return outShapes;
@@ -192,4 +186,3 @@ export class Copy extends BranchOp {
         return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
     }
 } 
-

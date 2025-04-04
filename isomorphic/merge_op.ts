@@ -1,51 +1,39 @@
+import { g_GraphConfig } from './config';
 import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
 
-
 export abstract class MergeOp extends GraphNode {
-    protected _inShape: number[][];
-    protected _outShape: number[]| null;
-    public _prevs: GraphNode[] = [];
-    protected _next: GraphNode | null = null;
     protected readonly _opType: string;
-    protected _params: Record<string, any>;
-    public _numberOfMerges: number; 
+    protected _numberOfMerges: number; 
 
     constructor(
         id: string,
-        target: string,
         opType: string,
+        numberOfMerges: number,
         params: Record<string, any> = {}, 
-        numberOfMerges: number 
     ) {
-        super(id, target);
-        this._inShape = Array(numberOfMerges).fill(null); 
+        super(id, params);
+        this._inShapes = Array(numberOfMerges).fill(null); 
+        this._outShapes = [null];
         this._prevs = Array(numberOfMerges).fill(null); 
+        this._nexts = [null];
         this._opType = opType;
-        this._params = params;
-        this._outShape = null; 
         this._numberOfMerges = numberOfMerges; 
     }
-    
-    protected abstract computeOutShape(): number[];
+
+    /* this is probably required for all nodes??? why is it defined here. */
+    protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
     abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
-    
 
     // Getters and setters
-    get prev(): GraphNode | null { return null; }
-    set prev(node: GraphNode | null) { /* Do nothing */ }
-    get inShape(): number[][] { return this._inShape; }
-    get outShape(): number[] | null { return this._outShape; }
-    get next(): GraphNode | null { return this._next; }
-    set next(node: GraphNode | null) { this._next = node; }
     get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
         (this._params) = { ...params };
         // Recalculate output shape
-        this._outShape = this.computeOutShape();
+        this._outShapes = [this.computeOutShape()];
     }
 
     // addPrev 
@@ -53,48 +41,49 @@ export abstract class MergeOp extends GraphNode {
     // main class addPrev should only take care of checkingIncomingShapeValidity. And this can be done for most Merge Operations 
     // For Reduceable Op, at any this stage they can compute an outShape (Reduceable Op's computeOutShape can be just an operation over the existing outShape)
     // However, For non-reduceable Op, they will have to check that they have filled all the requireed inputs before they can compute and outShape 
-
     addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (indexSelf === undefined) {
             throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
         } 
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShape.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
+        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
         if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
             throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
         }
-        //-------------------------------------------------------
-        this.checkIncomingShapeMatch(prevOutShape); 
-        
+
+        /* Different for every derived object */
+        this.checkIncomingShapeMatch(prevOutShape);
+
         // Store both the prev node and its shape
         this._prevs[validatedIndex] = prev;
-        this._inShape[validatedIndex] = [...prevOutShape];
+        this._inShapes[validatedIndex] = [...prevOutShape];
         
         // Now compute the output shape based on the updated input shapes
-        this._outShape = this.computeOutShape();
+        this._outShapes = [this.computeOutShape()];
     }
 
     addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void {
-        if (this._next !== null) {
+        if (this._nexts[0] !== null) {
             throw new Error("MergeOp already has a sink connection");
         }
 
         // Just set our next reference - Graph handles all validation and connections
-        this._next = next;
+        this._nexts[0] = next;
     }
 
     deletePrev(indexSelf: number): void {
         //at this point we have already check that indexSelf is valid from the function calling deletePrev
-        this._prevs[indexSelf] = null as unknown as GraphNode;
+        this._prevs[indexSelf] = null;
         // Just clear our reference and reset shapes 
-        this._inShape[indexSelf] = null as unknown as number[]; 
-        this._outShape = null; 
+        this._inShapes[indexSelf] = null;
+        this._outShapes = [null]; 
     }
 
-    deleteNext(indexSelf?: number): void {
+    deleteNext(): void {
         // Just clear our next reference
-        this._next = null;
+        this._nexts[0] = null;
     }
 }
+
 
 /**
  * PointwiseOp represents operations that take exactly two inputs with matching shapes
@@ -103,19 +92,18 @@ export abstract class MergeOp extends GraphNode {
 export class PointwiseOp extends MergeOp {
     constructor(
         id: string,
-        target: string,
         opType: string,
         params: Record<string, any> = {}
     ) {
-        super(id, target, opType, params, 2); // Always 2 inputs for pointwise ops
+        super(id, opType, 2, params); // Always 2 inputs for pointwise ops
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
-        if (!this._inShape.some(s => s !== null)) {
+        if (!this._inShapes.some(s => s !== null)) {
             return; // First shape, no need to check
         }
 
-        const referenceShape = this._inShape.find(s => s !== null);
+        const referenceShape = this._inShapes.find(s => s !== null);
         if (!referenceShape) return;
 
         if (shape.length !== referenceShape.length) {
@@ -129,28 +117,30 @@ export class PointwiseOp extends MergeOp {
         }
     }
 
-    protected computeOutShape(): number[] {
+    /* TODO: these checks are good. need a canonical place to put these for each concrete class */
+    protected computeOutShape(): number[] | null {
         if (this._prevs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
 
-        const shape = this._prevs[0]?.outShape;
-        if (!shape) {
+        const shape = this._inShapes[0];
+        if (shape === null) {
             throw new Error("PointwiseOp requires first input to have defined shape");
         }
 
-        return Array.isArray(shape) ? shape as number[] : [shape as number];
+        return shape;
     }
 
+    /* XXX: this is called "to_torch_functional" but we are fetching target from global?? doesn't make much sense */
     to_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
         try {
-            const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, this._target);
+            const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, g_GraphConfig.target);
             return `${inputs[0]} = ${diffOpCode}(${inputs[0]}, ${inputs[1]})`;
         } catch {
-            const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, this._target);
+            const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, g_GraphConfig.target);
             return `${inputs[0]} = ${nonDiffOpCode}(${inputs[0]}, ${inputs[1]})`;
         }
     }
@@ -165,19 +155,17 @@ export class PointwiseOp extends MergeOp {
 export class DotOp extends MergeOp {
     constructor(
         id: string,
-        target: string,
-        opType: string,
         params: Record<string, any> = {}
     ) {
-        super(id, target, opType, params, 2); // Always 2 inputs for dot ops
+        super(id, "Dot", 2, params); // Always 2 inputs for dot ops
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
-        if (!this._inShape.some(s => s !== null)) {
+        if (this._inShapes.every(s => s === null)) {
             return; // First shape, no need to check
         }
 
-        const referenceShape = this._inShape.find(s => s !== null);
+        const referenceShape = this._inShapes.find(s => s !== null);
         if (!referenceShape) return;
 
         // For dot product, last dimension of first tensor must match first dimension of second tensor
@@ -189,24 +177,21 @@ export class DotOp extends MergeOp {
         }
     }
 
-    protected computeOutShape(): number[] {
+    protected computeOutShape(): number[] | null {
         if (this._prevs.length !== 2) {
             // throw new Error("DotOp requires exactly 2 inputs");
-            return [];
+            return null;
         }
 
-        const shape1 = this._prevs[0]?.outShape;
-        const shape2 = this._prevs[1]?.outShape;
+        const shape1 = this._inShapes[0];
+        const shape2 = this._inShapes[1];
         if (!shape1 || !shape2) {
             //throw new Error("DotOp requires both inputs to have defined shapes");
-            return [];
+            return null;
         }
 
         // For dot product, output shape is [batch_dims..., shape1[-2], shape2[-1]]
-        const arr1 = Array.isArray(shape1) ? shape1 as number[] : [shape1 as number];
-        const arr2 = Array.isArray(shape2) ? shape2 as number[] : [shape2 as number];
-        console.log("in computeOutShape, returning ", [...arr1.slice(0, -1), arr2[arr2.length - 1]])
-        return [...arr1.slice(0, -1), arr2[arr2.length - 1]];
+        return [...shape1.slice(0, -1), shape2[shape2.length - 1]];
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {
@@ -224,19 +209,17 @@ export class DotOp extends MergeOp {
 export class CrossOp extends MergeOp {
     constructor(
         id: string,
-        target: string,
-        opType: string,
         params: Record<string, any> = {}
     ) {
-        super(id, target, opType, params, 2); // Always 2 inputs for cross ops
+        super(id, "Cross", 2, params); // Always 2 inputs for cross ops
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
-        if (!this._inShape.some(s => s !== null)) {
+        if (this._inShapes.every(s => s === null)) {
             return; // First shape, no need to check
         }
 
-        const referenceShape = this._inShape.find(s => s !== null);
+        const referenceShape = this._inShapes.find(s => s !== null);
         if (!referenceShape) return;
 
         // For cross product, last dimension must be 3
@@ -257,20 +240,21 @@ export class CrossOp extends MergeOp {
         }
     }
 
-    protected computeOutShape(): number[] {
+    /* can be simplified once we find a canonical place for those checks */
+    protected computeOutShape(): number[] | null {
         if (this._prevs.length !== 2) {
             //throw new Error("CrossOp requires exactly 2 inputs");
-            return [];
+            return null;
         }
 
-        const shape = this._prevs[0]?.outShape;
-        if (!shape) {
+        const shape = this._inShapes[0];
+        if (shape === null) {
             //throw new Error("CrossOp requires first input to have defined shape");
-            return [];
+            return null;
         }
 
         // Cross product preserves the input shape
-        return Array.isArray(shape) ? shape as number[] : [shape as number];
+        return shape;
     }
 
     to_torch_functional(inputs: string[], outputs?: string[]): string {

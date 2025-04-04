@@ -4,30 +4,34 @@
  */
 export abstract class GraphNode {
     protected readonly _id: string;
-    protected readonly _target: string;
-    constructor(id: string, target: string) {
+    protected _params: Record<string, any>;
+
+    protected _inShapes: (number[] | null)[] = [];
+    protected _outShapes: (number[] | null)[] = [];
+
+    protected _prevs: (GraphNode | null)[] = [];
+    protected _nexts: (GraphNode | null)[] = [];
+
+    constructor(id: string, params: Record<string, any>) {
         // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(id)) {
             throw new Error(`Invalid UUID format: ${id}`);
         }
         this._id = id;
-        this._target = target;
+        this._params = params;
     }
 
     get id(): string { return this._id; }
-    get target(): string { return this._target; }
 
-    abstract get prev(): GraphNode | null;
-    abstract set prev(node: GraphNode | null);
-    abstract get next(): GraphNode | null;
-    abstract set next(node: GraphNode | null);
+    get prevs(): (GraphNode | null)[] { return this._prevs; }
+    get nexts(): (GraphNode | null)[] { return this._nexts; }
 
     // Abstract shape and parameter accessors
-    abstract get inShape(): number[] | number[][] | null;
-    abstract get outShape(): number[] | number[][] | null;
-    abstract get params(): Record<string, any>;
-    abstract set params(params: Record<string, any>);
+    get inShapes(): (number[] | null)[] { return this._inShapes; }
+    get outShapes(): (number[] | null)[] { return this._outShapes; }
+    get params(): Record<string, any> { return this._params; }
+    set params(params: Record<string, any>) { this._params = params; }
 
     abstract addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void;
     abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
@@ -210,24 +214,7 @@ export abstract class GraphNode {
      * @returns true if the node has any inputs connected
      */
     static hasInputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        
-        // List all node types that use _prevs array for multiple inputs
-        const multiInputTypes = [
-            'MergeOp',
-            'Concat', 
-            'PointwiseReduce',
-            'PointwiseOp',
-            'DotOp',
-            'CrossOp'
-        ];
-        
-        if (multiInputTypes.includes(className)) {
-            // @ts-ignore: Accessing protected property
-            return !node._prevs.every(p => !p);
-        } else {
-            return node.prev !== null;
-        }
+        return node._prevs.some(prev => prev !== null);
     }
 
     /**
@@ -236,20 +223,6 @@ export abstract class GraphNode {
      * @returns true if the node has any outputs connected
      */
     static hasOutputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        
-        // List all node types that use _nexts array for multiple outputs
-        const multiOutputTypes = [
-            'BranchOp',
-            'Split',
-            'Copy'
-        ];
-        
-        if (multiOutputTypes.includes(className)) {
-            // @ts-ignore: Accessing protected property
-            return !node._nexts.every(n => !n);
-        } else {
-            return node.next !== null;
-        }
+        return node._nexts.some(next => next !== null);
     }
 }
