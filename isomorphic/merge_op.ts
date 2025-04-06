@@ -41,7 +41,7 @@ export abstract class MergeOp extends GraphNode {
     // main class addPrev should only take care of checkingIncomingShapeValidity. And this can be done for most Merge Operations 
     // For Reduceable Op, at any this stage they can compute an outShape (Reduceable Op's computeOutShape can be just an operation over the existing outShape)
     // However, For non-reduceable Op, they will have to check that they have filled all the requireed inputs before they can compute and outShape 
-    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
+    addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number): void {
         if (indexSelf === undefined) {
             throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
         } 

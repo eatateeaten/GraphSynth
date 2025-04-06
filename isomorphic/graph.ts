@@ -42,11 +42,11 @@ export class Graph {
             assert(params.opType, "No operation type provided");
             node = new Op(id, params.opType, params);
         }else if(nodeType === "Split"){
-            assert(params.dim, "Dimension is required for Split");
+            assert(params.dim !== undefined, "Dimension is required for Split");
             assert(params.sections, "Sections is required for Split");
             node = new Split(id, params.dim, params.sections, params);
         }else if(nodeType === "Concat"){
-            assert(params.dim, "Dimension is required for Concat");
+            assert(params.dim !== undefined, "Dimension is required for Concat");
             assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for Concat");
             node = new Concat(id, params.dim, params.numberOfMerges, params);
         }else if(nodeType === "Copy"){
@@ -448,7 +448,6 @@ export class Graph {
         
             // Track the source variable in our map
             updateNodeVar(source.id, varName);
-            console.log(`Mapped source node ${source.id} to variable ${varName}`);
           
             // Send this var to the source's children
             const nextNodes = this._getNextNodes(source);
@@ -592,9 +591,7 @@ export class Graph {
                         throw new Error(`BranchOp ${branchOp.id} has no output shape defined`);
                     }
                 
-                    console.log(`DEBUG: BranchOp ${branchOp.id} outShape:`, branchOp.outShapes);
                     numOutputs = branchOp.outShapes.length;
-                    console.log(`BranchOp ${branchOp.id} (${branchOp.constructor.name}) has ${numOutputs} outputs and ${branchOp.nexts.length} next slots`);
                 } catch (error: any) {
                     console.error(`ERROR in output shape for ${branchOp.id}:`, error);
                     throw new Error(`Failed to get output shape for BranchOp ${branchOp.id}: ${error.message}`);
@@ -606,25 +603,17 @@ export class Graph {
                     const v = newVar();
                     usedNames.add(v);
                     outVars.push(v);
-                    console.log(`Generated output var ${v} for branch ${i} of ${branchOp.id}`);
                 }
-            
-                console.log(`Generated output variables for ${branchOp.id}: ${outVars.join(', ')}`);
-        
+
                 // Generate the torch functional code
                 const branchCode = branchOp.to_torch_functional(inputs, outVars);
-                console.log(`Generated branch code for ${branchOp.id}:\n${branchCode}`);
                 code += `${branchCode}\n`;
-            
-                // Track the generated code to diagnose issues
-                console.log(`Code so far:\n${code}`);
             
                 // Track each output variable for this branch node
                 for (let i = 0; i < outVars.length; i++) {
                     // For branch nodes, track variables by output index
                     // Use a unique key format: nodeId_outputIndex
                     updateNodeVar(`${branchOp.id}_${i}`, outVars[i]);
-                    console.log(`Mapped branch output: ${branchOp.id}_${i} -> ${outVars[i]}`);
                 }
             
                 // IMPORTANT: Don't use filtered nextNodes - use the actual _nexts array with its indices
@@ -632,7 +621,6 @@ export class Graph {
                 for (let i = 0; i < branchOp.nexts.length; i++) {
                     const nxt = branchOp.nexts[i];
                     if (!nxt) {
-                        console.log(`Next node at index ${i} is null for ${branchOp.id}`);
                         continue;
                     }
               
@@ -643,13 +631,11 @@ export class Graph {
                     }
               
                     const varToPass = outVars[i];
-                    console.log(`Connecting output ${i} (${varToPass}) of ${branchOp.id} to ${nxt.id}`);
               
                     const childInDegree = this._getPrevNodes(nxt).filter(p => p !== null).length;
                     const childSingleIn = GraphNode.singleInput(nxt);
               
                     if (childSingleIn && childInDegree <= 1) {
-                        console.log(`Pushing single-input node ${nxt.id} to stack with input [${varToPass}]`);
                         stack.push({ node: nxt, inputs: [varToPass] });
                     } else {
                         let partialInputs = waiting.get(nxt);
@@ -657,12 +643,10 @@ export class Graph {
                             partialInputs = new Array(childInDegree).fill("");
                         }
                         const idx = this._getPrevNodeIndex(nxt, branchOp);
-                        console.log(`Setting partial input at index ${idx} for node ${nxt.id} to ${varToPass}`);
                         partialInputs[idx] = varToPass;
                         waiting.set(nxt, partialInputs);
                 
                         if (partialInputs.every(v => v !== "")) {
-                            console.log(`All inputs filled for ${nxt.id}, pushing to stack with inputs [${partialInputs.join(', ')}]`);
                             stack.push({ node: nxt, inputs: partialInputs });
                             waiting.delete(nxt);
                         }
@@ -679,15 +663,11 @@ export class Graph {
         // return statement for sink Tensors
         const sinkVars: string[] = [];
         for (const sink of this._sinks) {
-            console.log(`Processing sink node: ${sink.id} (${sink.constructor.name})`);
 
             // Check if we have direct mapping for this sink
             if (nodeToVarMap.has(sink.id)) {
                 sinkVars.push(nodeToVarMap.get(sink.id)!);
             } else {
-            // If not, find incoming connections to this sink
-                console.log(`  No direct mapping found for sink ${sink.id}, searching incoming connections...`);
-
                 // Find nodes that connect to this sink
                 const incomingNodes = [];
                 for (const [nodeId, node] of this._nodes.entries()) {
@@ -696,12 +676,10 @@ export class Graph {
                         for (let i = 0; i < node.nexts.length; i++) {
                             if (node.nexts[i] === sink) {
                                 incomingNodes.push({ nodeId, outputIndex: i });
-                                console.log(`  Found incoming BranchOp connection: ${nodeId} at output ${i}`);
                             }
                         }
                     } else if ((node instanceof Op || node instanceof MergeOp) && node.nexts[0] === sink) {
                         incomingNodes.push({ nodeId, outputIndex: 0 });
-                        console.log(`  Found incoming Op/MergeOp connection: ${nodeId}`);
                     }
                 }
             
@@ -711,13 +689,11 @@ export class Graph {
                     const branchKey = `${nodeId}_${outputIndex}`;
                     if (nodeToVarMap.has(branchKey)) {
                         const varName = nodeToVarMap.get(branchKey)!;
-                        console.log(`  Found branch mapping for incoming connection: ${branchKey} -> ${varName}`);
                         sinkVars.push(varName);
                         foundVar = true;
                         break;
                     } else if (nodeToVarMap.has(nodeId)) {
                         const varName = nodeToVarMap.get(nodeId)!;
-                        console.log(`  Found node mapping for incoming connection: ${nodeId} -> ${varName}`);
                         sinkVars.push(varName);
                         foundVar = true;
                         break;
@@ -730,7 +706,6 @@ export class Graph {
                     const tensorName = sink instanceof Tensor && sink.variableName ? 
                         sink.variableName : 
                         `output${sinkVars.length + 1}`;
-                    console.log(`  No incoming connections found, using fallback name: ${tensorName}`);
                     sinkVars.push(tensorName);
                 }
             }
@@ -764,13 +739,11 @@ export class Graph {
         return node.prevs.findIndex(p => p && p.id === prevNode.id);
     }
 
-    // Add a helper method to generate UUIDs
     /**
      * Generates a UUID v4 string
-     * @private
      * @returns A UUID v4 string
      */
-    private _generateUUID(): string {
+    public _generateUUID(): string {
         // RFC4122 compliant UUID v4
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
@@ -827,31 +800,6 @@ export class Graph {
                 }
             });
         }
-
-        // Log sources and sinks
-        console.log("Sources:", Array.from(this._sources).map(node => ({
-            id: node.id,
-            type: node.constructor.name
-        })));
-        
-        console.log("Sinks:", Array.from(this._sinks).map(node => ({
-            id: node.id,
-            type: node.constructor.name
-        })));
-        
-        // Log the full adjacency list
-        console.log("Adjacency List:");
-        for (const [nodeId, nodeInfo] of Object.entries(adjList)) {
-            const outEdgesStr = nodeInfo.outEdges.map(edge => 
-                edge.index !== undefined 
-                    ? `${edge.type}[${edge.id}] (at index ${edge.index})` 
-                    : `${edge.type}[${edge.id}]`
-            ).join(", ");
-            
-            console.log(`${nodeInfo.type}[${nodeId}] → ${outEdgesStr || "(no outgoing edges)"}`);
-        }
-        
-        console.log("======================================");
     }
 }
 

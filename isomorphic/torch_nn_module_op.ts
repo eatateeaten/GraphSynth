@@ -1,3 +1,5 @@
+import { assert } from "./utils";
+
 interface ModuleMetadata {
     required_params: string[];
     optional_params: string[];
@@ -65,15 +67,12 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: ["bias"],
         code_generator: (params) => `nn.Linear(${params['input_features']}, ${params['output_features']}, bias=${params['bias'] ?? true})`,
         forward_shape_inference: (inShape, params) => {
-            // Typically, linear expects [N, input_features], output => [N, output_features]
-            // We'll assume inShape is [N, input_features] or [input_features]
-            if (inShape.length === 1) {
-                // Input is just [input_features] without batch dimension
-                return [params['output_features']];
-            } else {
-                // Input has batch dimension [N, input_features]
-                return [inShape[0], params['output_features']];
-            }
+            /* From torch documentation:
+             * Input: (∗,Hin) where ∗ means any number of dimensions including none and Hin = in_features
+             * Output: (∗,Hout) where all but the last dimension are the same shape as the input and Hout = out_features */
+            assert(inShape.length >= 1, "Linear requires at least 1D input");
+            assert(inShape[inShape.length-1] === params.input_features, "Last dimension must be equal to input features");
+            return [...inShape.slice(0, -1), params.output_features];
         },
     },
 
@@ -87,20 +86,39 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // Conv1D requires 2D [C_in, L] or 3D [N, C_in, L] input
+            const is3D = inShape.length === 3;
+            const is2D = inShape.length === 2;
+            
+            if (!is3D && !is2D) {
+                throw new Error(`Conv1D requires 2D or 3D input tensor, got shape ${inShape}`);
+            }
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 2) {
-                // Input is [C_in, L] without batch dimension
-                const L_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
-                return [params['out_channels'], L_out];
-            } else {
-                // Standard case: [N, C_in, L]
-                const L_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
+            // Validate channels
+            const channelDim = is3D ? 1 : 0;
+            if (inShape[channelDim] !== params['in_channels']) {
+                throw new Error(`Conv1D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            }
+            
+            // Calculate output spatial dimension
+            const lenDim = is3D ? 2 : 1;
+            const L_out = convOutputSize(inShape[lenDim], kernel, stride, padding, dilation);
+            
+            if (L_out <= 0) {
+                throw new Error(`Conv1D output length would be ${L_out}, which is invalid`);
+            }
+            
+            // Return appropriate shape based on input rank
+            if (is3D) {
                 return [inShape[0], params['out_channels'], L_out];
+            } else {
+                return [params['out_channels'], L_out];
             }
         },
     },
@@ -114,22 +132,42 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // Conv2D requires 3D [C_in, H, W] or 4D [N, C_in, H, W] input
+            const is4D = inShape.length === 4;
+            const is3D = inShape.length === 3;
+            
+            if (!is4D && !is3D) {
+                throw new Error(`Conv2D requires 3D or 4D input tensor, got shape ${inShape}`);
+            }
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 3) {
-                // Input is [C_in, H_in, W_in] without batch dimension
-                const H_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
-                const W_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-                return [params['out_channels'], H_out, W_out];
-            } else {
-                // Standard case: [N, C_in, H_in, W_in]
-                const H_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-                const W_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
+            // Validate channels
+            const channelDim = is4D ? 1 : 0;
+            if (inShape[channelDim] !== params['in_channels']) {
+                throw new Error(`Conv2D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            }
+            
+            // Calculate output spatial dimensions
+            const hDim = is4D ? 2 : 1;
+            const wDim = is4D ? 3 : 2;
+            
+            const H_out = convOutputSize(inShape[hDim], kernel, stride, padding, dilation);
+            const W_out = convOutputSize(inShape[wDim], kernel, stride, padding, dilation);
+            
+            if (H_out <= 0 || W_out <= 0) {
+                throw new Error(`Conv2D output dimensions would be ${H_out}x${W_out}, which is invalid`);
+            }
+            
+            // Return appropriate shape based on input rank
+            if (is4D) {
                 return [inShape[0], params['out_channels'], H_out, W_out];
+            } else {
+                return [params['out_channels'], H_out, W_out];
             }
         },
     },
@@ -143,24 +181,40 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
             `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // Conv3D requires 4D [C_in, D, H, W] or 5D [N, C_in, D, H, W] input
+            const is5D = inShape.length === 5;
+            const is4D = inShape.length === 4;
+            
+            assert(is5D || is4D, `Conv3D requires 4D or 5D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 4) {
-                // Input is [C_in, D_in, H_in, W_in] without batch dimension
-                const D_out = convOutputSize(inShape[1], kernel, stride, padding, dilation);
-                const H_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-                const W_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
-                return [params['out_channels'], D_out, H_out, W_out];
-            } else {
-                // Standard case: [N, C_in, D_in, H_in, W_in]
-                const D_out = convOutputSize(inShape[2], kernel, stride, padding, dilation);
-                const H_out = convOutputSize(inShape[3], kernel, stride, padding, dilation);
-                const W_out = convOutputSize(inShape[4], kernel, stride, padding, dilation);
+            // Validate channels
+            const channelDim = is5D ? 1 : 0;
+            assert(inShape[channelDim] === params['in_channels'], 
+                `Conv3D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            
+            // Calculate output spatial dimensions
+            const dDim = is5D ? 2 : 1;
+            const hDim = is5D ? 3 : 2;
+            const wDim = is5D ? 4 : 3;
+            
+            const D_out = convOutputSize(inShape[dDim], kernel, stride, padding, dilation);
+            const H_out = convOutputSize(inShape[hDim], kernel, stride, padding, dilation);
+            const W_out = convOutputSize(inShape[wDim], kernel, stride, padding, dilation);
+            
+            assert(D_out > 0 && H_out > 0 && W_out > 0, 
+                `Conv3D output dimensions would be ${D_out}x${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is5D) {
                 return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            } else {
+                return [params['out_channels'], D_out, H_out, W_out];
             }
         },
     },
@@ -172,25 +226,38 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) =>
             `nn.ConvTranspose1d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
             `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
-            `output_padding=${params['output_padding'] ?? 0}, groups=${params['groups'] ?? 1}, ` +
-            `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
-            `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+            `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
+            `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // ConvTranspose1D requires 2D [C_in, L] or 3D [N, C_in, L] input
+            const is3D = inShape.length === 3;
+            const is2D = inShape.length === 2;
+            
+            assert(is3D || is2D, `ConvTranspose1D requires 2D or 3D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 2) {
-                // Input is [C_in, L_in] without batch dimension
-                const L_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
-                return [params['out_channels'], L_out];
-            } else {
-                // Standard case: [N, C_in, L_in]
-                const L_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
+            // Validate channels
+            const channelDim = is3D ? 1 : 0;
+            assert(inShape[channelDim] === params['in_channels'], 
+                `ConvTranspose1D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            
+            // Calculate output spatial dimension
+            const lenDim = is3D ? 2 : 1;
+            const L_out = convTransposeOutputSize(inShape[lenDim], kernel, stride, padding, dilation, outputPadding);
+            
+            assert(L_out > 0, `ConvTranspose1D output length would be ${L_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is3D) {
                 return [inShape[0], params['out_channels'], L_out];
+            } else {
+                return [params['out_channels'], L_out];
             }
         },
     },
@@ -201,27 +268,42 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) =>
             `nn.ConvTranspose2d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
             `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
-            `output_padding=${params['output_padding'] ?? 0}, groups=${params['groups'] ?? 1}, ` +
-            `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
-            `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+            `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
+            `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // ConvTranspose2D requires 3D [C_in, H, W] or 4D [N, C_in, H, W] input
+            const is4D = inShape.length === 4;
+            const is3D = inShape.length === 3;
+            
+            assert(is4D || is3D, `ConvTranspose2D requires 3D or 4D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 3) {
-                // Input is [C_in, H_in, W_in] without batch dimension
-                const H_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
-                const W_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-                return [params['out_channels'], H_out, W_out];
-            } else {
-                // Standard case: [N, C_in, H_in, W_in]
-                const H_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-                const W_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
+            // Validate channels
+            const channelDim = is4D ? 1 : 0;
+            assert(inShape[channelDim] === params['in_channels'], 
+                `ConvTranspose2D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            
+            // Calculate output spatial dimensions
+            const hDim = is4D ? 2 : 1;
+            const wDim = is4D ? 3 : 2;
+            
+            const H_out = convTransposeOutputSize(inShape[hDim], kernel, stride, padding, dilation, outputPadding);
+            const W_out = convTransposeOutputSize(inShape[wDim], kernel, stride, padding, dilation, outputPadding);
+            
+            assert(H_out > 0 && W_out > 0, 
+                `ConvTranspose2D output dimensions would be ${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is4D) {
                 return [inShape[0], params['out_channels'], H_out, W_out];
+            } else {
+                return [params['out_channels'], H_out, W_out];
             }
         },
     },
@@ -232,29 +314,44 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) =>
             `nn.ConvTranspose3d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
             `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
-            `output_padding=${params['output_padding'] ?? 0}, groups=${params['groups'] ?? 1}, ` +
-            `bias=${params['bias'] ?? true}, dilation=${params['dilation'] ?? 1}, ` +
-            `padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+            `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
+            `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
         forward_shape_inference: (inShape, params) => {
+            // ConvTranspose3D requires 4D [C_in, D, H, W] or 5D [N, C_in, D, H, W] input
+            const is5D = inShape.length === 5;
+            const is4D = inShape.length === 4;
+            
+            assert(is5D || is4D, `ConvTranspose3D requires 4D or 5D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters with defaults
             const stride = params['stride'] ?? 1;
             const padding = params['padding'] ?? 0;
             const outputPadding = params['output_padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const kernel = params['kernel_size'];
             
-            // Check if we have a batch dimension
-            if (inShape.length === 4) {
-                // Input is [C_in, D_in, H_in, W_in] without batch dimension
-                const D_out = convTransposeOutputSize(inShape[1], kernel, stride, padding, dilation, outputPadding);
-                const H_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-                const W_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
-                return [params['out_channels'], D_out, H_out, W_out];
-            } else {
-                // Standard case: [N, C_in, D_in, H_in, W_in]
-                const D_out = convTransposeOutputSize(inShape[2], kernel, stride, padding, dilation, outputPadding);
-                const H_out = convTransposeOutputSize(inShape[3], kernel, stride, padding, dilation, outputPadding);
-                const W_out = convTransposeOutputSize(inShape[4], kernel, stride, padding, dilation, outputPadding);
+            // Validate channels
+            const channelDim = is5D ? 1 : 0;
+            assert(inShape[channelDim] === params['in_channels'], 
+                `ConvTranspose3D expected in_channels=${params['in_channels']}, got ${inShape[channelDim]}`);
+            
+            // Calculate output spatial dimensions
+            const dDim = is5D ? 2 : 1;
+            const hDim = is5D ? 3 : 2;
+            const wDim = is5D ? 4 : 3;
+            
+            const D_out = convTransposeOutputSize(inShape[dDim], kernel, stride, padding, dilation, outputPadding);
+            const H_out = convTransposeOutputSize(inShape[hDim], kernel, stride, padding, dilation, outputPadding);
+            const W_out = convTransposeOutputSize(inShape[wDim], kernel, stride, padding, dilation, outputPadding);
+            
+            assert(D_out > 0 && H_out > 0 && W_out > 0, 
+                `ConvTranspose3D output dimensions would be ${D_out}x${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is5D) {
                 return [inShape[0], params['out_channels'], D_out, H_out, W_out];
+            } else {
+                return [params['out_channels'], D_out, H_out, W_out];
             }
         },
     },
@@ -268,21 +365,34 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
+            // MaxPool1D requires 2D [C, L] or 3D [N, C, L] input
+            const is3D = inShape.length === 3;
+            const is2D = inShape.length === 2;
+            
+            if (!is3D && !is2D) {
+                throw new Error(`MaxPool1D requires 2D or 3D input tensor, got shape ${inShape}`);
+            }
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
             
-            // Check if we have a batch dimension
-            if (inShape.length === 2) {
-                // Input is [C, L] without batch dimension
-                const L_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
-                return [inShape[0], L_out];
-            } else {
-                // Standard case: [N, C, L]
-                const L_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+            // Calculate output length
+            const lenDim = is3D ? 2 : 1;
+            const L_out = poolOutputSize(inShape[lenDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            if (L_out <= 0) {
+                throw new Error(`MaxPool1D output length would be ${L_out}, which is invalid`);
+            }
+            
+            // Return output shape based on input rank
+            if (is3D) {
                 return [inShape[0], inShape[1], L_out];
+            } else {
+                return [inShape[0], L_out];
             }
         },
     },
@@ -295,24 +405,38 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
+            // MaxPool2D requires 3D [C, H, W] or 4D [N, C, H, W] input
+            const is4D = inShape.length === 4;
+            const is3D = inShape.length === 3;
+            
+            if (!is4D && !is3D) {
+                throw new Error(`MaxPool2D requires 3D or 4D input tensor, got shape ${inShape}`);
+            }
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
             
-            // Check if we have a batch dimension
-            if (inShape.length === 3) {
-                // Input is [C, H, W] without batch dimension
-                const H_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
-                const W_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-                return [inShape[0], H_out, W_out];
-            } else {
-                // Standard case: [N, C, H, W]
-                const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-                const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-                return [inShape[0], inShape[1], H_out, W_out];
+            // Calculate output spatial dimensions
+            const hDim = is4D ? 2 : 1;
+            const wDim = is4D ? 3 : 2;
+            
+            const H_out = poolOutputSize(inShape[hDim], kernel, stride, padding, dilation, ceil_mode);
+            const W_out = poolOutputSize(inShape[wDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            if (H_out <= 0 || W_out <= 0) {
+                throw new Error(`MaxPool2D output dimensions would be ${H_out}x${W_out}, which is invalid`);
             }
+            
+            // Return appropriate shape based on input rank
+            const outShape = [...inShape];
+            outShape[hDim] = H_out;
+            outShape[wDim] = W_out;
+            
+            return outShape;
         },
     },
 
@@ -324,26 +448,38 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `dilation=${params['dilation'] ?? 1}, return_indices=${params['return_indices'] ?? false}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
+            // MaxPool3D requires 4D [C, D, H, W] or 5D [N, C, D, H, W] input
+            const is5D = inShape.length === 5;
+            const is4D = inShape.length === 4;
+            
+            assert(is5D || is4D, `MaxPool3D requires 4D or 5D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
             const dilation = params['dilation'] ?? 1;
             const ceil_mode = params['ceil_mode'] ?? false;
             
-            // Check if we have a batch dimension
-            if (inShape.length === 4) {
-                // Input is [C, D, H, W] without batch dimension
-                const D_out = poolOutputSize(inShape[1], kernel, stride, padding, dilation, ceil_mode);
-                const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-                const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-                return [inShape[0], D_out, H_out, W_out];
-            } else {
-                // Standard case: [N, C, D, H, W]
-                const D_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-                const H_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-                const W_out = poolOutputSize(inShape[4], kernel, stride, padding, dilation, ceil_mode);
-                return [inShape[0], inShape[1], D_out, H_out, W_out];
-            }
+            // Calculate output spatial dimensions
+            const dDim = is5D ? 2 : 1;
+            const hDim = is5D ? 3 : 2;
+            const wDim = is5D ? 4 : 3;
+            
+            const D_out = poolOutputSize(inShape[dDim], kernel, stride, padding, dilation, ceil_mode);
+            const H_out = poolOutputSize(inShape[hDim], kernel, stride, padding, dilation, ceil_mode);
+            const W_out = poolOutputSize(inShape[wDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(D_out > 0 && H_out > 0 && W_out > 0, 
+                `MaxPool3D output dimensions would be ${D_out}x${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            const outShape = [...inShape];
+            outShape[dDim] = D_out;
+            outShape[hDim] = H_out;
+            outShape[wDim] = W_out;
+            
+            return outShape;
         },
     },
 
@@ -354,14 +490,31 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `stride=${params['stride'] ?? params['kernel_size']}, padding=${params['padding'] ?? 0}, ` +
             `ceil_mode=${params['ceil_mode'] ?? false}, count_include_pad=${params['count_include_pad'] ?? true})`,
         forward_shape_inference: (inShape, params) => {
+            // AvgPool1D requires 2D [C, L] or 3D [N, C, L] input
+            const is3D = inShape.length === 3;
+            const is2D = inShape.length === 2;
+            
+            assert(is3D || is2D, `AvgPool1D requires 2D or 3D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
-            // dilation is not an arg for AvgPool in PyTorch, default = 1
-            const dilation = 1;
+            const dilation = 1; // dilation is not an arg for AvgPool in PyTorch
             const ceil_mode = params['ceil_mode'] ?? false;
-            const L_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], L_out];
+            
+            // Calculate output length
+            const lenDim = is3D ? 2 : 1;
+            const L_out = poolOutputSize(inShape[lenDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(L_out > 0, `AvgPool1D output length would be ${L_out}, which is invalid`);
+            
+            // Return output shape based on input rank
+            if (is3D) {
+                return [inShape[0], inShape[1], L_out];
+            } else {
+                return [inShape[0], L_out];
+            }
         },
     },
 
@@ -373,14 +526,34 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `ceil_mode=${params['ceil_mode'] ?? false}, count_include_pad=${params['count_include_pad'] ?? true}, ` +
             `divisor_override=${params['divisor_override'] ?? 'None'})`,
         forward_shape_inference: (inShape, params) => {
+            // AvgPool2D requires 3D [C, H, W] or 4D [N, C, H, W] input
+            const is4D = inShape.length === 4;
+            const is3D = inShape.length === 3;
+            
+            assert(is4D || is3D, `AvgPool2D requires 3D or 4D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
-            const dilation = 1;
+            const dilation = 1; // dilation is not an arg for AvgPool in PyTorch
             const ceil_mode = params['ceil_mode'] ?? false;
-            const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], H_out, W_out];
+            
+            // Calculate output spatial dimensions
+            const hDim = is4D ? 2 : 1;
+            const wDim = is4D ? 3 : 2;
+            
+            const H_out = poolOutputSize(inShape[hDim], kernel, stride, padding, dilation, ceil_mode);
+            const W_out = poolOutputSize(inShape[wDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(H_out > 0 && W_out > 0, `AvgPool2D output dimensions would be ${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is4D) {
+                return [inShape[0], inShape[1], H_out, W_out];
+            } else {
+                return [inShape[0], H_out, W_out];
+            }
         },
     },
 
@@ -392,15 +565,37 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `ceil_mode=${params['ceil_mode'] ?? false}, count_include_pad=${params['count_include_pad'] ?? true}, ` +
             `divisor_override=${params['divisor_override'] ?? 'None'})`,
         forward_shape_inference: (inShape, params) => {
+            // AvgPool3D requires 4D [C, D, H, W] or 5D [N, C, D, H, W] input
+            const is5D = inShape.length === 5;
+            const is4D = inShape.length === 4;
+            
+            assert(is5D || is4D, `AvgPool3D requires 4D or 5D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = params['padding'] ?? 0;
-            const dilation = 1;
+            const dilation = 1; // dilation is not an arg for AvgPool in PyTorch
             const ceil_mode = params['ceil_mode'] ?? false;
-            const D_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
-            const H_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
-            const W_out = poolOutputSize(inShape[4], kernel, stride, padding, dilation, ceil_mode);
-            return [inShape[0], inShape[1], D_out, H_out, W_out];
+            
+            // Calculate output spatial dimensions
+            const dDim = is5D ? 2 : 1;
+            const hDim = is5D ? 3 : 2;
+            const wDim = is5D ? 4 : 3;
+            
+            const D_out = poolOutputSize(inShape[dDim], kernel, stride, padding, dilation, ceil_mode);
+            const H_out = poolOutputSize(inShape[hDim], kernel, stride, padding, dilation, ceil_mode);
+            const W_out = poolOutputSize(inShape[wDim], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(D_out > 0 && H_out > 0 && W_out > 0, 
+                `AvgPool3D output dimensions would be ${D_out}x${H_out}x${W_out}, which is invalid`);
+            
+            // Return appropriate shape based on input rank
+            if (is5D) {
+                return [inShape[0], inShape[1], D_out, H_out, W_out];
+            } else {
+                return [inShape[0], D_out, H_out, W_out];
+            }
         },
     },
 
@@ -410,13 +605,21 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) => `nn.LPPool1d(norm_type=${params['norm_type']}, kernel_size=${params['kernel_size']}, ` +
             `stride=${params['stride'] ?? params['kernel_size']}, ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, L] -> [N, C, L_out]
+            // LPPool1D requires 3D input [N, C, L]
+            assert(inShape.length === 3, `LPPool1D requires 3D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
             const padding = 0; // not in signature
             const dilation = 1; // not in signature
             const ceil_mode = params['ceil_mode'] ?? false;
+            
+            // Calculate output length
             const L_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(L_out > 0, `LPPool1D output length would be ${L_out}, which is invalid`);
+            
             return [inShape[0], inShape[1], L_out];
         },
     },
@@ -427,14 +630,22 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         code_generator: (params) => `nn.LPPool2d(norm_type=${params['norm_type']}, kernel_size=${params['kernel_size']}, ` +
             `stride=${params['stride'] ?? params['kernel_size']}, ceil_mode=${params['ceil_mode'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, H, W] -> [N, C, H_out, W_out]
+            // LPPool2D requires 4D input [N, C, H, W]
+            assert(inShape.length === 4, `LPPool2D requires 4D input tensor, got shape ${inShape}`);
+            
+            // Extract parameters
             const kernel = params['kernel_size'];
-            const stride = (params['stride'] !== undefined) ? params['stride'] : kernel;
-            const padding = 0;
-            const dilation = 1;
+            const stride = params['stride'] !== undefined ? params['stride'] : kernel;
+            const padding = 0; // not in signature
+            const dilation = 1; // not in signature 
             const ceil_mode = params['ceil_mode'] ?? false;
+            
+            // Calculate output spatial dimensions
             const H_out = poolOutputSize(inShape[2], kernel, stride, padding, dilation, ceil_mode);
             const W_out = poolOutputSize(inShape[3], kernel, stride, padding, dilation, ceil_mode);
+            
+            assert(H_out > 0 && W_out > 0, `LPPool2D output dimensions would be ${H_out}x${W_out}, which is invalid`);
+            
             return [inShape[0], inShape[1], H_out, W_out];
         },
     },
@@ -445,8 +656,14 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: [],
         code_generator: (params) => `nn.AdaptiveAvgPool1d(output_size=${params['output_size']})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, L_in] -> [N, C, output_size]
-            return [inShape[0], inShape[1], params['output_size']];
+            // AdaptiveAvgPool1D requires 3D input [N, C, L]
+            assert(inShape.length === 3, `AdaptiveAvgPool1D requires 3D input tensor, got shape ${inShape}`);
+            
+            // Ensure output_size is valid
+            const output_size = params['output_size'];
+            assert(output_size > 0, `AdaptiveAvgPool1D output_size must be > 0, got ${output_size}`);
+            
+            return [inShape[0], inShape[1], output_size];
         },
     },
 
@@ -455,13 +672,20 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: [],
         code_generator: (params) => `nn.AdaptiveAvgPool2d(output_size=${params['output_size']})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, H_in, W_in] -> [N, C, outH, outW]
+            // AdaptiveAvgPool2D requires 4D input [N, C, H, W]
+            assert(inShape.length === 4, `AdaptiveAvgPool2D requires 4D input tensor, got shape ${inShape}`);
+            
+            // Get output size
             const outSize = ensureArray(params['output_size']);
+            
+            // Validate output size
             if (outSize.length === 1) {
-                // e.g. output_size=H
-                return [inShape[0], inShape[1], outSize[0], outSize[0]];
+                assert(outSize[0] > 0, `AdaptiveAvgPool2D output_size must be > 0, got ${outSize[0]}`);
+                return [inShape[0], inShape[1], outSize[0], outSize[0]]; // Square output
             } else {
-                // e.g. output_size=[H, W]
+                assert(outSize.length === 2, `AdaptiveAvgPool2D expected output_size to have 1 or 2 dimensions, got ${outSize.length}`);
+                assert(outSize[0] > 0 && outSize[1] > 0, 
+                    `AdaptiveAvgPool2D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1]];
             }
         },
@@ -472,14 +696,24 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: [],
         code_generator: (params) => `nn.AdaptiveAvgPool3d(output_size=${params['output_size']})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, D_in, H_in, W_in] -> [N, C, outD, outH, outW]
+            // AdaptiveAvgPool3D requires 5D input [N, C, D, H, W]
+            assert(inShape.length === 5, `AdaptiveAvgPool3D requires 5D input tensor, got shape ${inShape}`);
+            
+            // Get output size
             const outSize = ensureArray(params['output_size']);
-            // Could be single, double, or triple, but typically triple
+            
+            // Validate and handle different output size formats
             if (outSize.length === 1) {
-                return [inShape[0], inShape[1], outSize[0], outSize[0], outSize[0]];
+                assert(outSize[0] > 0, `AdaptiveAvgPool3D output_size must be > 0, got ${outSize[0]}`);
+                return [inShape[0], inShape[1], outSize[0], outSize[0], outSize[0]]; // Cube output
             } else if (outSize.length === 2) {
+                assert(outSize[0] > 0 && outSize[1] > 0, 
+                    `AdaptiveAvgPool3D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1], outSize[1]];
             } else {
+                assert(outSize.length === 3, `AdaptiveAvgPool3D expected output_size to have 1, 2 or 3 dimensions, got ${outSize.length}`);
+                assert(outSize[0] > 0 && outSize[1] > 0 && outSize[2] > 0, 
+                    `AdaptiveAvgPool3D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}x${outSize[2]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1], outSize[2]];
             }
         },
@@ -490,8 +724,14 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: ["return_indices"],
         code_generator: (params) => `nn.AdaptiveMaxPool1d(output_size=${params['output_size']}, return_indices=${params['return_indices'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, L_in] -> [N, C, output_size]
-            return [inShape[0], inShape[1], params['output_size']];
+            // AdaptiveMaxPool1D requires 3D input [N, C, L]
+            assert(inShape.length === 3, `AdaptiveMaxPool1D requires 3D input tensor, got shape ${inShape}`);
+            
+            // Ensure output_size is valid
+            const output_size = params['output_size'];
+            assert(output_size > 0, `AdaptiveMaxPool1D output_size must be > 0, got ${output_size}`);
+            
+            return [inShape[0], inShape[1], output_size];
         },
     },
 
@@ -500,11 +740,20 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: ["return_indices"],
         code_generator: (params) => `nn.AdaptiveMaxPool2d(output_size=${params['output_size']}, return_indices=${params['return_indices'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, H_in, W_in] -> [N, C, outH, outW]
+            // AdaptiveMaxPool2D requires 4D input [N, C, H, W]
+            assert(inShape.length === 4, `AdaptiveMaxPool2D requires 4D input tensor, got shape ${inShape}`);
+            
+            // Get output size
             const outSize = ensureArray(params['output_size']);
+            
+            // Validate output size
             if (outSize.length === 1) {
-                return [inShape[0], inShape[1], outSize[0], outSize[0]];
+                assert(outSize[0] > 0, `AdaptiveMaxPool2D output_size must be > 0, got ${outSize[0]}`);
+                return [inShape[0], inShape[1], outSize[0], outSize[0]]; // Square output
             } else {
+                assert(outSize.length === 2, `AdaptiveMaxPool2D expected output_size to have 1 or 2 dimensions, got ${outSize.length}`);
+                assert(outSize[0] > 0 && outSize[1] > 0, 
+                    `AdaptiveMaxPool2D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1]];
             }
         },
@@ -515,13 +764,24 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: ["return_indices"],
         code_generator: (params) => `nn.AdaptiveMaxPool3d(output_size=${params['output_size']}, return_indices=${params['return_indices'] ?? false})`,
         forward_shape_inference: (inShape, params) => {
-            // [N, C, D_in, H_in, W_in] -> [N, C, outD, outH, outW]
+            // AdaptiveMaxPool3D requires 5D input [N, C, D, H, W]
+            assert(inShape.length === 5, `AdaptiveMaxPool3D requires 5D input tensor, got shape ${inShape}`);
+            
+            // Get output size
             const outSize = ensureArray(params['output_size']);
+            
+            // Validate and handle different output size formats
             if (outSize.length === 1) {
-                return [inShape[0], inShape[1], outSize[0], outSize[0], outSize[0]];
+                assert(outSize[0] > 0, `AdaptiveMaxPool3D output_size must be > 0, got ${outSize[0]}`);
+                return [inShape[0], inShape[1], outSize[0], outSize[0], outSize[0]]; // Cube output
             } else if (outSize.length === 2) {
+                assert(outSize[0] > 0 && outSize[1] > 0, 
+                    `AdaptiveMaxPool3D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1], outSize[1]];
             } else {
+                assert(outSize.length === 3, `AdaptiveMaxPool3D expected output_size to have 1, 2 or 3 dimensions, got ${outSize.length}`);
+                assert(outSize[0] > 0 && outSize[1] > 0 && outSize[2] > 0, 
+                    `AdaptiveMaxPool3D output dimensions must be > 0, got ${outSize[0]}x${outSize[1]}x${outSize[2]}`);
                 return [inShape[0], inShape[1], outSize[0], outSize[1], outSize[2]];
             }
         },
@@ -538,8 +798,13 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `affine=${params['affine'] ?? true}, track_running_stats=${params['track_running_stats'] ?? true}${dimParam})`;
         },
         forward_shape_inference: (inShape) => {
-            // [N, C, L] => same shape
-            return inShape;
+            // BatchNorm1D requires 2D [N, C] or 3D [N, C, L] input
+            if (inShape.length !== 2 && inShape.length !== 3) {
+                throw new Error(`BatchNorm1D requires 2D or 3D input tensor, got shape ${inShape}`);
+            }
+            
+            // BatchNorm1D preserves input shape
+            return [...inShape];
         },
     },
 
@@ -552,9 +817,23 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `eps=${params['eps'] ?? 1e-5}, momentum=${params['momentum'] ?? 0.1}, ` +
             `affine=${params['affine'] ?? true}, track_running_stats=${params['track_running_stats'] ?? true}${dimParam})`;
         },
-        forward_shape_inference: (inShape) => {
-            // [N, C, H, W] => same shape
-            return inShape;
+        forward_shape_inference: (inShape, params) => {
+            // BatchNorm2D requires 3D [C, H, W] or 4D [N, C, H, W] input
+            const is4D = inShape.length === 4;
+            const is3D = inShape.length === 3;
+            
+            if (!is4D && !is3D) {
+                throw new Error(`BatchNorm2D requires 3D or 4D input tensor, got shape ${inShape}`);
+            }
+            
+            // Validate channels
+            const channelDim = is4D ? 1 : 0;
+            if (inShape[channelDim] !== params['num_features']) {
+                throw new Error(`BatchNorm2D expected num_features=${params['num_features']}, got ${inShape[channelDim]}`);
+            }
+            
+            // BatchNorm2D preserves input shape
+            return [...inShape];
         },
     },
 
@@ -567,9 +846,23 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             `eps=${params['eps'] ?? 1e-5}, momentum=${params['momentum'] ?? 0.1}, ` +
             `affine=${params['affine'] ?? true}, track_running_stats=${params['track_running_stats'] ?? true}${dimParam})`;
         },
-        forward_shape_inference: (inShape) => {
-            // [N, C, D, H, W] => same shape
-            return inShape;
+        forward_shape_inference: (inShape, params) => {
+            // BatchNorm3D requires 4D [C, D, H, W] or 5D [N, C, D, H, W] input
+            const is5D = inShape.length === 5;
+            const is4D = inShape.length === 4;
+            
+            if (!is5D && !is4D) {
+                throw new Error(`BatchNorm3D requires 4D or 5D input tensor, got shape ${inShape}`);
+            }
+            
+            // Validate channels
+            const channelDim = is5D ? 1 : 0;
+            if (inShape[channelDim] !== params['num_features']) {
+                throw new Error(`BatchNorm3D expected num_features=${params['num_features']}, got ${inShape[channelDim]}`);
+            }
+            
+            // BatchNorm3D preserves input shape
+            return [...inShape];
         },
     },
 
@@ -581,7 +874,7 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             return `nn.LayerNorm(normalized_shape=${params['normalized_shape']}, ` +
             `eps=${params['eps'] ?? 1e-5}, elementwise_affine=${params['elementwise_affine'] ?? true}${dimParam})`;
         },
-        forward_shape_inference: (inShape) => {
+        forward_shape_inference: (inShape, params) => {
             // shape unchanged
             return inShape;
         },
@@ -595,7 +888,7 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             return `nn.GroupNorm(num_groups=${params['num_groups']}, num_channels=${params['num_channels']}, ` +
             `eps=${params['eps'] ?? 1e-5}, affine=${params['affine'] ?? true}${dimParam})`;
         },
-        forward_shape_inference: (inShape) => inShape,
+        forward_shape_inference: (inShape, params) => inShape,
     },
 
     "InstanceNorm1D": {
@@ -646,7 +939,19 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             }
             return `nn.Dropout(p=${params['p'] ?? 0.5}, inplace=${params['inplace'] ?? false})`;
         },
-        forward_shape_inference: (inShape) => inShape,
+        forward_shape_inference: (inShape, params) => {
+            // Dropout takes any shape input
+            assert(inShape.length > 0, `Dropout requires at least 1D input tensor, got shape ${inShape}`);
+            
+            // If dim is specified, validate it's within bounds
+            if (params['dim'] !== undefined) {
+                const dim = params['dim'];
+                assert(dim >= 0 && dim < inShape.length, `Dropout dimension ${dim} is out of bounds for input shape ${inShape}`);
+            }
+            
+            // Dropout preserves input shape
+            return [...inShape];
+        },
     },
 
     "Dropout2D": {
@@ -660,7 +965,19 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             }
             return `nn.Dropout2d(p=${params['p'] ?? 0.5}, inplace=${params['inplace'] ?? false})`;
         },
-        forward_shape_inference: (inShape) => inShape,
+        forward_shape_inference: (inShape, params) => {
+            // Dropout2d typically expects 4D input [N, C, H, W]
+            assert(inShape.length === 4, `Dropout2D typically expects 4D input tensor, got shape ${inShape}`);
+            
+            // If dim is specified, validate it's within bounds
+            if (params['dim'] !== undefined) {
+                const dim = params['dim'];
+                assert(dim >= 0 && dim < inShape.length, `Dropout2D dimension ${dim} is out of bounds for input shape ${inShape}`);
+            }
+            
+            // Dropout2D preserves input shape
+            return [...inShape];
+        },
     },
 
     "Dropout3D": {
@@ -674,7 +991,19 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             }
             return `nn.Dropout3d(p=${params['p'] ?? 0.5}, inplace=${params['inplace'] ?? false})`;
         },
-        forward_shape_inference: (inShape) => inShape,
+        forward_shape_inference: (inShape, params) => {
+            // Dropout3d typically expects 5D input [N, C, D, H, W]
+            assert(inShape.length === 5, `Dropout3D typically expects 5D input tensor, got shape ${inShape}`);
+            
+            // If dim is specified, validate it's within bounds
+            if (params['dim'] !== undefined) {
+                const dim = params['dim'];
+                assert(dim >= 0 && dim < inShape.length, `Dropout3D dimension ${dim} is out of bounds for input shape ${inShape}`);
+            }
+            
+            // Dropout3D preserves input shape
+            return [...inShape];
+        },
     },
 
     "AlphaDropout": {
@@ -867,9 +1196,35 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: [],
         code_generator: (params) => `torch.reshape(${params['shape'].join(', ')})`,
         forward_shape_inference: (inShape, params) => {
-            // We'll assume the user-provided shape is correct
-            // If shape includes -1, normally we'd compute it, but let's assume user does that.
-            return params['shape'];
+            // Validate the shape parameter is an array
+            const targetShape = params['shape'];
+            assert(Array.isArray(targetShape), `Reshape shape parameter must be an array, got ${targetShape}`);
+            
+            // Check that the number of elements is preserved (if no -1 is present)
+            const hasNegOne = targetShape.includes(-1);
+            
+            if (!hasNegOne) {
+                // Calculate total elements in input and target shapes
+                const inElements = inShape.reduce((acc, dim) => acc * dim, 1);
+                const outElements = targetShape.reduce((acc, dim) => acc * dim, 1);
+                
+                assert(inElements === outElements, 
+                    `Reshape total elements mismatch: input has ${inElements} elements, but target shape has ${outElements} elements`);
+            } else {
+                // Count negative ones
+                const negOnes = targetShape.filter(d => d === -1).length;
+                assert(negOnes === 1, `Reshape shape can have at most one -1 dimension, got ${negOnes}`);
+                
+                // Calculate the value for the -1 dimension
+                const inElements = inShape.reduce((acc, dim) => acc * dim, 1);
+                const specifiedElements = targetShape.filter(d => d !== -1).reduce((acc, dim) => acc * dim, 1);
+                
+                assert(inElements % specifiedElements === 0, 
+                    `Reshape cannot infer size for -1 dimension: input has ${inElements} elements, which is not divisible by product of specified dimensions (${specifiedElements})`);
+            }
+            
+            // Return the target shape, as validation passed
+            return targetShape;
         },
     },
 
@@ -878,8 +1233,20 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: [],
         code_generator: (params) => `torch.permute(${params['dims'].join(', ')})`,
         forward_shape_inference: (inShape, params) => {
+            // Validate the dims parameter
             const dims = params['dims'];
-            const outShape = dims.map((d: number) => inShape[d]);
+            assert(Array.isArray(dims), `Permute dims parameter must be an array, got ${dims}`);
+            assert(dims.length === inShape.length, 
+                `Permute dims must have same length as input shape, got ${dims.length} vs ${inShape.length}`);
+            
+            // Check that all dimensions are present exactly once
+            const sorted = [...dims].sort((a, b) => a - b);
+            for (let i = 0; i < sorted.length; i++) {
+                assert(sorted[i] === i, `Permute dims must contain all dimensions from 0 to ${inShape.length - 1} exactly once`);
+            }
+            
+            // Calculate output shape
+            const outShape = dims.map(d => inShape[d]);
             return outShape;
         },
     },
@@ -889,15 +1256,38 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
         optional_params: ["start_dim", "end_dim"],
         code_generator: (params) => `nn.Flatten(start_dim=${params['start_dim'] ?? 1}, end_dim=${params['end_dim'] ?? -1})`,
         forward_shape_inference: (inShape, params) => {
-            const start = params['start_dim'] ?? 1;
-            let end = params['end_dim'] ?? -1;
-            if (end < 0) {
-                end = inShape.length + end;
+            // Validate parameters with defaults
+            const start_dim = params['start_dim'] ?? 1;
+            let end_dim = params['end_dim'] ?? -1;
+            
+            // Convert negative end_dim to positive index
+            if (end_dim < 0) {
+                end_dim = inShape.length + end_dim;
             }
-            const before = inShape.slice(0, start);
-            const middle = inShape.slice(start, end + 1).reduce((acc, val) => acc * val, 1);
-            const after = inShape.slice(end + 1);
-            return [...before, middle, ...after];
+            
+            // Validate start_dim and end_dim
+            if (start_dim < 0 || start_dim >= inShape.length) {
+                throw new Error(`Flatten invalid start_dim=${start_dim} for input shape ${inShape}`);
+            }
+            
+            if (end_dim < start_dim || end_dim >= inShape.length) {
+                throw new Error(`Flatten invalid end_dim=${end_dim} for input shape ${inShape}`);
+            }
+            
+            // Calculate flattened size
+            let flattenedSize = 1;
+            for (let i = start_dim; i <= end_dim; i++) {
+                flattenedSize *= inShape[i];
+            }
+            
+            // Create output shape
+            const outShape = [
+                ...inShape.slice(0, start_dim),
+                flattenedSize,
+                ...inShape.slice(end_dim + 1)
+            ];
+            
+            return outShape;
         },
     },
 

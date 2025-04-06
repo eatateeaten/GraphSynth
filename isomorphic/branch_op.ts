@@ -1,4 +1,5 @@
 import { GraphNode } from './graph_node';
+import { assert } from "./utils";
 
 export abstract class BranchOp extends GraphNode {
     protected readonly _opType: string;
@@ -104,12 +105,25 @@ export class Split extends BranchOp {
         this._sections = sections;
     }
 
-    /* todo: reset dim and sections when params are set */
-    /* todo: setParams should probably be called from the constructor
-     * and should be mandatory for every non-abstract device? */
+    set params(params: Record<string, any>) {
+        assert(params.dim !== undefined, "dim is required for Split");
+        assert(params.sections !== undefined, "sections is required for Split");
+        this._dim = params.dim;
+        this._sections = params.sections;
+        (this._params) = { ...params };
+
+        // Recalculate output shapes
+        try {
+            this._outShapes = this.computeOutShape();
+        } catch (err: any) {
+            // If shape inference fails, we keep the existing output shapes
+            throw new Error(`Failed to update output shapes after params change: ${err.message}`);
+        }
+    }
 
     protected computeOutShape(): number[][] {
-        const { dim, sections } = this._params;
+        const dim = this._dim;
+        const sections = this._sections;
         const outShapes: number[][] = [];
         
         if (this._inShapes[0] === null) {

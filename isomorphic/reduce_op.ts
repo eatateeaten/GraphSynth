@@ -23,6 +23,7 @@
 
 import { MergeOp } from './merge_op';
 import { getPointWiseReduceOpCode } from './torch_pointwise_reduce_op';
+import { assert } from './utils';
 
 /* huh. it's interesting. reduceop doesn't do anything different than mergeop. keeping it for semantic reasons */
 export abstract class ReduceOp extends MergeOp {
@@ -111,8 +112,10 @@ export class Concat extends ReduceOp {
         this._dim = dim;
     }
 
-    /* XXX: we need a setParams here which checks the params and sets the dim
-     * alternatively, only take params and assert params.dim? */
+    set params(params: Record<string, any>) {
+        assert(params.dim, "Dimension is required for Concat");
+        super.params = params;
+    }
 
     protected checkIncomingShapeMatch(shape: number[]): void {
         // Get reference shape (first non-null shape)
@@ -122,7 +125,7 @@ export class Concat extends ReduceOp {
         }
 
         // Get concat dimension from params
-        const concatDim = this._params.dim;
+        const concatDim = this._dim;
         if (concatDim < 0 || concatDim >= shape.length) {
             throw new Error(
                 `Invalid concatenation dimension ${concatDim} for input shape of length ${shape.length}`
