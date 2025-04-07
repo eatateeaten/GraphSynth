@@ -1203,28 +1203,37 @@ export const nn_module_metadata: Record<string, ModuleMetadata> = {
             // Check that the number of elements is preserved (if no -1 is present)
             const hasNegOne = targetShape.includes(-1);
             
+            // Calculate total elements in input
+            const inElements = inShape.reduce((acc, dim) => acc * dim, 1);
+            
             if (!hasNegOne) {
-                // Calculate total elements in input and target shapes
-                const inElements = inShape.reduce((acc, dim) => acc * dim, 1);
+                // Calculate total elements in target shapes
                 const outElements = targetShape.reduce((acc, dim) => acc * dim, 1);
                 
                 assert(inElements === outElements, 
                     `Reshape total elements mismatch: input has ${inElements} elements, but target shape has ${outElements} elements`);
+                
+                // Return the target shape, as validation passed
+                return [...targetShape];
             } else {
                 // Count negative ones
                 const negOnes = targetShape.filter(d => d === -1).length;
                 assert(negOnes === 1, `Reshape shape can have at most one -1 dimension, got ${negOnes}`);
                 
                 // Calculate the value for the -1 dimension
-                const inElements = inShape.reduce((acc, dim) => acc * dim, 1);
                 const specifiedElements = targetShape.filter(d => d !== -1).reduce((acc, dim) => acc * dim, 1);
                 
                 assert(inElements % specifiedElements === 0, 
                     `Reshape cannot infer size for -1 dimension: input has ${inElements} elements, which is not divisible by product of specified dimensions (${specifiedElements})`);
+                
+                // Calculate the correct value for the -1 dimension
+                const negOneDimValue = inElements / specifiedElements;
+                
+                // Create a new output shape with the calculated dimension
+                const outputShape = targetShape.map(d => d === -1 ? negOneDimValue : d);
+                
+                return outputShape;
             }
-            
-            // Return the target shape, as validation passed
-            return targetShape;
         },
     },
 

@@ -11,6 +11,12 @@ export const mergeModules: Record<string, ModuleMetadata> = {
                 description: 'Dimension along which to concatenate the tensors',
                 type: 'number',
                 default: 0
+            },
+            numberOfMerges: {
+                label: 'Number of Inputs',
+                description: 'Number of tensors to combine',
+                type: 'number',
+                default: 2
             }
         }
     },
