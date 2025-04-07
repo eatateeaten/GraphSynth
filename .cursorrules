@@ -1,5 +1,0 @@
-Fit comments or docstrings into a single line where possible.
-Use 4 spaces for indentation.
-Be succinct and write short code. Don't add extraneous checks.
-Return early instead of try/catch. Never wrap and rethrow exceptions. Let them bubble up.
-Try to limit your comments to the top of each function. Inline comments are only for tricky operations.
