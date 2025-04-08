@@ -25,6 +25,7 @@ import type { FlowNode, FlowEdge, NodeType  } from './types';
 import { GRID_SIZE } from './config';
 
 import { Graph as CheckerGraph } from '../isomorphic/graph';
+import { JupyterService, type JupyterConfig, type JupyterStatus, type CodeExecutionResult } from './services/jupyter';
 
 interface NodeConfig {
     id: string;
@@ -38,6 +39,14 @@ interface GraphState {
     edges: FlowEdge[];
     selectedId: string | null;
     checkerGraph: CheckerGraph;
+    jupyter: {
+        service: JupyterService | null;
+        status: JupyterStatus | null;
+        isConnecting: boolean;
+        isExecuting: boolean;
+        lastExecutionResult: CodeExecutionResult | null;
+        config: JupyterConfig | null;
+    };
 }
 
 interface GraphActions {
@@ -48,6 +57,9 @@ interface GraphActions {
     updateEdges: (edges: FlowEdge[]) => void;
     addEdge: (edge: FlowEdge, sourceHandleIndex?: number, targetHandleIndex?: number) => void;
     updateNodeParams: (id: string, params: Record<string, any>) => void;
+    connectToJupyter: (config: JupyterConfig) => Promise<JupyterStatus>;
+    disconnectFromJupyter: () => Promise<void>;
+    executeCodeInJupyter: (code: string, kernelName?: string) => Promise<CodeExecutionResult>;
 }
 
 export const useStore = create<GraphState & GraphActions>((set, get) => {
@@ -74,6 +86,14 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         edges: [],
         selectedId: null,
         checkerGraph: new CheckerGraph(),
+        jupyter: {
+            service: null,
+            status: null,
+            isConnecting: false,
+            isExecuting: false,
+            lastExecutionResult: null,
+            config: null
+        },
 
         // Actions
         /* TODO: Pan to include all nodes when a node is added */
@@ -259,5 +279,112 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 throw error;
             }
         },
+        connectToJupyter: async (config) => {
+            set(state => ({
+                jupyter: {
+                    ...state.jupyter,
+                    isConnecting: true,
+                    status: null
+                }
+            }));
+            
+            try {
+                const service = new JupyterService();
+                const status = await service.connect(config);
+                
+                set(state => ({
+                    jupyter: {
+                        ...state.jupyter,
+                        service: status.connected ? service : null,
+                        status,
+                        isConnecting: false,
+                        config: status.connected ? config : null
+                    }
+                }));
+                
+                return status;
+            } catch (error) {
+                console.error('Failed to connect to Jupyter:', error);
+                
+                const errorStatus = { 
+                    connected: false, 
+                    error: error instanceof Error ? error.message : String(error)
+                };
+                
+                set(state => ({
+                    jupyter: {
+                        ...state.jupyter,
+                        isConnecting: false,
+                        status: errorStatus
+                    }
+                }));
+                
+                return errorStatus;
+            }
+        },
+        
+        disconnectFromJupyter: async () => {
+            const { service } = get().jupyter;
+            
+            if (service) {
+                await service.disconnect();
+            }
+            
+            set(state => ({
+                jupyter: {
+                    ...state.jupyter,
+                    service: null,
+                    status: null,
+                    config: null
+                }
+            }));
+        },
+        
+        executeCodeInJupyter: async (code, kernelName) => {
+            const { service } = get().jupyter;
+            
+            if (!service) {
+                throw new Error('Not connected to Jupyter');
+            }
+            
+            set(state => ({
+                jupyter: {
+                    ...state.jupyter,
+                    isExecuting: true
+                }
+            }));
+            
+            try {
+                const result = await service.executeCode(code, kernelName);
+                
+                set(state => ({
+                    jupyter: {
+                        ...state.jupyter,
+                        isExecuting: false,
+                        lastExecutionResult: result
+                    }
+                }));
+                
+                return result;
+            } catch (error) {
+                console.error('Failed to execute code:', error);
+                
+                const result = {
+                    success: false,
+                    outputs: [],
+                    textOutput: error instanceof Error ? error.message : String(error)
+                };
+                
+                set(state => ({
+                    jupyter: {
+                        ...state.jupyter,
+                        isExecuting: false,
+                        lastExecutionResult: result
+                    }
+                }));
+                
+                return result;
+            }
+        }
     };
 });

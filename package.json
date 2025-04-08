@@ -10,10 +10,14 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix"
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "jupyter:install": "cd runtime && pip install -r requirements.txt",
+    "jupyter:server": "cd runtime && python jupyter_server.py",
+    "jupyter:dev": "npm run jupyter:server & npm run dev"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
+    "@jupyterlab/services": "^7.0.0",
     "@mantine/core": "^7.17.3",
     "@mantine/hooks": "^7.17.3",
     "electron": "^35.1.2",

@@ -21,6 +21,9 @@ wheels/
 *.egg
 node_modules/
 
+.cursorignore
+.cursorrules
+
 # Virtual Environment
 venv/
 env/

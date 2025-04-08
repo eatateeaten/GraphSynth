@@ -1,8 +1,9 @@
 import { Menu, Button } from '@mantine/core';
+import { JupyterButton } from './JupyterButton';
 
 export function Topbar() {
     return (
-        <div style={{ padding: '8px 16px', display: 'flex', gap: '8px' }}>
+        <div style={{ padding: '8px 16px', display: 'flex', gap: '4px', alignItems: 'center' }}>
             <Menu shadow="md">
                 <Menu.Target>
                     <Button variant="subtle">File</Button>
@@ -49,6 +50,12 @@ export function Topbar() {
                     <Menu.Item>About</Menu.Item>
                 </Menu.Dropdown>
             </Menu>
+            
+            {/* Spacer to push Jupyter connection to the right */}
+            <div style={{ flex: 1 }}></div>
+            
+            {/* Jupyter connection panel */}
+            <JupyterButton />
         </div>
     );
 } 

@@ -1,6 +1,7 @@
 import { Workspace } from './Workspace';
 import { NodeEditor } from './NodeEditor';
 import { CodeWindow } from './CodeWindow';
+import { CodeOutput } from './CodeOutput';
 import { Topbar } from './Topbar';
 
 function App() {
@@ -15,9 +16,12 @@ function App() {
                 </div>
                 <div className="sidebar-container">
                     <div className="node-editor-container"><NodeEditor /></div>
-                    <div className="code-window-container"><CodeWindow /></div>
                 </div>
             </main>
+            <div className="bottom-container">
+                <div className="code-window-container"><CodeWindow /></div>
+                <div className="code-output-container"><CodeOutput /></div>
+            </div>
         </div>
     );
 }
