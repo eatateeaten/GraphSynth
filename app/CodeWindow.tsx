@@ -50,7 +50,7 @@ export function CodeWindow() {
             }
 
             // Get raw code
-            const rawCode = checkerGraph.to_torch_functional();
+            const rawCode = checkerGraph.emit_torch_functional();
 
             // Get source and sink variables
             const sources = Array.from(checkerGraph.getSources());

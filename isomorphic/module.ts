@@ -1,5 +1,6 @@
 import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
+import { TargetType } from './types';
 
 /**
  * Module represents a neural network module that can have multiple inputs and outputs.
@@ -14,18 +15,20 @@ export abstract class Module extends GraphNode {
     protected _params: Record<string, any>;
     private _inputs: Tensor[] = [];
     private _outputs: Tensor[] = [];
+    protected readonly _target: TargetType;
 
     constructor(
         id: string,
-        target: string,
+        target: TargetType,
         opType: string,
         params: Record<string, any> = {}
     ) {
-        super(id, target);
+        super(id, params);
         this._inShape = [];
         this._outShape = [];
         this._opType = opType;
         this._params = params;
+        this._target = target;
     }
 
     // Shape getters
@@ -51,24 +54,34 @@ export abstract class Module extends GraphNode {
     /**
      * Abstract method to generate framework-specific code
      */
-    abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
+    abstract emit_torch_functional(inputs: string[], outputs?: string[]): string;
+
+    /**
+     * Generates framework-specific code
+     */
+    emit_torch(inputs: string[], outputs?: string[]): string {
+        if (this._target !== "Torch") {
+            throw new Error(`Code generation not implemented for target framework: ${this._target}`);
+        }
+        return this.emit_torch_functional(inputs, outputs);
+    }
 
     /**
      * Adds a previous node to this module (implements GraphNode.addPrev)
      */
     addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
-        if (!prev.outShape) {
+        if (!prev.outShapes) {
             throw new Error("Input node must have a defined shape");
         }
 
         // Process the outShape from the node
         let nodeShape: number[][];
-        if (Array.isArray(prev.outShape[0])) {
+        if (Array.isArray(prev.outShapes[0])) {
             // It's already a number[][]
-            nodeShape = prev.outShape as number[][];
+            nodeShape = prev.outShapes as number[][];
         } else {
             // It's a number[], wrap it in an array
-            nodeShape = [prev.outShape as number[]];
+            nodeShape = [prev.outShapes as unknown as number[]];
         }
 
         if (indexSelf === undefined) {

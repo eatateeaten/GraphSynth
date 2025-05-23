@@ -23,7 +23,7 @@ export abstract class BranchOp extends GraphNode {
     }
 
     protected abstract computeOutShape(): number[][];
-    abstract to_torch_functional(inputs: string[], outputs: string[]): string;
+    abstract emit_torch_functional(inputs: string[], outputs: string[]): string;
 
     // Getters and setters 
     get opType(): string { return this._opType; }
@@ -146,7 +146,7 @@ export class Split extends BranchOp {
         return outShapes;
     }
 
-    to_torch_functional(inputs: string[], outputs: string[]): string {
+    emit_torch_functional(inputs: string[], outputs: string[]): string {
         const dim = this._dim;
         const sections = this._sections;
 
@@ -189,7 +189,7 @@ export class Copy extends BranchOp {
         return outShapes;
     }
 
-    to_torch_functional(inputs: string[], outputs: string[]): string {
+    emit_torch_functional(inputs: string[], outputs: string[]): string {
         // Handle multiple outputs separately to make each assignment clear in the output
         if (outputs.length <= 1) {
             return `${outputs[0]} = ${inputs[0]}`;

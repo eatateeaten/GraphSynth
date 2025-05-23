@@ -396,13 +396,15 @@ export class Graph {
         visited.add(node.id);
     }
 
+    
+
     /**
      * Generates functional PyTorch code from the graph.
      * Uses a depth-first traversal strategy to respect computation order.
      * 
      * @returns A string containing PyTorch code in functional style
      */
-    public to_torch_functional(): string {
+    public emit_torch_functional(): string {
         // 1) Validate the graph (checks for sources, sinks, shape consistency, cycles, etc.)
         this.validate_graph();
       
@@ -440,10 +442,9 @@ export class Graph {
             const tensorSource = source as Tensor;
           
             // Use a user-defined variableName if present, else generate one
-            let varName = tensorSource.variableName ?? newVar();
-            while (usedNames.has(varName)) {
-                varName = newVar();
-            }
+            //let varName = tensorSource.variableName ?? newVar();
+            const varName = newVar();
+
             usedNames.add(varName);
         
             // Track the source variable in our map
@@ -504,9 +505,9 @@ export class Graph {
                 const outVar = newVar();
                 usedNames.add(outVar);
         
-                // to_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
+                // emit_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
                 // We'll do: `outVar = that_snippet`
-                code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+                code += `${node.emit_torch_functional(inputs, [outVar])}\n`;
             
                 // Track the output variable for this node
                 updateNodeVar(node.id, outVar);
@@ -544,7 +545,7 @@ export class Graph {
                 usedNames.add(outVar);
         
                 // Generate code as described above
-                code += `${node.to_torch_functional(inputs, [outVar])}\n`;
+                code += `${node.emit_torch_functional(inputs, [outVar])}\n`;
             
                 // Track the output variable for this node
                 updateNodeVar(node.id, outVar);
@@ -606,7 +607,7 @@ export class Graph {
                 }
 
                 // Generate the torch functional code
-                const branchCode = branchOp.to_torch_functional(inputs, outVars);
+                const branchCode = branchOp.emit_torch_functional(inputs, outVars);
                 code += `${branchCode}\n`;
             
                 // Track each output variable for this branch node

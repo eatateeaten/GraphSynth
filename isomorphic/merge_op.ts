@@ -13,7 +13,7 @@ export abstract class MergeOp extends GraphNode {
         params: Record<string, any> = {}, 
     ) {
         super(id, params);
-        this._inShapes = Array(numberOfMerges).fill(null); 
+2
         this._outShapes = [null];
         this._prevs = Array(numberOfMerges).fill(null); 
         this._nexts = [null];
@@ -24,7 +24,7 @@ export abstract class MergeOp extends GraphNode {
     /* this is probably required for all nodes??? why is it defined here. */
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract to_torch_functional(inputs: string[], outputs?: string[]): string;
+    abstract emit_torch_functional(inputs: string[], outputs?: string[]): string;
 
     // Getters and setters
     get opType(): string { return this._opType; }
@@ -132,7 +132,7 @@ export class PointwiseOp extends MergeOp {
     }
 
     /* XXX: this is called "to_torch_functional" but we are fetching target from global?? doesn't make much sense */
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
+    emit_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
@@ -194,7 +194,7 @@ export class DotOp extends MergeOp {
         return [...shape1.slice(0, -1), shape2[shape2.length - 1]];
     }
 
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
+    emit_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("DotOp requires exactly 2 inputs");
         }
@@ -257,7 +257,7 @@ export class CrossOp extends MergeOp {
         return shape;
     }
 
-    to_torch_functional(inputs: string[], outputs?: string[]): string {
+    emit_torch_functional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("CrossOp requires exactly 2 inputs");
         }

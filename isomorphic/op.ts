@@ -36,7 +36,7 @@ export class Op extends GraphNode {
         throw new Error(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
     }
 
-    to_torch_functional(inputs: string[], outputs: string[]): string {
+    emit_torch_functional(inputs: string[], outputs: string[]): string {
         if (g_GraphConfig.target  !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
