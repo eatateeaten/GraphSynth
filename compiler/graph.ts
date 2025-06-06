@@ -23,50 +23,67 @@ export class Graph {
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
     private _edges: Edge[]; // Track all connections for easier disconnection
+    
+    // Factory functions for creating different node types
+    private _nodeFactories: Map<string, (id: string, params: Record<string, any>) => GraphNode>;
 
     constructor() {
         this._nodes = new Map();
         this._sources = new Set();
         this._sinks = new Set();
         this._edges = [];
+        
+        // Initialize factory functions
+        this._nodeFactories = new Map<string, (id: string, params: Record<string, any>) => GraphNode>([
+            ['Tensor', (id, params) => {
+                assert(params.shape, "Shape is required for Tensor");
+                assert(params.variableName, "Variable name is required for Tensor");
+                return new Tensor(id, params.shape, params.variableName);
+            }],
+            ['Op', (id, params) => {
+                assert(params.opType, "No operation type provided");
+                return new Op(id, params.opType, params);
+            }],
+            ['Split', (id, params) => {
+                assert(params.dim !== undefined, "Dimension is required for Split");
+                assert(params.sections, "Sections is required for Split");
+                return new Split(id, params.dim, params.sections, params);
+            }],
+            ['Concat', (id, params) => {
+                assert(params.dim !== undefined, "Dimension is required for Concat");
+                assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for Concat");
+                return new Concat(id, params.dim, params.numberOfMerges, params);
+            }],
+            ['Copy', (id, params) => {
+                assert(params.copies, "Copies parameter is required for Copy");
+                return new Copy(id, params.copies, params);
+            }],
+            ['PointwiseReduce', (id, params) => {
+                assert(params.opType, "Operation type is required for PointwiseReduce");
+                assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for PointwiseReduce");
+                return new PointwiseReduce(id, params.opType, params.numberOfMerges, params);
+            }],
+            ['PointwiseOp', (id, params) => {
+                assert(params.opType, "Operation type is required for PointwiseOp");
+                return new PointwiseOp(id, params.opType, params);
+            }],
+            ['DotOp', (id, params) => {
+                return new DotOp(id, params);
+            }],
+            ['CrossOp', (id, params) => {
+                return new CrossOp(id, params);
+            }]
+        ]);
     }
 
     /** Add a node to the graph */
     addNode(id: string, nodeType: string, params: Record<string, any>): void {
-        let node: GraphNode;
-        if(nodeType === "Tensor"){
-            assert(params.shape, "Shape is required for Tensor");
-            assert(params.variableName, "Variable name is required for Tensor");
-            node = new Tensor(id, params.shape, params.variableName);
-        }else if(nodeType === "Op"){
-            assert(params.opType, "No operation type provided");
-            node = new Op(id, params.opType, params);
-        }else if(nodeType === "Split"){
-            assert(params.dim !== undefined, "Dimension is required for Split");
-            assert(params.sections, "Sections is required for Split");
-            node = new Split(id, params.dim, params.sections, params);
-        }else if(nodeType === "Concat"){
-            assert(params.dim !== undefined, "Dimension is required for Concat");
-            assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for Concat");
-            node = new Concat(id, params.dim, params.numberOfMerges, params);
-        }else if(nodeType === "Copy"){
-            assert(params.copies, "Copies parameter is required for Copy");
-            node = new Copy(id, params.copies, params);
-        }else if(nodeType === "PointwiseReduce"){
-            assert(params.opType, "Operation type is required for PointwiseReduce");
-            assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for PointwiseReduce");
-            node = new PointwiseReduce(id, params.opType, params.numberOfMerges, params);
-        }else if(nodeType === "PointwiseOp"){
-            assert(params.opType, "Operation type is required for PointwiseOp");
-            node = new PointwiseOp(id, params.opType, params);
-        }else if(nodeType === "DotOp"){
-            node = new DotOp(id, params);
-        }else if(nodeType === "CrossOp"){
-            node = new CrossOp(id, params);
-        }else{
+        const factory = this._nodeFactories.get(nodeType);
+        if (!factory) {
             throw new Error(`Unknown GraphNode type: ${nodeType}`);
         }
-
+        
+        const node = factory(id, params);
         this._nodes.set(id, node);
     }
 
@@ -87,59 +104,7 @@ export class Graph {
      * graph.removeNode("nodeToRemoveId");
      */
     removeNode(nodeId: string): void {
-        const node = this._nodes.get(nodeId);
-        if (!node) {throw new Error(`Node with id ${nodeId} does not exist in graph`);}
-        
-        // First disconnect all connections to/from this node
-        // Find all edges that involve this node
-        const edgesToRemove = this._edges.filter(
-            edge => edge.sourceId === nodeId || edge.sinkId === nodeId
-        );
-        
-        // Disconnect each edge
-        for (const edge of edgesToRemove) {
-            try {
-                // If this node is source, disconnect it from its sink
-                if (edge.sourceId === nodeId && edge.sinkId) {
-                    const sink = this._nodes.get(edge.sinkId);
-                    if (sink) {
-                        // Note: we need to handle undefined sourceIndex/sinkIndex
-                        const sourceIndex = edge.sourceIndex ?? 0;
-                        const sinkIndex = edge.sinkIndex ?? 0;
-                        
-                        // Clear the node references
-                        sink.deletePrev(sinkIndex);
-                        node.deleteNext(sourceIndex);
-                    }
-                }
-                
-                // If this node is sink, disconnect it from its source
-                if (edge.sinkId === nodeId && edge.sourceId) {
-                    const source = this._nodes.get(edge.sourceId);
-                    if (source) {
-                        // Note: we need to handle undefined sourceIndex/sinkIndex
-                        const sourceIndex = edge.sourceIndex ?? 0;
-                        const sinkIndex = edge.sinkIndex ?? 0;
-                        
-                        // Clear the node references
-                        node.deletePrev(sinkIndex);
-                        source.deleteNext(sourceIndex);
-                    }
-                }
-            } catch (error) {
-                console.warn(`Error disconnecting edge: ${error}`);
-            }
-        }
-        
-        // Remove the processed edges from the edges array
-        this._edges = this._edges.filter(
-            edge => edge.sourceId !== nodeId && edge.sinkId !== nodeId
-        );
-        
-        // Remove from collections
-        this._nodes.delete(nodeId);
-        this._sources.delete(node);
-        this._sinks.delete(node);
+        throw new Error("removeNode is not implemented");
     }
 
     /**

@@ -1,6 +1,6 @@
-import { Graph } from '../isomorphic/graph';
-import { Tensor } from '../isomorphic/tensor';
-import { Op } from '../isomorphic/op';
+import { Graph } from '../compiler/graph';
+import { Tensor } from '../compiler/tensor';
+import { Op } from '../compiler/op';
 
 describe('Graph Operations', () => {
     test('should create and add nodes to graph', () => {

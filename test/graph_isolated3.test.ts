@@ -1,6 +1,6 @@
-import { Tensor } from '../isomorphic/tensor';
-import { Op } from '../isomorphic/op';
-import { g_GraphConfig } from '../isomorphic/config';
+import { Tensor } from '../compiler/tensor';
+import { Op } from '../compiler/op';
+import { g_GraphConfig } from '../compiler/config';
 
 // Set the target to Torch for shape inference
 beforeAll(() => {

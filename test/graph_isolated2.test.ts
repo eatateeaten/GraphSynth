@@ -1,7 +1,7 @@
-import { Tensor } from '../isomorphic/tensor';
-import { Copy } from '../isomorphic/branch_op';
-import { PointwiseReduce } from '../isomorphic/reduce_op';
-import { DotOp, CrossOp } from '../isomorphic/merge_op';
+import { Tensor } from '../compiler/tensor';
+import { Copy } from '../compiler/branch_op';
+import { PointwiseReduce } from '../compiler/reduce_op';
+import { DotOp, CrossOp } from '../compiler/merge_op';
 
 describe('Node Connection Methods - Part 2', () => {
     describe('Copy Node', () => {

@@ -17,7 +17,7 @@
  * 
  * Key methods:
  * - computeOutShape(): abstract in MergeOp, implemented in ReduceOp and its subclasses
- * - to_torch_functional(): abstract in MergeOp, implemented in ReduceOp and its subclasses
+ * - emit_torch_functional(): abstract in MergeOp, implemented in ReduceOp and its subclasses
  * - addPrev(): overridden in ReduceOp to handle dynamic input shapes
  */
 

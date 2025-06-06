@@ -56,7 +56,7 @@ export class Op extends GraphNode {
      * @returns A string containing the PyTorch code for this operation
      * @throws Error if the operation is not a PyTorch operation
      */
-    to_torch(): string {
+    emit_torch(): string {
         if (g_GraphConfig.target !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }

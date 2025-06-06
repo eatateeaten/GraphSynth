@@ -1,6 +1,6 @@
-import { Tensor } from '../isomorphic/tensor';
-import { Split } from '../isomorphic/branch_op';
-import { Concat } from '../isomorphic/reduce_op';
+import { Tensor } from '../compiler/tensor';
+import { Split } from '../compiler/branch_op';
+import { Concat } from '../compiler/reduce_op';
 
 describe('Node Connection Methods', () => {
     describe('Tensor Node', () => {
