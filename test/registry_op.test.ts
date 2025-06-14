@@ -1,5 +1,5 @@
 import { nn_module_metadata } from '../compiler/torch_nn_module_op';
-import { allModules } from '../app/registry';
+import { allModules } from '../registry';
 
 describe('Registry Tests', () => {
     // Helper function to get all operation names from the registry

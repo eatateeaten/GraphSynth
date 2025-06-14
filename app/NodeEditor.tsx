@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
 import { useStore } from './store';
-import { NodeType, ParamFieldMetadata, Shape } from './registry/types';
-import { allModules, getMeta, validateParams } from './registry/index';
+import { NodeType, ParamFieldMetadata, Shape } from '../registry/types';
+import { allModules, getMeta, validateParams } from '../registry/index';
 
 /* Build layer type options from available modules */
 const LAYER_TYPE_OPTIONS = (() => {

@@ -1,4 +1,4 @@
-export type { NodeType } from '../types';
+export type { NodeType } from '../app/types';
 
 export interface ParamFieldMetadata {
     label: string;
