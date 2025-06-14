@@ -191,7 +191,7 @@ export class Graph {
             }
         }
 
-        // ------- Establish bidirectional pointers -------
+        // ------- Establish bidirectional references -------
         // let each node handle its connection setup 
         sink.addPrev(source, sourcePortOutShape, sinkPortIndex, sourcePortIndex);  
         // this is where inShapeInferred Nodes must check for validity of inferring inShape from prev outShape 
@@ -243,8 +243,8 @@ export class Graph {
         if (!sink) throw new Error(`No sink with ID ${sinkId}`);
 
         // Remove bidirectional node connections
-        sink.deletePrev(sinkPortIndex); //check each class implemetation for correctness 
-        source.deleteNext(sourcePortIndex); //check each class implemetation for correctness 
+        sink.deletePrev(sinkPortIndex); //TODO check each class implemetation for correctness 
+        source.deleteNext(sourcePortIndex); //TODO check each class implemetation for correctness 
 
         // Remove the corresponding edge from the edge list 
         this._edges = this._edges.filter(edge => 
@@ -259,9 +259,6 @@ export class Graph {
 
 
     private _refreshNodeSinkSourceStatus(node: GraphNode): void {
-        // Keep the current implementation unless ealing with nodes having dozens of ports 
-        // The simplicity and correctness outweigh the minor performance cost for typical use cases 
-
         // Check source status (no incoming connections)
         const isSource = !GraphNode.hasInputs(node);
             
@@ -278,8 +275,11 @@ export class Graph {
 
 //--------- ALREADY WENT THROUGH EVERYTHING ABOVE --------- 
     validate_graph(): void {
-        
-        
+        //check the graph has source and sink tensors 
+        //check that all sources and sinks are tensors 
+        //check that the entire graph is connected 
+        //
+
         // Recompute sources and sinks to ensure they're correctly identified
         // This fixes potential issues with BranchOp and other node types
         this._refreshAllNodesSourceSinkStatus();
