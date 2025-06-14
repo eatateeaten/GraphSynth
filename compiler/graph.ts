@@ -14,8 +14,8 @@ interface Edge {
     edgeId: string;     // Unique identifier for the edge
     sourceId: string;
     sinkId: string;
-    sourceIndex?: number;
-    sinkIndex?: number;
+    sourcePortIndex?: number;
+    sinkPortIndex?: number;
 }
 
 export class Graph {
@@ -76,6 +76,19 @@ export class Graph {
         ]);
     }
 
+    getNode(id: string): GraphNode | undefined {
+        return this._nodes.get(id);
+    }
+
+    getSources(): Set<GraphNode> {
+        return new Set(this._sources);
+    }
+
+    getSinks(): Set<GraphNode> {
+        return new Set(this._sinks);
+    }
+
+
     /** Add a node to the graph */
     addNode(id: string, nodeType: string, params: Record<string, any>): void {
         const factory = this._nodeFactories.get(nodeType);
@@ -107,31 +120,34 @@ export class Graph {
         throw new Error("removeNode is not implemented");
     }
 
+
     /**
-     * Validates the source node's connection point and returns its output shape
+     * Validates the source node's connection port and returns its output shape
      */
-    private _validateSourceAndGetOutShape(source: GraphNode, sourceIndex: number): number[] {
-        // SourceIndex must be in bounds of Source.outShape
-        sourceIndex = GraphNode.checkIndexInBound(sourceIndex, source.outShapes.length, "connect");
-        // Ensure the source has an output shape
-        if (!source.outShapes[sourceIndex]) {
+    private _validateSourcePortAndGetShape(source: GraphNode, sourcePortIndex: number): number[] {
+        // SourcePortIndex must be in bounds of Source.outShape
+        sourcePortIndex = GraphNode.isIndexInBound(sourcePortIndex, source.outShapes.length, "connect");
+        // The source port output shape has to be defined, whether the current node applies inShape inference or not 
+        if (!source.outShapes[sourcePortIndex]) {
             throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
+        } else {
+            return source.outShapes[sourcePortIndex]!;
         }
-        return source.outShapes[sourceIndex]!;
+
     }
    
     /**
-     * Validates the sink node's connection point and returns its input shape, returned value can be null 
+     * Validates the sink node's connection port and returns its input shape, returned value can be null if sink node has input shape inferred
      */
-    private _validateSinkAndGetInShape(sink: GraphNode, sinkIndex: number): number[] | null {
-        // SourceIndex must be in bounds of Source.outShape
-        sinkIndex = GraphNode.checkIndexInBound(sinkIndex, sink.inShapes.length, "connect");
-        const inShape = sink.inShapes[sinkIndex];
-
-        if(inShape === null && !GraphNode.inShapeInferred(sink))
+    private _validateSinkPortAndGetShape(sink: GraphNode, sinkPortIndex: number): number[] | null {
+        // SinkPortIndex must be in bounds of Sink.inShapes
+        sinkPortIndex = GraphNode.isIndexInBound(sinkPortIndex, sink.inShapes.length, "connect");
+        // Check if sink port has a defined input shape or if shape inference is allowed
+        if (sink.inShapes[sinkPortIndex] === null && !GraphNode.inShapeInferred(sink)) {  //sink node does not have input shape inferred 
             throw new Error(`Node with id ${sink.id} must have defined input shape`);
-
-        return inShape;
+        } else {
+            return sink.inShapes[sinkPortIndex];
+        }
     }
 
     /**
@@ -144,8 +160,8 @@ export class Graph {
      * 
      * @param sourceId - ID of the source node
      * @param sinkId - ID of the sink node
-     * @param sourceIndex - Index for the source node output (required for nodes with multiple outputs)
-     * @param sinkIndex - Index for the sink node input (required for nodes with multiple inputs)
+     * @param sourcePortIndex - Index for the source node output (required for nodes with multiple outputs)
+     * @param sinkPortIndex - Index for the sink node input (required for nodes with multiple inputs)
      * @throws Error if nodes don't exist or have incompatible shapes
      * 
      * @example
@@ -156,39 +172,41 @@ export class Graph {
      * graph.connect("splitId", "opId", 0); // Connect from first output of split
      * graph.connect("opId", "concatId", undefined, 1); // Connect to second input of concat
      */
-    connect(sourceId: string, sinkId: string, sourceIndex: number, sinkIndex: number): void {
-        // Get source node from main graph
+    connect(sourceId: string, sinkId: string, sourcePortIndex: number, sinkPortIndex: number): void {
+        // ------ Check both source and sink exist --------
         const source = this._nodes.get(sourceId);
         if (!source) throw new Error(`Source node with id ${sourceId} does not exist in graph`);
-        // Get sink node from either main graph or pending nodes
-        let sink = this._nodes.get(sinkId);
+        const sink = this._nodes.get(sinkId);
         if (!sink) throw new Error(`Sink node with id ${sinkId} does not exist in graph`);
 
-        // Validate connection endpoints and get shapes
-        const sourceOutShape = this._validateSourceAndGetOutShape(source, sourceIndex);
-        const sinkInShape = this._validateSinkAndGetInShape(sink, sinkIndex);
-
+        // ------ Validate indices of connection ports and get source and sink port shapes
+        const sourcePortOutShape = this._validateSourcePortAndGetShape(source, sourcePortIndex);
+        const sinkPortInShape = this._validateSinkPortAndGetShape(sink, sinkPortIndex);
+        
+        // ------ Shape-match Check --------
         // Skip shape compatibility check if sink has no defined input shape yet
-        // This allows connecting nodes before their shapes are fully determined
-        if (sinkInShape !== null) {
-            if (!GraphNode.shapeMatch(sourceOutShape, sinkInShape)) {
-                throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourceOutShape}] to ${sink.constructor.name} with input shape [${sinkInShape}]`);
+        if (sinkPortInShape !== null) {
+            if (!GraphNode.shapeMatch(sourcePortOutShape, sinkPortInShape)) {
+                throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourcePortOutShape}] to ${sink.constructor.name} with input shape [${sinkPortInShape}]`);
             }
         }
 
-        //---------------------------------------------------------
-        // Establish bidirectional connections
-        // Let each node handle its own connection logic
-        sink.addPrev(source, sourceOutShape, sinkIndex, sourceIndex);  ///this is where inShapeInferred Nodes must check for validity of inferring inshape from prev outShape 
-        source.addNext(sink, sourceIndex, sinkIndex);
+        // ------- Establish bidirectional pointers -------
+        // let each node handle its connection setup 
+        sink.addPrev(source, sourcePortOutShape, sinkPortIndex, sourcePortIndex);  
+        // this is where inShapeInferred Nodes must check for validity of inferring inShape from prev outShape 
+        // If inShape inferred from prev outShape is not valid for this node's operation, such as applying to Conv(3, 3) shape of (2, 2) without padding, it will promptly fail 
 
-        // Add the connection to our edge list with a unique ID
+        source.addNext(sink, sourcePortIndex, sinkPortIndex);
+
+        // -----  Add the connection to the edge list ------
+        // with a unique ID 
         this._edges.push({
             edgeId: this._generateUUID(),
             sourceId: sourceId,
             sinkId: sinkId,
-            sourceIndex: sourceIndex,
-            sinkIndex: sinkIndex
+            sourcePortIndex: sourcePortIndex,
+            sinkPortIndex: sinkPortIndex
         });
 
         //----------------------------------------------------------
@@ -198,15 +216,41 @@ export class Graph {
     }
 
     
-    disconnect(sourceId: string, sinkId: string, sourceIndex: number, sinkIndex: number): void {        
+    /**
+     * Disconnects two nodes by removing their connection.
+     * 
+     * This method removes the bidirectional connection between two nodes,
+     * cleans up the edge tracking, and updates the graph's source/sink status.
+     * 
+     * @param sourceId - ID of the source node
+     * @param sinkId - ID of the sink node  
+     * @param sourcePortIndex - Index of the source node output port
+     * @param sinkPortIndex - Index of the sink node input port
+     * @throws Error if either node doesn't exist in the graph
+     * 
+     * @example
+     * // Disconnect two nodes
+     * graph.disconnect("sourceId", "sinkId", 0, 0);
+     * 
+     * // Disconnect specific ports for multi-port nodes
+     * graph.disconnect("splitId", "concatId", 1, 2);
+     */
+    disconnect(sourceId: string, sinkId: string, sourcePortIndex: number, sinkPortIndex: number): void {        
         const source = this._nodes.get(sourceId);
         const sink = this._nodes.get(sinkId);
 
-        if(!source) throw new Error(`No source with ID ${sourceId}`);
-        if(!sink) throw new Error(`No sink with ID ${sinkId}`);
+        if (!source) throw new Error(`No source with ID ${sourceId}`);
+        if (!sink) throw new Error(`No sink with ID ${sinkId}`);
 
-        sink.deletePrev(sinkIndex);
-        source.deleteNext(sourceIndex);
+        // Remove bidirectional node connections
+        sink.deletePrev(sinkPortIndex); //check each class implemetation for correctness 
+        source.deleteNext(sourcePortIndex); //check each class implemetation for correctness 
+
+        // Remove the corresponding edge from the edge list 
+        this._edges = this._edges.filter(edge => 
+            !(edge.sourceId === sourceId && edge.sinkId === sinkId && 
+              edge.sourcePortIndex === sourcePortIndex && edge.sinkPortIndex === sinkPortIndex)
+        );
 
         // Update graph status
         this._refreshNodeSinkSourceStatus(source);
@@ -215,6 +259,9 @@ export class Graph {
 
 
     private _refreshNodeSinkSourceStatus(node: GraphNode): void {
+        // Keep the current implementation unless ealing with nodes having dozens of ports 
+        // The simplicity and correctness outweigh the minor performance cost for typical use cases 
+
         // Check source status (no incoming connections)
         const isSource = !GraphNode.hasInputs(node);
             
@@ -229,19 +276,14 @@ export class Graph {
         else this._sinks.delete(node);
     }
 
-    getNode(id: string): GraphNode | undefined {
-        return this._nodes.get(id);
-    }
-
-    getSources(): Set<GraphNode> {
-        return new Set(this._sources);
-    }
-
-    getSinks(): Set<GraphNode> {
-        return new Set(this._sinks);
-    }
-
+//--------- ALREADY WENT THROUGH EVERYTHING ABOVE --------- 
     validate_graph(): void {
+        
+        
+        // Recompute sources and sinks to ensure they're correctly identified
+        // This fixes potential issues with BranchOp and other node types
+        this._refreshAllNodesSourceSinkStatus();
+        
         // Check that the graph has source nodes
         if (this._sources.size === 0) {
             throw new Error("Graph has no source nodes");
@@ -251,16 +293,6 @@ export class Graph {
         if (this._sinks.size === 0) {
             throw new Error("Graph has no sink nodes");
         }
-        
-        // Recompute sources and sinks to ensure they're correctly identified
-        // This fixes potential issues with BranchOp and other node types
-        this._refreshAllNodesSourceSinkStatus();
-        
-        // Re-check for sinks after refreshing
-        if (this._sinks.size === 0) {
-            throw new Error("Graph has no sink nodes after refresh");
-        }
-        
         // Check that all source nodes are Tensors
         const sourceNodes = Array.from(this._sources);
         for (const source of sourceNodes) {
@@ -369,7 +401,7 @@ export class Graph {
      * 
      * @returns A string containing PyTorch code in functional style
      */
-    public emit_torch_functional(): string {
+    public emitTorchFunctional(): string {
         // 1) Validate the graph (checks for sources, sinks, shape consistency, cycles, etc.)
         this.validate_graph();
       
@@ -470,9 +502,9 @@ export class Graph {
                 const outVar = newVar();
                 usedNames.add(outVar);
         
-                // emit_torch_functional() typically returns a snippet like: `torch.relu(VarX)` 
+                // emitTorchFunctional() typically returns a snippet like: `torch.relu(VarX)` 
                 // We'll do: `outVar = that_snippet`
-                code += `${node.emit_torch_functional(inputs, [outVar])}\n`;
+                code += `${node.emitTorchFunctional(inputs, [outVar])}\n`;
             
                 // Track the output variable for this node
                 updateNodeVar(node.id, outVar);
@@ -510,7 +542,7 @@ export class Graph {
                 usedNames.add(outVar);
         
                 // Generate code as described above
-                code += `${node.emit_torch_functional(inputs, [outVar])}\n`;
+                code += `${node.emitTorchFunctional(inputs, [outVar])}\n`;
             
                 // Track the output variable for this node
                 updateNodeVar(node.id, outVar);
@@ -572,7 +604,7 @@ export class Graph {
                 }
 
                 // Generate the torch functional code
-                const branchCode = branchOp.emit_torch_functional(inputs, outVars);
+                const branchCode = branchOp.emitTorchFunctional(inputs, outVars);
                 code += `${branchCode}\n`;
             
                 // Track each output variable for this branch node

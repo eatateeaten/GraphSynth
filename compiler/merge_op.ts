@@ -24,7 +24,7 @@ export abstract class MergeOp extends GraphNode {
     /* this is probably required for all nodes??? why is it defined here. */
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emit_torch_functional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
 
     // Getters and setters
     get opType(): string { return this._opType; }
@@ -45,7 +45,7 @@ export abstract class MergeOp extends GraphNode {
         if (indexSelf === undefined) {
             throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
         } 
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
+        const validatedIndex = GraphNode.isIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
         if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
             throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
         }
@@ -132,7 +132,7 @@ export class PointwiseOp extends MergeOp {
     }
 
     /* XXX: this is called "to_torch_functional" but we are fetching target from global?? doesn't make much sense */
-    emit_torch_functional(inputs: string[], outputs?: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
@@ -194,7 +194,7 @@ export class DotOp extends MergeOp {
         return [...shape1.slice(0, -1), shape2[shape2.length - 1]];
     }
 
-    emit_torch_functional(inputs: string[], outputs?: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("DotOp requires exactly 2 inputs");
         }
@@ -257,7 +257,7 @@ export class CrossOp extends MergeOp {
         return shape;
     }
 
-    emit_torch_functional(inputs: string[], outputs?: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("CrossOp requires exactly 2 inputs");
         }

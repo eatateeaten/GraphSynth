@@ -54,20 +54,20 @@ export abstract class Module extends GraphNode {
     /**
      * Abstract method to generate framework-specific code
      */
-    abstract emit_torch_functional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
 
     /**
      * Generates framework-specific code
      */
-    emit_torch(inputs: string[], outputs?: string[]): string {
+    emitTorch(inputs: string[], outputs?: string[]): string {
         if (this._target !== "Torch") {
             throw new Error(`Code generation not implemented for target framework: ${this._target}`);
         }
-        return this.emit_torch_functional(inputs, outputs);
+        return this.emitTorchFunctional(inputs, outputs);
     }
 
     /**
-     * Adds a previous node to this module (implements GraphNode.addPrev)
+     * Adds a previous node to this module (implements GraphNode.addPrev) 
      */
     addPrev(prev: GraphNode, prevOutShape: number[], indexSelf?: number, indexPrev?: number): void {
         if (!prev.outShapes) {

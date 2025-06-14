@@ -17,7 +17,7 @@
  * 
  * Key methods:
  * - computeOutShape(): abstract in MergeOp, implemented in ReduceOp and its subclasses
- * - emit_torch_functional(): abstract in MergeOp, implemented in ReduceOp and its subclasses
+ * - emitTorchFunctional(): abstract in MergeOp, implemented in ReduceOp and its subclasses
  * - addPrev(): overridden in ReduceOp to handle dynamic input shapes
  */
 
@@ -38,7 +38,7 @@ export abstract class ReduceOp extends MergeOp {
 
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emit_torch_functional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
 }
 
 export class PointwiseReduce extends ReduceOp {
@@ -85,7 +85,7 @@ export class PointwiseReduce extends ReduceOp {
         return [...this._inShapes[referenceShapeIndex]!];
     }
 
-    emit_torch_functional(inputs: string[], outputs?: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 2) {
             throw new Error("PointwiseReduce requires at least 2 inputs");
         }
@@ -189,7 +189,7 @@ export class Concat extends ReduceOp {
         return outShape;
     }
 
-    emit_torch_functional(inputs: string[], outputs?: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
         return `${outVar} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
     }

@@ -14,7 +14,7 @@ export abstract class BranchOp extends GraphNode {
         super(id, params);
         
         this._inShapes = [null];
-        this._outShapes = Array(numberOfBranches).fill(null);
+        this._outShapes = Array(numberOfBranches).fill(null); 
         this._prevs = [null];
         this._nexts = Array(numberOfBranches).fill(null);
 
@@ -23,7 +23,7 @@ export abstract class BranchOp extends GraphNode {
     }
 
     protected abstract computeOutShape(): number[][];
-    abstract emit_torch_functional(inputs: string[], outputs: string[]): string;
+    abstract emitTorchFunctional(inputs: string[], outputs: string[]): string;
 
     // Getters and setters 
     get opType(): string { return this._opType; }
@@ -82,7 +82,7 @@ export abstract class BranchOp extends GraphNode {
         }
 
         // Validate index
-        const validatedIndex = GraphNode.checkIndexInBound(indexSelf, this._numberOfBranches, "BranchOp.deleteNext");
+        const validatedIndex = GraphNode.isIndexInBound(indexSelf, this._numberOfBranches, "BranchOp.deleteNext");
         
         // Clear the specific connection
         this._nexts[validatedIndex] = null;
@@ -146,7 +146,7 @@ export class Split extends BranchOp {
         return outShapes;
     }
 
-    emit_torch_functional(inputs: string[], outputs: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs: string[]): string {
         const dim = this._dim;
         const sections = this._sections;
 
@@ -189,7 +189,7 @@ export class Copy extends BranchOp {
         return outShapes;
     }
 
-    emit_torch_functional(inputs: string[], outputs: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs: string[]): string {
         // Handle multiple outputs separately to make each assignment clear in the output
         if (outputs.length <= 1) {
             return `${outputs[0]} = ${inputs[0]}`;

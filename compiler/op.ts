@@ -2,6 +2,20 @@ import { GraphNode } from './graph_node';
 import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
 import { g_GraphConfig } from './config';
 
+/**
+ * Op represents operations with exactly one input and one output.
+ * 
+ * This class handles standard neural network operations like ReLU, Conv2d, 
+ * Linear, etc. that take a single tensor input and produce a single tensor output.
+ * For operations requiring multiple inputs or outputs, use MergeOp or BranchOp instead.
+ * 
+ * @example
+ * // Create a ReLU operation
+ * const relu = new Op("relu-1", "ReLU", {});
+ * 
+ * // Create a Conv2d operation  
+ * const conv = new Op("conv-1", "Conv2d", { in_channels: 3, out_channels: 64, kernel_size: 3 });
+ */
 export class Op extends GraphNode {
     protected readonly _opType: string;
 
@@ -36,7 +50,7 @@ export class Op extends GraphNode {
         throw new Error(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
     }
 
-    emit_torch_functional(inputs: string[], outputs: string[]): string {
+    emitTorchFunctional(inputs: string[], outputs: string[]): string {
         if (g_GraphConfig.target  !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }
@@ -56,7 +70,7 @@ export class Op extends GraphNode {
      * @returns A string containing the PyTorch code for this operation
      * @throws Error if the operation is not a PyTorch operation
      */
-    emit_torch(): string {
+    emitTorch(): string {
         if (g_GraphConfig.target !== "Torch") {
             throw new Error("Operation is not a PyTorch operation");
         }

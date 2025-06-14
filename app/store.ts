@@ -170,8 +170,8 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
 
                 // Store connection info for reconnection
                 let connections = {
-                    sources: [] as {id: string, sourceIndex?: number, targetIndex?: number}[],
-                    targets: [] as {id: string, sourceIndex?: number, targetIndex?: number}[]
+                            sources: [] as {id: string, sourcePortIndex?: number, targetPortIndex?: number}[],
+        targets: [] as {id: string, sourcePortIndex?: number, targetPortIndex?: number}[]
                 };
 
                 if (node) {
@@ -187,15 +187,15 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                         if (edge.target === id) {
                             connections.sources.push({
                                 id: edge.source,
-                                sourceIndex: edge.sourceHandle ? parseInt(edge.sourceHandle) : undefined,
-                                targetIndex: edge.targetHandle ? parseInt(edge.targetHandle) : undefined
+                                sourcePortIndex: edge.sourceHandle ? parseInt(edge.sourceHandle) : undefined,
+                                targetPortIndex: edge.targetHandle ? parseInt(edge.targetHandle) : undefined
                             });
                         }
                         if (edge.source === id) {
                             connections.targets.push({
                                 id: edge.target,
-                                sourceIndex: edge.sourceHandle ? parseInt(edge.sourceHandle) : undefined,
-                                targetIndex: edge.targetHandle ? parseInt(edge.targetHandle) : undefined
+                                sourcePortIndex: edge.sourceHandle ? parseInt(edge.sourceHandle) : undefined,
+                                targetPortIndex: edge.targetHandle ? parseInt(edge.targetHandle) : undefined
                             });
                         }
                     });
@@ -208,14 +208,14 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                                 if (connectedNode) {
                                     if (connections.sources.some(s => s.id === conn.id)) {
                                         // Convert handle IDs to integers
-                                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
-                                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
-                                        get().checkerGraph.disconnect(conn.id, id, sourceIndex, targetIndex);
+                                        const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
+                                        const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
+                                        get().checkerGraph.disconnect(conn.id, id, sourcePortIndex, targetPortIndex);
                                     } else {
                                         // Convert handle IDs to integers
-                                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
-                                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
-                                        get().checkerGraph.disconnect(id, conn.id, sourceIndex, targetIndex);
+                                        const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
+                                        const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
+                                        get().checkerGraph.disconnect(id, conn.id, sourcePortIndex, targetPortIndex);
                                     }
                                 }
                             }
@@ -250,11 +250,11 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 // Try to reconnect
                 connections.sources.forEach(conn => {
                     try {
-                        // Parse source and target indices
-                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
-                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                        // Parse source and target port indices
+                        const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
+                        const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
                         
-                        get().checkerGraph.connect(conn.id, id, sourceIndex, targetIndex);
+                        get().checkerGraph.connect(conn.id, id, sourcePortIndex, targetPortIndex);
                     } catch (e) {
                         console.warn('Error reconnecting source:', e);
                     }
@@ -262,11 +262,11 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 
                 connections.targets.forEach(conn => {
                     try {
-                        // Parse source and target indices
-                        const sourceIndex = conn.sourceIndex !== undefined ? parseInt(String(conn.sourceIndex), 10) : 0;
-                        const targetIndex = conn.targetIndex !== undefined ? parseInt(String(conn.targetIndex), 10) : 0;
+                        // Parse source and target port indices
+                        const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
+                        const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
                         
-                        get().checkerGraph.connect(id, conn.id, sourceIndex, targetIndex);
+                        get().checkerGraph.connect(id, conn.id, sourcePortIndex, targetPortIndex);
                     } catch (e) {
                         console.warn('Error reconnecting target:', e);
                     }
