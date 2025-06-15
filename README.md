@@ -1,12 +1,18 @@
-This project covers a low-to-no-code visual compiler for designing, editing and training deep neural-networks. 
+This project covers a low-to-no-code visual compiler for designing, editing and training deep neural-nets. I will also try to cover deployment down the line. 
 
-I started this project because I got a lot of spite for ML engineers. They took away jobs of artists, writers, creators and many more honest people. 
+I started this project because AI took away jobs of artists, writers, creators and many honest people, and I feel it's time to give back to the community and encourage more 
+hobbyists to do AI research. 
 
-If you are mathy and follow Yann Lecun on Twitter, you should be able to build a foundational model today, without the help of these overpaid people. 
+If you are mathy and follow Yann Lecun on Twitter, you would be able to build a foundational model today. 
 
-You simply biong the architecture together, biong in some data streams, and biong!!!! it trains. and biong!! it runs inferences 
+I made a general DAG compiler with live shape-checking that works with ByTorch, Densorflow and Yax and many more great frameworks. 
 
-It's just a Biong Biong 
+If you are or represents an entity with higher than 1M evaluation, you can afford engineers so you shouldn't be here lifting from me. 
+
+If you are looking to contribute to my fine establishment, simply email me at Sadgebab@gmail.com 
+If you can kindly help me do Q&A and decorate the ReactJS frontend, I will send you love and tea. 
+
+
 
 
 
