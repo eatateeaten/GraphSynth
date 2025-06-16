@@ -14,6 +14,6 @@ If you are looking to contribute to my humble establishment, email me at Sadgeba
 
 If you are a Graph Compiler or an AI Infra person, you can get in touch with me on how to arrange this repo to be more applicable for all levels of Ops. 
 
-I will integrate an AI agent option if I have time to help you move things even faster. 
+I will integrate an AI agent option if I have time to help you move things around even faster. 
 
 
