@@ -1,6 +1,6 @@
-import { Tensor } from '../DAGCompiler/tensor';
-import { Op } from '../DAGCompiler/op';
-import { g_GraphConfig } from '../DAGCompiler/config';
+import { Tensor } from '../OpCompiler/tensor';
+import { Op } from '../OpCompiler/op';
+import { g_GraphConfig } from '../OpCompiler/config';
 
 // Set the target to Torch for shape inference
 beforeAll(() => {

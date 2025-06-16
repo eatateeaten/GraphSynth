@@ -13,7 +13,7 @@ export abstract class MergeOp extends GraphNode {
         params: Record<string, any> = {}, 
     ) {
         super(id, params);
-2
+        this._inShapes = Array(numberOfMerges).fill(null);
         this._outShapes = [null];
         this._prevs = Array(numberOfMerges).fill(null); 
         this._nexts = [null];

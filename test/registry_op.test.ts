@@ -1,4 +1,4 @@
-import { nn_module_metadata } from '../DAGCompiler/torch_nn_module_op';
+import { nn_module_metadata } from '../OpCompiler/torch_nn_module_op';
 import { allModules } from '../registry';
 
 describe('Registry Tests', () => {

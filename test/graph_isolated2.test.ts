@@ -1,7 +1,7 @@
-import { Tensor } from '../DAGCompiler/tensor';
-import { Copy } from '../DAGCompiler/branch_op';
-import { PointwiseReduce } from '../DAGCompiler/reduce_op';
-import { DotOp, CrossOp } from '../DAGCompiler/merge_op';
+import { Tensor } from '../OpCompiler/tensor';
+import { Copy } from '../OpCompiler/branch_op';
+import { PointwiseReduce } from '../OpCompiler/reduce_op';
+import { DotOp, CrossOp } from '../OpCompiler/merge_op';
 
 describe('Node Connection Methods - Part 2', () => {
     describe('Copy Node', () => {
