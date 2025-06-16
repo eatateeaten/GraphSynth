@@ -55,6 +55,7 @@ export abstract class Module extends GraphNode {
      * Abstract method to generate framework-specific code
      */
     abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitIR(): string;
 
     /**
      * Generates framework-specific code

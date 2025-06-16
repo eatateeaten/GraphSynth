@@ -24,6 +24,7 @@ export abstract class BranchOp extends GraphNode {
 
     protected abstract computeOutShape(): number[][];
     abstract emitTorchFunctional(inputs: string[], outputs: string[]): string;
+    abstract emitIR(): string;
 
     // Getters and setters 
     get opType(): string { return this._opType; }
@@ -159,6 +160,13 @@ export class Split extends BranchOp {
         // torch.split returns a tuple that needs to be assigned to the output variables
         return `${outputs.join(', ')} = torch.split(${inputs[0]}, sections=${JSON.stringify(sections).replace('[', '(').replace(']', ')')}, dim=${dim})`;
     }
+
+    emitIR(): string {
+        const outShapesStr = this._outShapes.map(shape => 
+            shape ? `[${shape.join(',')}]` : 'unknown'
+        ).join(', ');
+        return `Split(dim=${this._dim}, sections=${JSON.stringify(this._sections)}) -> [${outShapesStr}]`;
+    }
 } 
 
 /**
@@ -198,5 +206,13 @@ export class Copy extends BranchOp {
         // Generate separate assignment statements for each output
         // This ensures each output gets its own line and is treated as a separate variable
         return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
+    }
+
+    emitIR(): string {
+        const outShapesStr = this._outShapes.map(shape => 
+            shape ? `[${shape.join(',')}]` : 'unknown'
+        ).join(', ');
+        const copies = this._params.copies || this._outShapes.length;
+        return `Copy(copies=${copies}) -> [${outShapesStr}]`;
     }
 } 

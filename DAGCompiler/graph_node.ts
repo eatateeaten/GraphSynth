@@ -38,6 +38,7 @@ export abstract class GraphNode {
     abstract deletePrev(indexSelf?: number): void;
     abstract deleteNext(indexSelf?: number): void;
     abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitIR(): string;
 
     static isIndexInBound(index: number, length: number, context: string): number {
         if (index < 0 || index >= length) {throw new Error(`${context}: Index ${index} is out of bounds for length ${length}`);}

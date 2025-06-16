@@ -1,4 +1,4 @@
-import { validateParams as validateTorchParams } from '../isomorphic/torch_nn_module_op';
+import { validateParams as validateTorchParams } from '../DAGCompiler/torch_nn_module_op';
 import { ModuleMetadata } from './types';
 import { convolutionalModules } from './convolutional';
 import { activationModules } from './activation';

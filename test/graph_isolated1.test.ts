@@ -1,6 +1,6 @@
-import { Tensor } from '../compiler/tensor';
-import { Split } from '../compiler/branch_op';
-import { Concat } from '../compiler/reduce_op';
+import { Tensor } from '../DAGCompiler/tensor';
+import { Split } from '../DAGCompiler/branch_op';
+import { Concat } from '../DAGCompiler/reduce_op';
 
 describe('Node Connection Methods', () => {
     describe('Tensor Node', () => {

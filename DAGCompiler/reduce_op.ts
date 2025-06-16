@@ -39,6 +39,7 @@ export abstract class ReduceOp extends MergeOp {
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
     abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitIR(): string;
 }
 
 export class PointwiseReduce extends ReduceOp {
@@ -96,6 +97,11 @@ export class PointwiseReduce extends ReduceOp {
         );
         
         return `${inputs[0]} = ${result}`;
+    }
+
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `${this._opType}Reduce(inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }
 }
 
@@ -192,5 +198,10 @@ export class Concat extends ReduceOp {
     emitTorchFunctional(inputs: string[], outputs?: string[]): string {
         const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
         return `${outVar} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
+    }
+
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `Concat(dim=${this._dim}, inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }
 }

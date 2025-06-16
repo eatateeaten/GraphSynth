@@ -25,6 +25,7 @@ export abstract class MergeOp extends GraphNode {
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
     abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitIR(): string;
 
     // Getters and setters
     get opType(): string { return this._opType; }
@@ -144,6 +145,11 @@ export class PointwiseOp extends MergeOp {
             return `${inputs[0]} = ${nonDiffOpCode}(${inputs[0]}, ${inputs[1]})`;
         }
     }
+
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `${this._opType}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+    }
 }
 
 /**
@@ -199,6 +205,11 @@ export class DotOp extends MergeOp {
             throw new Error("DotOp requires exactly 2 inputs");
         }
         return `${inputs[0]} = torch.matmul(${inputs[0]}, ${inputs[1]})`;
+    }
+
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `Dot(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 }
 
@@ -262,5 +273,10 @@ export class CrossOp extends MergeOp {
             throw new Error("CrossOp requires exactly 2 inputs");
         }
         return `${inputs[0]} = torch.cross(${inputs[0]}, ${inputs[1]})`;
+    }
+
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `Cross(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 }

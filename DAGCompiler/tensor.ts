@@ -69,4 +69,14 @@ export class Tensor extends GraphNode {
         const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
         return `${outVar} = ${inputs[0]}`;
     }
+
+    /**
+     * Generates intermediate representation for this tensor.
+     * 
+     * @returns A string containing the IR representation of this tensor
+     */
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `Tensor(${this._variableName}) -> ${shapeStr}`;
+    }
 }

@@ -24,7 +24,7 @@ import { create } from 'zustand';
 import type { FlowNode, FlowEdge, NodeType  } from './types';
 import { GRID_SIZE } from './config';
 
-import { Graph as CheckerGraph } from '../compiler/graph';
+import { Graph as CheckerGraph } from '../DAGCompiler/graph';
 import { JupyterService, type JupyterConfig, type JupyterStatus, type CodeExecutionResult } from './services/jupyter';
 
 interface NodeConfig {

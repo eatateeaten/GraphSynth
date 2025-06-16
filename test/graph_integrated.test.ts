@@ -1,6 +1,6 @@
-import { Graph } from '../compiler/graph';
-import { Tensor } from '../compiler/tensor';
-import { Op } from '../compiler/op';
+import { Graph } from '../DAGCompiler/graph';
+import { Tensor } from '../DAGCompiler/tensor';
+import { Op } from '../DAGCompiler/op';
 
 describe('Graph Operations', () => {
     test('should create and add nodes to graph', () => {

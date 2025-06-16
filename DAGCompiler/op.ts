@@ -79,6 +79,16 @@ export class Op extends GraphNode {
         return getTorchCode(this._opType, this._params);
     }
 
+    /**
+     * Generates intermediate representation for this operation.
+     * 
+     * @returns A string containing the IR representation of this operation
+     */
+    emitIR(): string {
+        const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
+        return `${this._opType}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+    }
+
     // Getters and setters
     set inShape(shape: number[] | null) { 
         // inShape can only be set during connection

@@ -273,7 +273,7 @@ export class Graph {
         else this._sinks.delete(node);
     }
 
-//--------- ALREADY WENT THROUGH EVERYTHING ABOVE --------- 
+
     validate_graph(): void {
         //check the graph has source and sink tensors 
         //check that all sources and sinks are tensors 
@@ -309,92 +309,93 @@ export class Graph {
             }
         }
         
-        // Check that all sinks are reachable from sources using BFS
-        const visited = new Set<string>();
-        const queue: GraphNode[] = Array.from(this._sources);
-        
-        // BFS traversal from source nodes
-        while (queue.length > 0) {
-            const node = queue.shift()!;
-            
-            if (visited.has(node.id)) {
-                continue;
-            }
-            
-            visited.add(node.id);
-
-            // Add next nodes to the queue
-            for (const nextNode of node.nexts) {
-                if (nextNode) {
-                    queue.push(nextNode);
-                }
-            }
-        }
-
-        // Check if any nodes are unreachable
-        if (visited.size !== this._nodes.size) {
-            const unreachable = Array.from(this._nodes.keys())
-                .filter(id => !visited.has(id))
-                .map(id => this._nodes.get(id)!.id);
-            
-            throw new Error(`Graph contains unreachable nodes: ${unreachable.join(', ')}`);
-        }
-
-        // Check if all sinks are reachable
-        for (const sink of sinkNodes) {
-            if (!visited.has(sink.id)) {
-                throw new Error(`Sink node ${sink.id} is not reachable from any source`);
-            }
-        }
-
-        // Check for cycles
-        this._checkForCycles();
-
+        // Check that all sinks are reachable from sources and that the graph doesn't contain cycles using Kahn's algorithm 
+        this. _bfsValidateGraph()
         // Log the graph structure as an adjacency list
         this._logGraphStructure();
     }
 
-    private _checkForCycles(): void {
-        // Track nodes being processed in the current DFS path
-        const visiting = new Set<string>();
-        // Track nodes already fully processed
-        const visited = new Set<string>();
+//--------- ALREADY WENT THROUGH EVERYTHING ABOVE --------- 
+
+    private _bfsValidateGraph(): void {
+        // Calculate in-degrees for all nodes
+        const inDegree = new Map<string, number>();
+        for (const [id, node] of this._nodes) {
+            inDegree.set(id, node.prevs.filter(p => p !== null).length);
+        }
         
-        // Start DFS from each source node
-        const sourceNodes = Array.from(this._sources);
-        for (const source of sourceNodes) {
-            this._dfsCheckCycle(source, visiting, visited);
-        }
-    }
-
-    private _dfsCheckCycle(node: GraphNode, visiting: Set<string>, visited: Set<string>): void {
-        // If already fully processed, no need to check again
-        if (visited.has(node.id)) {
-            return;
-        }
-
-        // If we're visiting this node in the current path, we found a cycle
-        if (visiting.has(node.id)) {
-            throw new Error(`Graph contains a cycle involving node ${node.id}`);
-        }
-
-        // Mark node as being visited in current path
-        visiting.add(node.id);
-
-        // Visit all next nodes
-        for (const nextNode of node.nexts) {
-            if (nextNode) {
-                this._dfsCheckCycle(nextNode, visiting, visited);
+        // Start with nodes that have no incoming edges (sources)
+        const queue: GraphNode[] = [];
+        for (const [id, degree] of inDegree) {
+            if (degree === 0) {
+                queue.push(this._nodes.get(id)!);
             }
         }
-
-        // Mark node as fully processed
-        visiting.delete(node.id);
-        visited.add(node.id);
+        
+        const visited = new Set<string>();
+        
+        while (queue.length > 0) {
+            const node = queue.shift()!;
+            visited.add(node.id);
+            
+            // Process all outgoing edges
+            for (const nextNode of node.nexts) {
+                if (!nextNode) continue;
+                
+                // Decrease in-degree
+                const newDegree = inDegree.get(nextNode.id)! - 1;
+                inDegree.set(nextNode.id, newDegree);
+                
+                // If in-degree becomes 0, add to queue
+                if (newDegree === 0) {
+                    queue.push(nextNode);
+                }
+            }
+        }
+        
+        // Check both reachability AND cycles in one shot!
+        if (visited.size !== this._nodes.size) {
+            const unprocessed = Array.from(this._nodes.keys())
+                .filter(id => !visited.has(id));
+            
+            // If we couldn't process all nodes, there's either:
+            // 1. A cycle (nodes with non-zero in-degree remaining)
+            // 2. Unreachable nodes
+            
+            const cycleNodes = unprocessed.filter(id => inDegree.get(id)! > 0);
+            if (cycleNodes.length > 0) {
+                throw new Error(`Graph contains cycles involving nodes: ${cycleNodes.join(', ')}`);
+            } else {
+                throw new Error(`Graph contains unreachable nodes: ${unprocessed.join(', ')}`);
+            }
+        }
     }
-
     
-
+    /**
+     * Generates intermediate representation (IR) for the entire graph.
+     * Shows the structure and data flow of all nodes.
+     * 
+     * @returns A string containing the IR representation of the graph
+     */
+    public emitIR(): string {
+        this.validate_graph();
+        
+        const topoOrder = this._topologicalSort();
+        let ir = "=== GRAPH IR ===\n";
+        
+        for (const node of topoOrder) {
+            const nodeIR = node.emitIR();
+            ir += `${node.id}: ${nodeIR}\n`;
+        }
+        
+        // Add connection information
+        ir += "\n=== CONNECTIONS ===\n";
+        for (const edge of this._edges) {
+            ir += `${edge.sourceId}[${edge.sourcePortIndex}] -> ${edge.sinkId}[${edge.sinkPortIndex}]\n`;
+        }
+        
+        return ir;
+    }
     /**
      * Generates complete SSA (Static Single Assignment) style PyTorch code from the graph DAG.
      * Each variable is assigned exactly once with automatic variable name generation.
@@ -403,91 +404,25 @@ export class Graph {
      * @returns A string containing complete PyTorch code in SSA functional style
      */
     public emitTorchFunctional(): string {
-        // 1) Validate the graph (checks for sources, sinks, shape consistency, cycles, etc.)
         this.validate_graph();
-      
-        // 2) SSA variable management
+        
         let varCounter = 0;
-        const newVar = (): string => `v${varCounter++}`;
-        
-        // Map each node to its output variable(s) - for branch nodes, use nodeId_outputIndex
-        const nodeOutputVars = new Map<string, string>();
-        
-        // 3) Topological sort to get proper execution order
+        const newVar = () => `v${varCounter++}`;
+        const nodeVars = new Map<string, string>();
         const topoOrder = this._topologicalSort();
         
-        // 4) Generate SSA code
         let code = "";
         
-        // Process each node in topological order
         for (const node of topoOrder) {
-            if (this._sources.has(node)) {
-                // Source nodes (Tensors) - assign initial variables
-                const sourceVar = newVar();
-                nodeOutputVars.set(node.id, sourceVar);
-                
-                // For source tensors, we might want to use their variableName if available
-                const tensorSource = node as Tensor;
-                const inputName = tensorSource.variableName || `input_${node.id}`;
-                code += `${sourceVar} = ${inputName}  # Source: ${node.id}\n`;
-                
-            } else if (GraphNode.singleInput(node) && GraphNode.singleOutput(node)) {
-                // Single input, single output (Op, most operations)
-                const inputVar = this._getSSAInputVariable(node, nodeOutputVars);
-                const outputVar = newVar();
-                nodeOutputVars.set(node.id, outputVar);
-                
-                // Get the operation code from the node (without variable names)
-                const opCode = this._getSSAOperationCode(node);
-                code += `${outputVar} = ${opCode}(${inputVar})  # ${node.constructor.name}: ${node.id}\n`;
-                
-            } else if (!GraphNode.singleInput(node) && GraphNode.singleOutput(node)) {
-                // Multiple inputs, single output (MergeOp, Add, Concat, etc.)
-                const inputVars = this._getSSAInputVariables(node, nodeOutputVars);
-                const outputVar = newVar();
-                nodeOutputVars.set(node.id, outputVar);
-                
-                // Get the operation code from the node
-                const opCode = this._getSSAOperationCode(node);
-                code += `${outputVar} = ${opCode}(${inputVars.join(', ')})  # ${node.constructor.name}: ${node.id}\n`;
-                
-            } else if (GraphNode.singleInput(node) && !GraphNode.singleOutput(node)) {
-                // Single input, multiple outputs (BranchOp, Split, Copy)
-                const inputVar = this._getSSAInputVariable(node, nodeOutputVars);
-                const branchOp = node as BranchOp;
-                const numOutputs = branchOp.outShapes.length;
-                
-                const outputVars: string[] = [];
-                for (let i = 0; i < numOutputs; i++) {
-                    const outVar = newVar();
-                    outputVars.push(outVar);
-                    // Store each output with indexed key for branch operations
-                    nodeOutputVars.set(`${node.id}_${i}`, outVar);
-                }
-                
-                // Get the operation code from the node
-                const opCode = this._getSSABranchOperationCode(node);
-                if (outputVars.length === 1) {
-                    code += `${outputVars[0]} = ${opCode}(${inputVar})  # ${node.constructor.name}: ${node.id}\n`;
-                } else {
-                    code += `${outputVars.join(', ')} = ${opCode}(${inputVar})  # ${node.constructor.name}: ${node.id}\n`;
-                }
-                
-            } else {
-                throw new Error(
-                    `Unsupported node type (multi-in & multi-out) for node ID ${node.id} (${node.constructor.name})`
-                );
-            }
+            const nodeCode = this._generateNodeCode(node, nodeVars, newVar);
+            code += nodeCode;
         }
         
-        // 5) Generate return statement for sink variables
-        const sinkVars: string[] = [];
-        for (const sink of this._sinks) {
-            // Find the variable that feeds into this sink
-            const sinkVar = this._getSSASinkVariable(sink, nodeOutputVars);
-            sinkVars.push(sinkVar);
-        }
-        
+        // Generate return statement
+        const sinkVars = this._sinks.size > 0 
+            ? Array.from(this._sinks).map(sink => this._getSinkVar(sink, nodeVars))
+            : [];
+            
         if (sinkVars.length > 0) {
             code += `return ${sinkVars.join(', ')}\n`;
         }
@@ -495,151 +430,165 @@ export class Graph {
         return code;
     }
 
-    // Helper methods for SSA code generation
-    private _topologicalSort(): GraphNode[] {
-        const visited = new Set<GraphNode>();
-        const result: GraphNode[] = [];
-        
-        const visit = (node: GraphNode) => {
-            if (visited.has(node)) return;
-            visited.add(node);
-            
-            // Visit all dependencies first
-            for (const prev of node.prevs) {
-                if (prev) visit(prev);
-            }
-            
-            result.push(node);
-        };
-        
-        // Start from all nodes (sources will naturally be first due to no dependencies)
-        for (const node of this._nodes.values()) {
-            visit(node);
+
+
+    private _generateNodeCode(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string {
+        if (this._sources.has(node)) {
+            return this._generateSourceCode(node, nodeVars, newVar);
         }
         
-        return result;
+        const inputs = this._getNodeInputs(node, nodeVars);
+        const outputs = this._createNodeOutputs(node, nodeVars, newVar);
+        const operation = this._getNodeOperation(node);
+        
+        return this._formatNodeCode(node, inputs, outputs, operation);
     }
-    
-    private _getSSAInputVariable(node: GraphNode, nodeOutputVars: Map<string, string>): string {
-        const prevNodes = this._getPrevNodes(node);
-        const prev = prevNodes.find(p => p !== null);
-        if (!prev) {
-            throw new Error(`Node ${node.id} has no input connections`);
-        }
+
+    private _generateSourceCode(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string {
+        const outputVar = newVar();
+        nodeVars.set(node.id, outputVar);
         
-        // Check if it's a branch output
-        if (prev instanceof BranchOp) {
-            const prevNodeIndex = this._getPrevNodeIndex(node, prev);
-            const key = `${prev.id}_${prevNodeIndex}`;
-            if (nodeOutputVars.has(key)) {
-                return nodeOutputVars.get(key)!;
-            }
-        }
+        const tensor = node as Tensor;
+        const inputName = tensor.variableName || `input_${node.id}`;
         
-        // Regular single output node
-        const inputVar = nodeOutputVars.get(prev.id);
-        if (!inputVar) {
-            throw new Error(`No output variable found for input node ${prev.id}`);
-        }
-        return inputVar;
+        return `${outputVar} = ${inputName}  # Source: ${node.id}\n`;
     }
-    
-    private _getSSAInputVariables(node: GraphNode, nodeOutputVars: Map<string, string>): string[] {
+
+    private _getNodeInputs(node: GraphNode, nodeVars: Map<string, string>): string[] {
         const prevNodes = this._getPrevNodes(node);
-        const inputVars: string[] = [];
+        const inputs: string[] = [];
         
         for (let i = 0; i < prevNodes.length; i++) {
             const prev = prevNodes[i];
             if (!prev) continue;
             
-            // Check if it's a branch output
-            if (prev instanceof BranchOp) {
-                const key = `${prev.id}_${i}`;
-                if (nodeOutputVars.has(key)) {
-                    inputVars.push(nodeOutputVars.get(key)!);
-                } else {
-                    throw new Error(`No output variable found for branch ${prev.id} output ${i}`);
-                }
-            } else {
-                // Regular single output node
-                const inputVar = nodeOutputVars.get(prev.id);
-                if (!inputVar) {
-                    throw new Error(`No output variable found for input node ${prev.id}`);
-                }
-                inputVars.push(inputVar);
+            const inputVar = prev instanceof BranchOp 
+                ? nodeVars.get(`${prev.id}_${i}`)
+                : nodeVars.get(prev.id);
+                
+            if (!inputVar) {
+                throw new Error(`No input variable found for ${prev.id}`);
             }
+            inputs.push(inputVar);
         }
         
-        return inputVars;
+        return inputs;
     }
-    
-    private _getSSAOperationCode(node: GraphNode): string {
-        // Get the raw operation code without variable assignments
+
+    private _createNodeOutputs(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string[] {
+        if (GraphNode.singleOutput(node)) {
+            const outputVar = newVar();
+            nodeVars.set(node.id, outputVar);
+            return [outputVar];
+        } else {
+            // Multi-output (branch) node
+            const branchOp = node as BranchOp;
+            const outputs: string[] = [];
+            
+            for (let i = 0; i < branchOp.outShapes.length; i++) {
+                const outputVar = newVar();
+                outputs.push(outputVar);
+                nodeVars.set(`${node.id}_${i}`, outputVar);
+            }
+            
+            return outputs;
+        }
+    }
+
+    private _getNodeOperation(node: GraphNode): string {
         if (node instanceof Op) {
-            return node.emitTorch(); // Use the parameter-less version
+            return node.emitTorch();
         } else if (node instanceof MergeOp) {
-            // For merge ops, we need to extract the operation from emitTorchFunctional
-            // This is a temporary solution - ideally MergeOp should have emitTorch() too
             const tempCode = node.emitTorchFunctional(['temp1', 'temp2'], ['tempOut']);
-            // Extract the operation part (everything after the '=')
             const match = tempCode.match(/= (.+)$/);
             return match ? match[1] : tempCode;
-        }
-        throw new Error(`Unsupported node type for operation code: ${node.constructor.name}`);
-    }
-    
-    private _getSSABranchOperationCode(node: GraphNode): string {
-        if (node instanceof BranchOp) {
-            // For branch ops, we need to extract the operation from emitTorchFunctional
+        } else if (node instanceof BranchOp) {
             const tempCode = node.emitTorchFunctional(['tempIn'], ['tempOut1', 'tempOut2']);
-            // Extract the operation part (everything after the '=')
             const match = tempCode.match(/= (.+)$/);
             return match ? match[1] : tempCode;
         }
-        throw new Error(`Unsupported node type for branch operation code: ${node.constructor.name}`);
+        
+        throw new Error(`Unsupported node type: ${node.constructor.name}`);
     }
-    
-    private _getSSASinkVariable(sink: GraphNode, nodeOutputVars: Map<string, string>): string {
+
+    private _formatNodeCode(node: GraphNode, inputs: string[], outputs: string[], operation: string): string {
+        const inputStr = inputs.join(', ');
+        const outputStr = outputs.join(', ');
+        const nodeType = node.constructor.name;
+        
+        return `${outputStr} = ${operation}(${inputStr})  # ${nodeType}: ${node.id}\n`;
+    }
+
+    private _getSinkVar(sink: GraphNode, nodeVars: Map<string, string>): string {
         // Find the node that connects to this sink
         for (const [nodeId, node] of this._nodes.entries()) {
             if (node instanceof BranchOp) {
-                // Check each branch output
                 for (let i = 0; i < node.nexts.length; i++) {
                     if (node.nexts[i] === sink) {
                         const key = `${nodeId}_${i}`;
-                        if (nodeOutputVars.has(key)) {
-                            return nodeOutputVars.get(key)!;
-                        }
+                        const sinkVar = nodeVars.get(key);
+                        if (sinkVar) return sinkVar;
                     }
                 }
             } else if ((node instanceof Op || node instanceof MergeOp) && node.nexts[0] === sink) {
-                if (nodeOutputVars.has(nodeId)) {
-                    return nodeOutputVars.get(nodeId)!;
-                }
+                const sinkVar = nodeVars.get(nodeId);
+                if (sinkVar) return sinkVar;
             }
         }
         
-        // Fallback - use sink's variable name if it's a tensor
         if (sink instanceof Tensor && sink.variableName) {
             return sink.variableName;
         }
         
         throw new Error(`No input variable found for sink ${sink.id}`);
     }
-      
-    // Helper to safely get next nodes regardless of node type
-    private _getNextNodes(node: GraphNode): GraphNode[] {
-        return node.nexts.filter(n => n !== null);
+
+    // Helper methods for SSA code generation
+    private _topologicalSort(): GraphNode[] {
+        const visited = new Set<string>();
+        const inProgress = new Set<string>();  // Cycle detection
+        const result: GraphNode[] = [];
+        
+        const visit = (node: GraphNode) => {
+            if (visited.has(node.id)) return;
+            
+            // Cycle detection
+            if (inProgress.has(node.id)) {
+                throw new Error(`Cycle detected involving node ${node.id}`);
+            }
+            
+            inProgress.add(node.id);
+            
+            // Validate null entries in prevs (catch construction errors)
+            for (let i = 0; i < node.prevs.length; i++) {
+                const prev = node.prevs[i];
+                if (prev === undefined) {
+                    throw new Error(`Node ${node.id} has undefined entry at prevs[${i}] - graph construction error`);
+                }
+                if (prev !== null) {
+                    visit(prev);
+                }
+            }
+            
+            inProgress.delete(node.id);
+            visited.add(node.id);
+            result.push(node);
+        };
+        
+        // Sort nodes by id for deterministic order
+        const sortedNodes = Array.from(this._nodes.values()).sort((a, b) => a.id.localeCompare(b.id));
+        
+        // Start from all nodes (sources will naturally be first due to no dependencies)
+        for (const node of sortedNodes) {
+            visit(node);
+        }
+        
+        return result;
     }
       
     // Helper to safely get previous nodes regardless of node type
     private _getPrevNodes(node: GraphNode): GraphNode[] {
         return node.prevs.filter(p => p !== null);
-    }
-      
-    // Helper to find the index of a prev node
-    private _getPrevNodeIndex(node: GraphNode, prevNode: GraphNode): number {
-        return node.prevs.findIndex(p => p && p.id === prevNode.id);
     }
 
     /**
