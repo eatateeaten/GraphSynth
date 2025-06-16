@@ -1,5 +1,5 @@
 import { GraphNode } from './graph_node';
-import { assert } from "./utils";
+import { ParamError } from './types';
 
 export abstract class BranchOp extends GraphNode {
     protected readonly _opType: string;
@@ -106,9 +106,21 @@ export class Split extends BranchOp {
         this._sections = sections;
     }
 
+    static fromParams(id: string, params: Record<string, any>): Split {
+        if (params.dim === undefined)
+            throw new ParamError("Dimension is required for Split");
+        if (params.sections === undefined)
+            throw new ParamError("Sections is required for Split");
+
+        return new Split(id, params.dim, params.sections, params);
+    }
+
     set params(params: Record<string, any>) {
-        assert(params.dim !== undefined, "dim is required for Split");
-        assert(params.sections !== undefined, "sections is required for Split");
+        if (params.dim === undefined)
+            throw new ParamError("Dimension is required for Split");
+        if (params.sections === undefined)
+            throw new ParamError("Sections is required for Split");
+
         this._dim = params.dim;
         this._sections = params.sections;
         (this._params) = { ...params };
@@ -180,6 +192,13 @@ export class Copy extends BranchOp {
         params: Record<string, any>,
     ) {
         super(id, "Copy", copies, params);
+    }
+
+    /** Validate params and construct if OK */
+    static fromParams(id: string, params: Record<string, any>): Copy {
+        if (!params.copies)
+            throw new ParamError("Copies parameter is required for Copy");
+        return new Copy(id, params.copies, params);
     }
 
     protected computeOutShape(): number[][] {

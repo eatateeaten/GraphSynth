@@ -1,6 +1,7 @@
 import { g_GraphConfig } from './config';
 import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
+import { ParamError } from './types';
 
 export abstract class MergeOp extends GraphNode {
     protected readonly _opType: string;
@@ -99,6 +100,12 @@ export class PointwiseOp extends MergeOp {
         super(id, opType, 2, params); // Always 2 inputs for pointwise ops
     }
 
+    static fromParams(id: string, params: Record<string, any>): PointwiseOp {
+        if (!params.opType)
+            throw new ParamError("Operation type is required for PointwiseOp");
+        return new PointwiseOp(id, params.opType, params);
+    }
+
     protected checkIncomingShapeMatch(shape: number[]): void {
         if (!this._inShapes.some(s => s !== null)) {
             return; // First shape, no need to check
@@ -166,6 +173,10 @@ export class DotOp extends MergeOp {
         super(id, "Dot", 2, params); // Always 2 inputs for dot ops
     }
 
+    static fromParams(id: string, params: Record<string, any>): DotOp {
+        return new DotOp(id, params);
+    }
+
     protected checkIncomingShapeMatch(shape: number[]): void {
         if (this._inShapes.every(s => s === null)) {
             return; // First shape, no need to check
@@ -223,6 +234,10 @@ export class CrossOp extends MergeOp {
         params: Record<string, any> = {}
     ) {
         super(id, "Cross", 2, params); // Always 2 inputs for cross ops
+    }
+
+    static fromParams(id: string, params: Record<string, any>): CrossOp {
+        return new CrossOp(id, params);
     }
 
     protected checkIncomingShapeMatch(shape: number[]): void {

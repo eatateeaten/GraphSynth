@@ -1,5 +1,5 @@
-import { assert } from 'console';
 import { GraphNode } from './graph_node';
+import { ParamError } from './types';
 
 export class Tensor extends GraphNode {
     protected _variableName: string;
@@ -11,6 +11,16 @@ export class Tensor extends GraphNode {
         this._prevs = [null];
         this._nexts = [null];
         this._variableName = variableName;
+    }
+
+    /** Validate params and construct if OK */
+    static fromParams(id: string, params: Record<string, any>): Tensor {
+        if (!params.shape)
+            throw new ParamError("Shape is required for Tensor");
+        if (!params.variableName) 
+            throw new ParamError("Variable name is required for Tensor");
+        
+        return new Tensor(id, params.shape, params.variableName);
     }
 
     // Getters and setters

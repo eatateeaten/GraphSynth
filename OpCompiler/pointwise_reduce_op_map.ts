@@ -15,19 +15,6 @@ export function getPointWiseReduceOpCode(opType: string, target: string = 'torch
         default:
             throw new Error(`Unknown differentiable elementwise operation type: ${opType}`);
         }
-    } else if (target.toLowerCase() === 'jax') {
-        switch (opType.toLowerCase()) {
-        case 'add':
-            return 'jnp.add';
-        case 'mul':
-            return 'jnp.multiply';
-        case 'pow':
-            return 'jnp.power';
-        case 'identity':
-            return input ? input : 'lambda x: x';
-        default:
-            throw new Error(`Unknown differentiable elementwise operation type: ${opType}`);
-        }
     } else {
         throw new Error(`Unsupported target framework: ${target}`);
     }
@@ -48,18 +35,7 @@ export function getNonDifferentiableReduceOpCode(opType: string, target: string 
         default:
             throw new Error(`Unknown non-differentiable associative and commutative operation type: ${opType}`);
         }
-    } else if (target.toLowerCase() === 'jax') {
-        switch (opType.toLowerCase()) {
-        case 'and':
-            return 'jnp.logical_and';
-        case 'or':
-            return 'jnp.logical_or';
-        case 'xor':
-            return 'jnp.logical_xor';
-        default:
-            throw new Error(`Unknown non-differentiable associative and commutative operation type: ${opType}`);
-        }
     } else {
         throw new Error(`Unsupported target framework: ${target}`);
     }
-} 
+}

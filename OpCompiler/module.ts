@@ -1,6 +1,5 @@
 import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
-import { TargetType } from './types';
 
 /**
  * Module represents a neural network module that can have multiple inputs and outputs.
@@ -15,11 +14,11 @@ export abstract class Module extends GraphNode {
     protected _params: Record<string, any>;
     private _inputs: Tensor[] = [];
     private _outputs: Tensor[] = [];
-    protected readonly _target: TargetType;
+    protected readonly _target: string;
 
     constructor(
         id: string,
-        target: TargetType,
+        target: string,
         opType: string,
         params: Record<string, any> = {}
     ) {

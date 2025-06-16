@@ -1,6 +1,7 @@
 import { GraphNode } from './graph_node';
 import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
 import { g_GraphConfig } from './config';
+import { ParamError } from './types';
 
 /**
  * Op represents operations with exactly one input and one output.
@@ -30,6 +31,13 @@ export class Op extends GraphNode {
         this._prevs = [null];
         this._nexts = [null];
         this._opType = opType;
+    }
+
+    /** Validate params and construct if OK */
+    static fromParams(id: string, params: Record<string, any>): Op {
+        if (!params.opType)
+            throw new ParamError("No operation type provided");
+        return new Op(id, params.opType, params);
     }
 
     protected computeOutShape(): number[] {

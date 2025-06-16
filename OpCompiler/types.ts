@@ -1,4 +1,24 @@
 /** Types for graph */
-export type NodeType = 'Tensor' | 'Op' | 'Split' | 'Copy' | 'Concat' | 'PointwiseReduce' | 'DotOp' | 'CrossOp';
+const NODE_TYPES = [
+    'Tensor', 'Op', 'Split', "Concat", 'Copy',
+    'Concat', 'PointwiseReduce', 'PointwiseOp',
+    'DotOp', 'CrossOp'
+] as const;
+
+export type NodeType = typeof NODE_TYPES[number];
+
+export function isNodeType(str: string): str is NodeType {
+    return str in NODE_TYPES;
+}
+
 export type Shape = number[];
-export type TargetType = "Torch" | "JAX";
+
+/** Custom error types */
+const createError = (name: string) => class extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = name;
+    }
+};
+export const ShapeError = createError("ShapeError");
+export const ParamError = createError("ParamError");

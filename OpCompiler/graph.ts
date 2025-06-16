@@ -4,8 +4,21 @@ import { Op } from './op';
 import { BranchOp, Split, Copy } from './branch_op';
 import { MergeOp, PointwiseOp, DotOp, CrossOp } from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
-import { assert } from './utils';
+import { isNodeType, NodeType, ParamError, Shape } from "./types";
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
+
+/// Node name to node builder lookup
+const moduleFromParams: Record<string, (id: NodeType, params: Record<string, any>) => GraphNode> = {
+    "Tensor": Tensor.fromParams,
+    "Op": Op.fromParams,
+    "Split": Split.fromParams,
+    "Concat": Concat.fromParams,
+    "Copy": Copy.fromParams,
+    "PointwiseReduce": PointwiseReduce.fromParams,
+    "PointwiseOp": PointwiseOp.fromParams,
+    "DotOp": DotOp.fromParams,
+    "CrossOp": CrossOp.fromParams,
+};
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -23,57 +36,12 @@ export class Graph {
     private _sources: Set<GraphNode>;
     private _sinks: Set<GraphNode>;
     private _edges: Edge[]; // Track all connections for easier disconnection
-    
-    // Factory functions for creating different node types
-    private _nodeFactories: Map<string, (id: string, params: Record<string, any>) => GraphNode>;
 
     constructor() {
         this._nodes = new Map();
         this._sources = new Set();
         this._sinks = new Set();
         this._edges = [];
-        
-        // Initialize factory functions
-        this._nodeFactories = new Map<string, (id: string, params: Record<string, any>) => GraphNode>([
-            ['Tensor', (id, params) => {
-                assert(params.shape, "Shape is required for Tensor");
-                assert(params.variableName, "Variable name is required for Tensor");
-                return new Tensor(id, params.shape, params.variableName);
-            }],
-            ['Op', (id, params) => {
-                assert(params.opType, "No operation type provided");
-                return new Op(id, params.opType, params);
-            }],
-            ['Split', (id, params) => {
-                assert(params.dim !== undefined, "Dimension is required for Split");
-                assert(params.sections, "Sections is required for Split");
-                return new Split(id, params.dim, params.sections, params);
-            }],
-            ['Concat', (id, params) => {
-                assert(params.dim !== undefined, "Dimension is required for Concat");
-                assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for Concat");
-                return new Concat(id, params.dim, params.numberOfMerges, params);
-            }],
-            ['Copy', (id, params) => {
-                assert(params.copies, "Copies parameter is required for Copy");
-                return new Copy(id, params.copies, params);
-            }],
-            ['PointwiseReduce', (id, params) => {
-                assert(params.opType, "Operation type is required for PointwiseReduce");
-                assert(params.numberOfMerges && params.numberOfMerges >= 2, "NumberOfMerges must be at least 2 for PointwiseReduce");
-                return new PointwiseReduce(id, params.opType, params.numberOfMerges, params);
-            }],
-            ['PointwiseOp', (id, params) => {
-                assert(params.opType, "Operation type is required for PointwiseOp");
-                return new PointwiseOp(id, params.opType, params);
-            }],
-            ['DotOp', (id, params) => {
-                return new DotOp(id, params);
-            }],
-            ['CrossOp', (id, params) => {
-                return new CrossOp(id, params);
-            }]
-        ]);
     }
 
     getNode(id: string): GraphNode | undefined {
@@ -88,15 +56,14 @@ export class Graph {
         return new Set(this._sinks);
     }
 
-
     /** Add a node to the graph */
     addNode(id: string, nodeType: string, params: Record<string, any>): void {
-        const factory = this._nodeFactories.get(nodeType);
-        if (!factory) {
+        if(!isNodeType(nodeType))
             throw new Error(`Unknown GraphNode type: ${nodeType}`);
-        }
+    
+        const factory = moduleFromParams[nodeType];
         
-        const node = factory(id, params);
+        const node = factory(id as NodeType, params);
         this._nodes.set(id, node);
     }
 
@@ -283,27 +250,23 @@ export class Graph {
         // Recompute sources and sinks to ensure they're correctly identified
         // This fixes potential issues with BranchOp and other node types
         this._refreshAllNodesSourceSinkStatus();
-        
+
         // Check that the graph has source nodes
         if (this._sources.size === 0) {
             throw new Error("Graph has no source nodes");
         }
-        
         // Check that the graph has sink nodes
         if (this._sinks.size === 0) {
             throw new Error("Graph has no sink nodes");
         }
         // Check that all source nodes are Tensors
-        const sourceNodes = Array.from(this._sources);
-        for (const source of sourceNodes) {
+        for (const source of this._sources) {
             if (!(source instanceof Tensor)) {
                 throw new Error(`Source node ${source.id} is not a Tensor (found ${source.constructor.name} instead)`);
             }
         }
-        
         // Check that all sink nodes are Tensors
-        const sinkNodes = Array.from(this._sinks);
-        for (const sink of sinkNodes) {
+        for (const sink of this._sinks) {
             if (!(sink instanceof Tensor)) {
                 throw new Error(`Sink node ${sink.id} is not a Tensor (found ${sink.constructor.name} instead)`);
             }
