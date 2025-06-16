@@ -12,6 +12,6 @@ If you represent an entity with >1M evaluation, you can afford engineers so you 
 If you are looking to contribute to my humble establishment, email me at Sadgebab@gmail.com, I need help with testing and decorating the ReactJS frontend, I will send you love and tea. 
 
 
-If you are a Graph Compiler or an AI Infra person, let's get in touch on how to arrange this repo to be more applicable for all levels of Ops. 
+If you are a Graph Compiler or an AI Infra person, get in touch with me on how to arrange this repo to be more applicable for all levels of Ops. 
 
 
