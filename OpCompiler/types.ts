@@ -8,7 +8,7 @@ const NODE_TYPES = [
 export type NodeType = typeof NODE_TYPES[number];
 
 export function isNodeType(str: string): str is NodeType {
-    return str in NODE_TYPES;
+    return NODE_TYPES.includes(str as NodeType);
 }
 
 export type Shape = number[];

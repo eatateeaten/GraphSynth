@@ -84,9 +84,9 @@ export class Graph {
     addNode(id: string, nodeType: string, params: Record<string, any>): void {
         if(!isNodeType(nodeType))
             throw new ParamError(`Unknown GraphNode type: ${nodeType}`);
-    
+
         const factory = moduleFromParams[nodeType];
-        
+
         const node = factory(id as NodeType, params);
         this._nodes.set(id, node);
     }
