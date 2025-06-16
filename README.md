@@ -9,9 +9,9 @@ I made a visual interface and a general DAG compiler with live shape-checking th
 
 If you represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
 
-If you are looking to contribute to my humble establishment, simply email me at Sadgebab@gmail.com 
+If you are looking to contribute to my humble establishment, email me at Sadgebab@gmail.com 
 
-Kindly help me do Quality Assurance and decorate the ReactJS frontend, I will send you love and tea. 
+I need help with testing and decorating the ReactJS frontend, I will send you love and tea. 
 
 
 
