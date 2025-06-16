@@ -40,11 +40,6 @@ export abstract class GraphNode {
     abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
     abstract emitIR(): string;
 
-    static isIndexInBound(index: number, length: number, context: string): number {
-        if (index < 0 || index >= length) {throw new Error(`${context}: Index ${index} is out of bounds for length ${length}`);}
-        return index;
-    }
-
     static shapeMatch(shape1: number[], shape2: number[]): boolean {
         if (shape1.length !== shape2.length) {
             return false;

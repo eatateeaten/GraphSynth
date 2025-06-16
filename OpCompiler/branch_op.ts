@@ -81,12 +81,9 @@ export abstract class BranchOp extends GraphNode {
             this._nexts.fill(null);
             return;
         }
-
-        // Validate index
-        const validatedIndex = GraphNode.isIndexInBound(indexSelf, this._numberOfBranches, "BranchOp.deleteNext");
         
         // Clear the specific connection
-        this._nexts[validatedIndex] = null;
+        this._nexts[indexSelf] = null;
     }
 }
 

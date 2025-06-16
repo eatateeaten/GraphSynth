@@ -1,7 +1,7 @@
 import { GraphNode } from './graph_node';
 import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
 import { g_GraphConfig } from './config';
-import { ShapeInferenceError, TargetError, ParamError } from './error';
+import { ShapeInferenceError, TargetError, ParamError } from './errors';
 
 /**
  * Op represents operations with exactly one input and one output.

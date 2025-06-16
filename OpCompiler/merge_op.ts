@@ -1,7 +1,7 @@
 import { g_GraphConfig } from './config';
 import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
-import { ParamError, ShapeMatchError } from './error';
+import { ParamError, ShapeMatchError } from './errors';
 
 export abstract class MergeOp extends GraphNode {
     protected readonly _opType: string;
@@ -47,17 +47,13 @@ export abstract class MergeOp extends GraphNode {
         if (indexSelf === undefined) {
             throw new Error("MergeOp.addPrev requires an input index"); // a bit redundant if calling this from Graph.ts's connect 
         } 
-        const validatedIndex = GraphNode.isIndexInBound(indexSelf, this._inShapes.length, "MergeOp.addPrev"); // a bit redundant if calling this from Graph.ts's connect 
-        if (this._prevs[validatedIndex] !== null && this._prevs[validatedIndex] !== undefined) {
-            throw new Error(`MergeOp already has a connection at input ${validatedIndex}`); // a bit redundant 
-        }
 
         /* Different for every derived object */
         this.checkIncomingShapeMatch(prevOutShape);
 
         // Store both the prev node and its shape
-        this._prevs[validatedIndex] = prev;
-        this._inShapes[validatedIndex] = [...prevOutShape];
+        this._prevs[indexSelf] = prev;
+        this._inShapes[indexSelf] = [...prevOutShape];
         
         // Now compute the output shape based on the updated input shapes
         this._outShapes = [this.computeOutShape()];
