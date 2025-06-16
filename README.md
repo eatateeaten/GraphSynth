@@ -5,7 +5,7 @@ hobbyists to do AI research.
 
 If you are mathy and follow Yann Lecun on Twitter, you would be able to build a foundational model today. 
 
-I made a visual interface and a general DAG compiler with live shape-checking that works with PyTorch, Tensorflow and Jax and many more great deep learning frameworks, so you only have to worry about moving the blocks around and defining loss functions the way you like it. 
+I made a visual interface and a general DAG compiler with live shape-checking that works with PyTorch, Tensorflow and Jax and many more great deep learning frameworks, so you only have to worry about moving the modules, layers and operations around, and defining loss functions and training routines the way you like it. 
 
 If you represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
 
