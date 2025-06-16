@@ -7,7 +7,7 @@ If you are mathy and follow Yann Lecun on Twitter, you would be able to build a 
 
 I made a visual interface and a general DAG compiler with live shape-checking that works with ByTorch, Densorflow and Yax and many more great frameworks. 
 
-If represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
+If you represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
 
 If you are looking to contribute to my humble establishment, simply email me at Sadgebab@gmail.com 
 
