@@ -5,7 +5,7 @@ hobbyists to do AI research.
 
 If you are mathy and follow Yann Lecun on Twitter, you would be able to build a foundational model today. 
 
-I made a general DAG compiler with live shape-checking that works with ByTorch, Densorflow and Yax and many more great frameworks. 
+I made a visual interface and a general DAG compiler with live shape-checking that works with ByTorch, Densorflow and Yax and many more great frameworks. 
 
 If represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
 
