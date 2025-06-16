@@ -4,6 +4,7 @@ export const Linear: ModuleDef = {
     label: 'Linear',
     description: 'Applies a linear transformation to the incoming data',
     category: 'Linear',
+    moduleType: "Op",
     params: {
         input_features: {
             label: 'Input Features',
@@ -28,8 +29,9 @@ export const Linear: ModuleDef = {
             required: false
         }
     },
-    toPytorchExpr: (params) => `nn.Linear(${params.input_features}, ${params.output_features}, bias=${params.bias ?? true})`,
-    shapeInference: (inShape, params) => {
+    toPytorchModule: (params) => `nn.Linear(${params.input_features}, ${params.output_features}, bias=${params.bias ?? true})`,
+    validateInputShape: (_inShape) => [],
+    inferOutputShape: (inShape, params) => {
         // TODO: Copy shape inference logic from torch file
         return [...inShape.slice(0, -1), params.output_features];
     }
@@ -39,7 +41,9 @@ export const Identity: ModuleDef = {
     label: 'Identity',
     description: 'A placeholder identity operator that is argument-insensitive',
     category: 'Linear',
+    moduleType: "Op",
     params: {},
-    toPytorchExpr: () => 'nn.Identity()',
-    shapeInference: (inShape) => inShape
+    toPytorchModule: () => 'nn.Identity()',
+    validateInputShape: (_inShape) => [],
+    inferOutputShape: (inShape) => inShape
 };

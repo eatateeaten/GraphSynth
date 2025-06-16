@@ -69,12 +69,12 @@ class ModuleDatabase {
     
     generateCode(moduleName: string, params: Record<string, any>): string {
         const spec = this.get(moduleName);
-        return spec.toPytorchExpr(params);
+        return spec.toPytorchModule(params);
     }
     
     inferShape(moduleName: string, inShape: number[], params: Record<string, any>): number[] {
         const spec = this.get(moduleName);
-        return spec.shapeInference(inShape, params);
+        return spec.inferOutputShape(inShape, params);
     }
 }
 

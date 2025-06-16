@@ -59,7 +59,7 @@ export class Op extends GraphNode {
     }
 
     emitTorchFunctional(inputs: string[], outputs: string[]): string {
-        if (g_GraphConfig.target  !== "Torch") {
+        if (g_GraphConfig.target !== "Torch") {
             throw new TargetError("Operation is not a PyTorch operation");
         }
 

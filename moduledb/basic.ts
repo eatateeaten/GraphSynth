@@ -1,9 +1,11 @@
 import { ModuleDef } from './types';
+import { shapeEqual } from './utils';
 
 export const Tensor: ModuleDef = {
     label: 'Tensor',
     description: 'Represents input data or intermediate results',
     category: 'Basic',
+    moduleType: "Tensor",
     params: {
         shape: {
             label: 'Shape',
@@ -21,6 +23,11 @@ export const Tensor: ModuleDef = {
             required: true
         }
     },
-    toPytorchExpr: () => '', // Tensors don't generate code
-    shapeInference: (_, params) => params.shape
-}; 
+    toPytorchModule: () => '', // Tensors don't generate code
+    validateInputShape: (inShape, params) => {
+        if(shapeEqual(inShape, params.shape))
+            return [];
+        return ["Input shape doesn't match with Tensor's shape"];
+    },
+    inferOutputShape: (_, params) => params.shape
+};

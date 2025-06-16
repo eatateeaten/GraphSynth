@@ -1,3 +1,5 @@
+import { NodeType } from "../OpCompiler/types";
+
 export interface ParamDef {
     // UI metadata
     label: string;
@@ -17,12 +19,13 @@ export interface ModuleDef {
     label: string;
     description: string;
     category: string;
-    moduleType: string;
-    
+    moduleType: NodeType;
+
     // Parameter definitions
     params: Record<string, ParamDef>;
-    
+
     // Computational logic
-    toPytorchExpr: (params: Record<string, any>) => string;
-    shapeInference: (inShape: number[], params: Record<string, any>) => number[];
+    toPytorchModule: (params: Record<string, any>) => string;
+    validateInputShape: (inShape: number[], params: Record<string, any>) => string[];
+    inferOutputShape: (inShape: number[], params: Record<string, any>) => number[];
 }
