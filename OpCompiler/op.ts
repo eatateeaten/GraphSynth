@@ -1,7 +1,7 @@
 import { GraphNode } from './graph_node';
 import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
 import { g_GraphConfig } from './config';
-import { ParamError } from './types';
+import { ShapeInferenceError, TargetError, ParamError } from './error';
 
 /**
  * Op represents operations with exactly one input and one output.
@@ -42,7 +42,7 @@ export class Op extends GraphNode {
 
     protected computeOutShape(): number[] {
         if (this._inShapes[0] === null) {
-            throw new Error(`Cannot compute output shape without input shape for operation ${this._opType}`);
+            throw new ShapeInferenceError(`Cannot compute output shape without input shape for operation ${this._opType}`);
         }
 
         // Use forwardShapeInference for torch operations
@@ -50,17 +50,17 @@ export class Op extends GraphNode {
             try {
                 return forwardShapeInference(this._opType, this._inShapes[0], this._params);
             } catch (err: any) {
-                throw new Error(`Shape inference error for ${this._opType}: ${err.message}. Consider using a different set of parameters.`);
+                throw new ShapeInferenceError(`Shape inference error for ${this._opType}: ${err.message}. Consider using a different set of parameters.`);
             }
         }
 
         // For non-torch operations, throw an error
-        throw new Error(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
+        throw new TargetError(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
     }
 
     emitTorchFunctional(inputs: string[], outputs: string[]): string {
         if (g_GraphConfig.target  !== "Torch") {
-            throw new Error("Operation is not a PyTorch operation");
+            throw new TargetError("Operation is not a PyTorch operation");
         }
 
         if (this._inShapes[0] === null || this._outShapes[0] === null) {

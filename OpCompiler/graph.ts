@@ -4,7 +4,15 @@ import { Op } from './op';
 import { BranchOp, Split, Copy } from './branch_op';
 import { MergeOp, PointwiseOp, DotOp, CrossOp } from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
-import { isNodeType, NodeType, ParamError, Shape } from "./types";
+import { isNodeType, NodeType } from "./types";
+import { 
+    ShapeMatchError, 
+    ParamError, 
+    CycleError, 
+    SourceNotTensorError, 
+    SinkNotTensorError, 
+    UnreachableNodeError 
+} from './error';
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
 
 /// Node name to node builder lookup
@@ -59,7 +67,7 @@ export class Graph {
     /** Add a node to the graph */
     addNode(id: string, nodeType: string, params: Record<string, any>): void {
         if(!isNodeType(nodeType))
-            throw new Error(`Unknown GraphNode type: ${nodeType}`);
+            throw new ParamError(`Unknown GraphNode type: ${nodeType}`);
     
         const factory = moduleFromParams[nodeType];
         
@@ -96,7 +104,7 @@ export class Graph {
         sourcePortIndex = GraphNode.isIndexInBound(sourcePortIndex, source.outShapes.length, "connect");
         // The source port output shape has to be defined, whether the current node applies inShape inference or not 
         if (!source.outShapes[sourcePortIndex]) {
-            throw new Error(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
+            throw new ShapeMatchError(`Cannot connect from ${source.constructor.name} with id ${source.id}: output shape is undefined`);
         } else {
             return source.outShapes[sourcePortIndex]!;
         }
@@ -153,9 +161,9 @@ export class Graph {
         // ------ Shape-match Check --------
         // Skip shape compatibility check if sink has no defined input shape yet
         if (sinkPortInShape !== null) {
-            if (!GraphNode.shapeMatch(sourcePortOutShape, sinkPortInShape)) {
-                throw new Error(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourcePortOutShape}] to ${sink.constructor.name} with input shape [${sinkPortInShape}]`);
-            }
+                    if (!GraphNode.shapeMatch(sourcePortOutShape, sinkPortInShape)) {
+            throw new ShapeMatchError(`Shape mismatch: Cannot connect ${source.constructor.name} with output shape [${sourcePortOutShape}] to ${sink.constructor.name} with input shape [${sinkPortInShape}]`);
+        }
         }
 
         // ------- Establish bidirectional references -------
@@ -253,22 +261,22 @@ export class Graph {
 
         // Check that the graph has source nodes
         if (this._sources.size === 0) {
-            throw new Error("Graph has no source nodes");
+            throw new SourceNotTensorError("Graph has no source nodes");
         }
         // Check that the graph has sink nodes
         if (this._sinks.size === 0) {
-            throw new Error("Graph has no sink nodes");
+            throw new SinkNotTensorError("Graph has no sink nodes");
         }
         // Check that all source nodes are Tensors
         for (const source of this._sources) {
             if (!(source instanceof Tensor)) {
-                throw new Error(`Source node ${source.id} is not a Tensor (found ${source.constructor.name} instead)`);
+                throw new SourceNotTensorError(`Source node ${source.id} is not a Tensor (found ${source.constructor.name} instead)`);
             }
         }
         // Check that all sink nodes are Tensors
         for (const sink of this._sinks) {
             if (!(sink instanceof Tensor)) {
-                throw new Error(`Sink node ${sink.id} is not a Tensor (found ${sink.constructor.name} instead)`);
+                throw new SinkNotTensorError(`Sink node ${sink.id} is not a Tensor (found ${sink.constructor.name} instead)`);
             }
         }
         
@@ -327,9 +335,9 @@ export class Graph {
             
             const cycleNodes = unprocessed.filter(id => inDegree.get(id)! > 0);
             if (cycleNodes.length > 0) {
-                throw new Error(`Graph contains cycles involving nodes: ${cycleNodes.join(', ')}`);
-            } else {
-                throw new Error(`Graph contains unreachable nodes: ${unprocessed.join(', ')}`);
+                                 throw new CycleError(`Graph contains cycles involving nodes: ${cycleNodes.join(', ')}`);
+              } else {
+                                   throw new UnreachableNodeError(`Graph contains unreachable nodes: ${unprocessed.join(', ')}`);
             }
         }
     }
@@ -517,7 +525,7 @@ export class Graph {
             
             // Cycle detection
             if (inProgress.has(node.id)) {
-                throw new Error(`Cycle detected involving node ${node.id}`);
+                throw new CycleError(`Cycle detected involving node ${node.id}`);
             }
             
             inProgress.add(node.id);

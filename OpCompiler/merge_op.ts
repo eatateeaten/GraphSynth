@@ -1,7 +1,7 @@
 import { g_GraphConfig } from './config';
 import { GraphNode } from './graph_node';
 import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
-import { ParamError } from './types';
+import { ParamError, ShapeMatchError } from './error';
 
 export abstract class MergeOp extends GraphNode {
     protected readonly _opType: string;
@@ -115,12 +115,12 @@ export class PointwiseOp extends MergeOp {
         if (!referenceShape) return;
 
         if (shape.length !== referenceShape.length) {
-            throw new Error(`Shape rank mismatch: expected ${referenceShape.length}, got ${shape.length}`);
+            throw new ShapeMatchError(`Shape rank mismatch: expected ${referenceShape.length}, got ${shape.length}`);
         }
 
         for (let i = 0; i < shape.length; i++) {
             if (shape[i] !== referenceShape[i]) {
-                throw new Error(`Shape mismatch at dim ${i}: expected ${referenceShape[i]}, got ${shape[i]}`);
+                throw new ShapeMatchError(`Shape mismatch at dim ${i}: expected ${referenceShape[i]}, got ${shape[i]}`);
             }
         }
     }

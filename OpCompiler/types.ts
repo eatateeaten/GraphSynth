@@ -20,5 +20,10 @@ const createError = (name: string) => class extends Error {
         this.name = name;
     }
 };
-export const ShapeError = createError("ShapeError");
-export const ParamError = createError("ParamError");
+
+export const ShapeMatchError = createError("ShapeMatchError");
+export const ShapeInferenceError = createError("ShapeInferenceError"); 
+export const ParamError = createError("ParamError"); 
+export const targetError = createError("targetError")
+
+ 
