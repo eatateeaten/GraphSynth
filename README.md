@@ -10,7 +10,8 @@ I made a general DAG compiler with live shape-checking that works with ByTorch, 
 If represent an entity with >1M evaluation, you can afford engineers so you shouldn't lift from me. 
 
 If you are looking to contribute to my humble establishment, simply email me at Sadgebab@gmail.com 
-If you can kindly help me do Q&A and decorate the ReactJS frontend, I will send you love and tea. 
+
+Kindly help me do Quality Assurance and decorate the ReactJS frontend, I will send you love and tea. 
 
 
 
