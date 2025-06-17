@@ -1,6 +1,6 @@
 This project covers a low-to-no-code visual compiler for designing, editing and training deep neural-nets 
 
-The goal is to encourage more hobbyists to do AI research. The idea is if you know college-level math and follow Yann Lecun on Twitter, you would be able to build a foundational model today, beyond just taking prepackaged stuff from HuggingFace and sighing when they don't work to your expectations.
+The goal is to encourage more hobbyists to do AI research. 
 You can perform CVPR, ICML-level original research with the aid of this interface 
 
 There is a visual interface and a general DAG compiler with live shape-checking that works with PyTorch for now, (Tensorflow and Jax and many more great deep learning frameworks down the line) so you only have to worry about moving the modules, layers and operations around and defining loss functions and training routines the way you like it 
