@@ -12,7 +12,7 @@ If you are looking to contribute to my humble establishment, email me at Sadgeba
 If you are an ML Compiler or an AI Infra person, you can get in touch with me on how to arrange this repo to be more applicable for all levels of Ops. 
 Will try to fuse it with StableHLO to give you the most stable experience. 
 
-I am integrating an AI agent to help us move things around even faster. 
+I have a plan to interface it with DsPy for LLM-graphIR reasoning 
 
 Please be aware of the license. 
 
