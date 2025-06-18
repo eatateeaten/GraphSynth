@@ -173,9 +173,7 @@ ${forwardCode}
         // Generate return statement
         const sinks = Array.from(this.graph.getSinks());
         const returnVars = sinks.map(sink => {
-            // Find the variable that feeds into this sink
-            const feedingNode = this._findNodeFeedingIntoSink(sink);
-            return nodeToVar.get(feedingNode.id) || "unknown";
+            return nodeToVar.get(sink.id)!;
         });
         
         if (returnVars.length === 1) {
@@ -208,17 +206,5 @@ ${forwardCode}
         }
         
         return inputs;
-    }
-
-    private _findNodeFeedingIntoSink(sink: GraphNode): GraphNode {
-        // Find the node that has this sink as a next node
-        const nodes = this.graph.getAllNodes();
-        for (const [_, node] of nodes) {
-            if (node.nexts.includes(sink)) {
-                return node;
-            }
-        }
-        
-        throw new Error(`No node found feeding into sink ${sink.id}`);
     }
 }

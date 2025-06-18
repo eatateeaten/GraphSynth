@@ -72,8 +72,7 @@ export class Tensor extends GraphNode {
     }
 
     toTorchModule(): string {
-        // TODO: what to generate here for Tensor?
-        return "toTorchModule for Tensor not implemented";
+        return "nn.Identity()";
     }
 
     /**
