@@ -38,7 +38,7 @@ export abstract class ReduceOp extends MergeOp {
 
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
     abstract emitIR(): string;
 }
 
@@ -94,7 +94,7 @@ export class PointwiseReduce extends ReduceOp {
         return [...this._inShapes[referenceShapeIndex]!];
     }
 
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         if (inputs.length < 2) {
             throw new Error("PointwiseReduce requires at least 2 inputs");
         }
@@ -213,7 +213,7 @@ export class Concat extends ReduceOp {
         return outShape;
     }
 
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
         return `${outVar} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
     }

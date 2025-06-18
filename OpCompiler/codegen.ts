@@ -180,11 +180,11 @@ export class CodeGenerator {
         if (node instanceof Op) {
             return node.emitTorch();
         } else if (node instanceof MergeOp) {
-            const tempCode = node.emitTorchFunctional(['temp1', 'temp2'], ['tempOut']);
+            const tempCode = node.emitTorchModule(['temp1', 'temp2'], ['tempOut']);
             const match = tempCode.match(/= (.+)$/);
             return match ? match[1] : tempCode;
         } else if (node instanceof BranchOp) {
-            const tempCode = node.emitTorchFunctional(['tempIn'], ['tempOut1', 'tempOut2']);
+            const tempCode = node.emitTorchModule(['tempIn'], ['tempOut1', 'tempOut2']);
             const match = tempCode.match(/= (.+)$/);
             return match ? match[1] : tempCode;
         }

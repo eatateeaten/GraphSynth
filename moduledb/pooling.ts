@@ -1,5 +1,4 @@
 import { ModuleDef, ParamDef } from './types';
-import { getTorchCode, forwardShapeInference } from '../OpCompiler/torch_nn_module_op';
 
 // Shared parameter definitions
 const commonPoolingParams: Record<string, ParamDef> = {
@@ -110,6 +109,13 @@ const adaptiveMaxPoolingParams: Record<string, ParamDef> = {
     }
 };
 
+// Helper function to calculate pooling output size
+function calculatePoolingOutputSize(inputSize: number, kernelSize: number, stride: number, padding: number, dilation: number, ceilMode: boolean): number {
+    const numerator = inputSize + 2 * padding - dilation * (kernelSize - 1) - 1;
+    const result = numerator / stride + 1;
+    return ceilMode ? Math.ceil(result) : Math.floor(result);
+}
+
 export const poolingModules: Record<string, ModuleDef> = {
     // Regular pooling layers
     'MaxPool1D': {
@@ -118,14 +124,20 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => getTorchCode('MaxPool1D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 2 && inShape.length !== 3) {
-                throw new Error(`MaxPool1D requires 2D or 3D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.MaxPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('MaxPool1D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 2 && inShape.length !== 3) {
+                errors.push(`MaxPool1D requires 2D or 3D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const outputSize = calculatePoolingOutputSize(inShape[inShape.length - 1], params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            return [...inShape.slice(0, -1), outputSize];
+        }
     },
 
     'MaxPool2D': {
@@ -134,14 +146,23 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => getTorchCode('MaxPool2D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 3 && inShape.length !== 4) {
-                throw new Error(`MaxPool2D requires 3D or 4D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.MaxPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('MaxPool2D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 3 && inShape.length !== 4) {
+                errors.push(`MaxPool2D requires 3D or 4D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const h = inShape[inShape.length - 2];
+            const w = inShape[inShape.length - 1];
+            const outH = calculatePoolingOutputSize(h, params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            const outW = calculatePoolingOutputSize(w, params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            return [...inShape.slice(0, -2), outH, outW];
+        }
     },
 
     'MaxPool3D': {
@@ -150,14 +171,25 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => getTorchCode('MaxPool3D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 4 && inShape.length !== 5) {
-                throw new Error(`MaxPool3D requires 4D or 5D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.MaxPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('MaxPool3D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 4 && inShape.length !== 5) {
+                errors.push(`MaxPool3D requires 4D or 5D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const d = inShape[inShape.length - 3];
+            const h = inShape[inShape.length - 2];
+            const w = inShape[inShape.length - 1];
+            const outD = calculatePoolingOutputSize(d, params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            const outH = calculatePoolingOutputSize(h, params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            const outW = calculatePoolingOutputSize(w, params.kernel_size, params.stride, params.padding, params.dilation, params.ceil_mode);
+            return [...inShape.slice(0, -3), outD, outH, outW];
+        }
     },
 
     'AvgPool1D': {
@@ -166,14 +198,20 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPoolingParams,
-        toPytorchModule: (params) => getTorchCode('AvgPool1D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 2 && inShape.length !== 3) {
-                throw new Error(`AvgPool1D requires 2D or 3D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.AvgPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AvgPool1D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 2 && inShape.length !== 3) {
+                errors.push(`AvgPool1D requires 2D or 3D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const outputSize = calculatePoolingOutputSize(inShape[inShape.length - 1], params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            return [...inShape.slice(0, -1), outputSize];
+        }
     },
 
     'AvgPool2D': {
@@ -182,14 +220,28 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPooling2D3DParams,
-        toPytorchModule: (params) => getTorchCode('AvgPool2D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 3 && inShape.length !== 4) {
-                throw new Error(`AvgPool2D requires 3D or 4D input tensor, got shape ${inShape}`);
+        toPytorchModule: (params) => {
+            let code = `nn.AvgPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
+            if (params.divisor_override !== undefined) {
+                code += `, divisor_override=${params.divisor_override}`;
             }
-            return [];
+            code += ')';
+            return code;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AvgPool2D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 3 && inShape.length !== 4) {
+                errors.push(`AvgPool2D requires 3D or 4D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const h = inShape[inShape.length - 2];
+            const w = inShape[inShape.length - 1];
+            const outH = calculatePoolingOutputSize(h, params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            const outW = calculatePoolingOutputSize(w, params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            return [...inShape.slice(0, -2), outH, outW];
+        }
     },
 
     'AvgPool3D': {
@@ -198,14 +250,30 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPooling2D3DParams,
-        toPytorchModule: (params) => getTorchCode('AvgPool3D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 4 && inShape.length !== 5) {
-                throw new Error(`AvgPool3D requires 4D or 5D input tensor, got shape ${inShape}`);
+        toPytorchModule: (params) => {
+            let code = `nn.AvgPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
+            if (params.divisor_override !== undefined) {
+                code += `, divisor_override=${params.divisor_override}`;
             }
-            return [];
+            code += ')';
+            return code;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AvgPool3D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 4 && inShape.length !== 5) {
+                errors.push(`AvgPool3D requires 4D or 5D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const d = inShape[inShape.length - 3];
+            const h = inShape[inShape.length - 2];
+            const w = inShape[inShape.length - 1];
+            const outD = calculatePoolingOutputSize(d, params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            const outH = calculatePoolingOutputSize(h, params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            const outW = calculatePoolingOutputSize(w, params.kernel_size, params.stride, params.padding, 1, params.ceil_mode);
+            return [...inShape.slice(0, -3), outD, outH, outW];
+        }
     },
 
     'LPPool1D': {
@@ -214,14 +282,20 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: lpPoolingParams,
-        toPytorchModule: (params) => getTorchCode('LPPool1D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 3) {
-                throw new Error(`LPPool1D requires 3D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.LPPool1d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('LPPool1D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 3) {
+                errors.push(`LPPool1D requires 3D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const outputSize = calculatePoolingOutputSize(inShape[inShape.length - 1], params.kernel_size, params.stride, 0, 1, params.ceil_mode);
+            return [...inShape.slice(0, -1), outputSize];
+        }
     },
 
     'LPPool2D': {
@@ -230,14 +304,23 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: lpPoolingParams,
-        toPytorchModule: (params) => getTorchCode('LPPool2D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 4) {
-                throw new Error(`LPPool2D requires 4D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.LPPool2d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('LPPool2D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 4) {
+                errors.push(`LPPool2D requires 4D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            const h = inShape[inShape.length - 2];
+            const w = inShape[inShape.length - 1];
+            const outH = calculatePoolingOutputSize(h, params.kernel_size, params.stride, 0, 1, params.ceil_mode);
+            const outW = calculatePoolingOutputSize(w, params.kernel_size, params.stride, 0, 1, params.ceil_mode);
+            return [...inShape.slice(0, -2), outH, outW];
+        }
     },
 
     // Adaptive pooling layers
@@ -247,14 +330,19 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePoolingParams,
-        toPytorchModule: (params) => getTorchCode('AdaptiveAvgPool1D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 3) {
-                throw new Error(`AdaptiveAvgPool1D requires 3D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.AdaptiveAvgPool1d(output_size=${params.output_size})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveAvgPool1D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 3) {
+                errors.push(`AdaptiveAvgPool1D requires 3D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            return [...inShape.slice(0, -1), params.output_size];
+        }
     },
 
     'AdaptiveAvgPool2D': {
@@ -263,14 +351,24 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePooling2D3DParams,
-        toPytorchModule: (params) => getTorchCode('AdaptiveAvgPool2D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 4) {
-                throw new Error(`AdaptiveAvgPool2D requires 4D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
+            return `nn.AdaptiveAvgPool2d(output_size=${sizeStr})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveAvgPool2D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 4) {
+                errors.push(`AdaptiveAvgPool2D requires 4D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            if (Array.isArray(params.output_size)) {
+                return [...inShape.slice(0, -2), ...params.output_size];
+            } else {
+                return [...inShape.slice(0, -2), params.output_size, params.output_size];
+            }
+        }
     },
 
     'AdaptiveAvgPool3D': {
@@ -279,14 +377,24 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePooling2D3DParams,
-        toPytorchModule: (params) => getTorchCode('AdaptiveAvgPool3D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 5) {
-                throw new Error(`AdaptiveAvgPool3D requires 5D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
+            return `nn.AdaptiveAvgPool3d(output_size=${sizeStr})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveAvgPool3D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 5) {
+                errors.push(`AdaptiveAvgPool3D requires 5D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            if (Array.isArray(params.output_size)) {
+                return [...inShape.slice(0, -3), ...params.output_size];
+            } else {
+                return [...inShape.slice(0, -3), params.output_size, params.output_size, params.output_size];
+            }
+        }
     },
 
     'AdaptiveMaxPool1D': {
@@ -295,14 +403,19 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePoolingParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => getTorchCode('AdaptiveMaxPool1D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 3) {
-                throw new Error(`AdaptiveMaxPool1D requires 3D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            return `nn.AdaptiveMaxPool1d(output_size=${params.output_size}, return_indices=${params.return_indices})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveMaxPool1D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 3) {
+                errors.push(`AdaptiveMaxPool1D requires 3D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            return [...inShape.slice(0, -1), params.output_size];
+        }
     },
 
     'AdaptiveMaxPool2D': {
@@ -311,14 +424,24 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => getTorchCode('AdaptiveMaxPool2D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 4) {
-                throw new Error(`AdaptiveMaxPool2D requires 4D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
+            return `nn.AdaptiveMaxPool2d(output_size=${sizeStr}, return_indices=${params.return_indices})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveMaxPool2D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 4) {
+                errors.push(`AdaptiveMaxPool2D requires 4D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            if (Array.isArray(params.output_size)) {
+                return [...inShape.slice(0, -2), ...params.output_size];
+            } else {
+                return [...inShape.slice(0, -2), params.output_size, params.output_size];
+            }
+        }
     },
 
     'AdaptiveMaxPool3D': {
@@ -327,13 +450,23 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => getTorchCode('AdaptiveMaxPool3D', params),
-        validateInputShape: (inShape, params) => {
-            if (inShape.length !== 5) {
-                throw new Error(`AdaptiveMaxPool3D requires 5D input tensor, got shape ${inShape}`);
-            }
-            return [];
+        toPytorchModule: (params) => {
+            const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
+            return `nn.AdaptiveMaxPool3d(output_size=${sizeStr}, return_indices=${params.return_indices})`;
         },
-        inferOutputShape: (inShape, params) => forwardShapeInference('AdaptiveMaxPool3D', inShape, params)
+        validateInputShape: (inShape, params) => {
+            const errors: string[] = [];
+            if (inShape.length !== 5) {
+                errors.push(`AdaptiveMaxPool3D requires 5D input tensor, got shape [${inShape.join(', ')}]`);
+            }
+            return errors;
+        },
+        inferOutputShape: (inShape, params) => {
+            if (Array.isArray(params.output_size)) {
+                return [...inShape.slice(0, -3), ...params.output_size];
+            } else {
+                return [...inShape.slice(0, -3), params.output_size, params.output_size, params.output_size];
+            }
+        }
     }
 };

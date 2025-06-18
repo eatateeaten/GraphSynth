@@ -71,7 +71,7 @@ export class Tensor extends GraphNode {
         this._nexts = [null];
     }
 
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         if (inputs.length === 0) {
             // This is a source tensor - use variableName if available, otherwise ID
             return this._variableName || this.id;

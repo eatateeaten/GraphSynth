@@ -23,7 +23,7 @@ export abstract class BranchOp extends GraphNode {
     }
 
     protected abstract computeOutShape(): number[][];
-    abstract emitTorchFunctional(inputs: string[], outputs: string[]): string;
+    abstract emitTorchModule(inputs: string[], outputs: string[]): string;
     abstract emitIR(): string;
 
     // Getters and setters 
@@ -156,7 +156,7 @@ export class Split extends BranchOp {
         return outShapes;
     }
 
-    emitTorchFunctional(inputs: string[], outputs: string[]): string {
+    emitTorchModule(inputs: string[], outputs: string[]): string {
         const dim = this._dim;
         const sections = this._sections;
 
@@ -213,7 +213,7 @@ export class Copy extends BranchOp {
         return outShapes;
     }
 
-    emitTorchFunctional(inputs: string[], outputs: string[]): string {
+    emitTorchModule(inputs: string[], outputs: string[]): string {
         // Handle multiple outputs separately to make each assignment clear in the output
         if (outputs.length <= 1) {
             return `${outputs[0]} = ${inputs[0]}`;

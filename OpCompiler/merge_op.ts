@@ -1,7 +1,6 @@
-import { g_GraphConfig } from './config';
 import { GraphNode } from './graph_node';
-import { getDifferentiablePointWiseOpCode, getNonDifferentiablePointWiseOpCode } from './pointwise_op_map';
 import { ParamError, ShapeMatchError } from './errors';
+import { ModuleDB } from '../moduledb';
 
 export abstract class MergeOp extends GraphNode {
     protected readonly _opType: string;
@@ -25,7 +24,7 @@ export abstract class MergeOp extends GraphNode {
     /* this is probably required for all nodes??? why is it defined here. */
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
     abstract emitIR(): string;
 
     // Getters and setters
@@ -135,18 +134,16 @@ export class PointwiseOp extends MergeOp {
         return shape;
     }
 
-    /* XXX: this is called "to_torch_functional" but we are fetching target from global?? doesn't make much sense */
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("PointwiseOp requires exactly 2 inputs");
         }
-        try {
-            const diffOpCode = getDifferentiablePointWiseOpCode(this._opType, g_GraphConfig.target);
-            return `${inputs[0]} = ${diffOpCode}(${inputs[0]}, ${inputs[1]})`;
-        } catch {
-            const nonDiffOpCode = getNonDifferentiablePointWiseOpCode(this._opType, g_GraphConfig.target);
-            return `${inputs[0]} = ${nonDiffOpCode}(${inputs[0]}, ${inputs[1]})`;
+        const moduleDef = ModuleDB.get('PointwiseOp');
+        if (!moduleDef) {
+            throw new Error("PointwiseOp not found in ModuleDB");
         }
+        const torchOp = moduleDef.toPytorchModule(this._params);
+        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
     }
 
     emitIR(): string {
@@ -207,11 +204,16 @@ export class DotOp extends MergeOp {
         return [...shape1.slice(0, -1), shape2[shape2.length - 1]];
     }
 
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("DotOp requires exactly 2 inputs");
         }
-        return `${inputs[0]} = torch.matmul(${inputs[0]}, ${inputs[1]})`;
+        const moduleDef = ModuleDB.get('DotOp');
+        if (!moduleDef) {
+            throw new Error("DotOp not found in ModuleDB");
+        }
+        const torchOp = moduleDef.toPytorchModule(this._params);
+        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
     }
 
     emitIR(): string {
@@ -279,11 +281,16 @@ export class CrossOp extends MergeOp {
         return shape;
     }
 
-    emitTorchFunctional(inputs: string[], outputs?: string[]): string {
+    emitTorchModule(inputs: string[], outputs?: string[]): string {
         if (inputs.length !== 2) {
             throw new Error("CrossOp requires exactly 2 inputs");
         }
-        return `${inputs[0]} = torch.cross(${inputs[0]}, ${inputs[1]})`;
+        const moduleDef = ModuleDB.get('CrossOp');
+        if (!moduleDef) {
+            throw new Error("CrossOp not found in ModuleDB");
+        }
+        const torchOp = moduleDef.toPytorchModule(this._params);
+        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
     }
 
     emitIR(): string {

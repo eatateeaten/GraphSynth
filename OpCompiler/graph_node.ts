@@ -37,7 +37,7 @@ export abstract class GraphNode {
     abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
     abstract deletePrev(indexSelf?: number): void;
     abstract deleteNext(indexSelf?: number): void;
-    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
     abstract emitIR(): string;
 
     static shapeMatch(shape1: number[], shape2: number[]): boolean {
@@ -77,131 +77,6 @@ export abstract class GraphNode {
         // Check if node is a type that infers shape
         return shapeInferredTypes.includes(className) || 
                (!className.includes('Tensor') && !className.includes('Module'));
-    }
-
-
-    /**
-     * Checks if the node can have multiple static inputs
-     * @param node The graph node to check
-     * @returns true if the node can have multiple static inputs
-     */
-    static multipleStaticInputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        // Only specific module classes have multiple static inputs
-        return className.includes('Module');
-    }
-
-    /**
-     * Checks if the node can have multiple outputs
-     * @param node The graph node to check
-     * @returns true if the node can have multiple outputs
-     */
-    static multipleOutputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        // List all node types that have multiple outputs
-        const multiOutputTypes = [
-            'BranchOp',
-            'Split',
-            'Copy'
-        ];
-        return multiOutputTypes.includes(className) || className.includes('Module');
-    }
-    
-    /**
-     * Checks if the node can have multiple inputs
-     * @param node The graph node to check
-     * @returns true if the node can have multiple inputs
-     */
-    static multipleInputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        // List all node types that have multiple inputs
-        const multiInputTypes = [
-            'MergeOp',
-            'Concat',
-            'PointwiseReduce',
-            'PointwiseOp',
-            'DotOp',
-            'CrossOp'
-        ];
-        return multiInputTypes.includes(className) || className.includes('Module');
-    }
-    
-    /**
-     * Checks if the node can have multiple static outputs
-     * @param node The graph node to check
-     * @returns true if the node can have multiple static outputs
-     */
-    static multipleStaticOutputs(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        // List all node types that have multiple static outputs
-        const multiStaticOutputTypes = [
-            'Split',
-            'Copy'
-        ];
-        return multiStaticOutputTypes.includes(className) || className.includes('Module');
-    }
-
-    /**
-     * Checks if the node can only have a single input
-     * @param node The graph node to check
-     * @returns true if the node can only have a single input
-     */
-    static singleInput(node: GraphNode): boolean {
-        // Direct class name check for maximum clarity and reliability
-        const className = node.constructor.name;
-        
-        // Multi-input node types (explicit listing)
-        const multiInputTypes = [
-            'MergeOp',
-            'Concat',
-            'PointwiseReduce',
-            'PointwiseOp',
-            'DotOp',
-            'CrossOp'
-        ];
-        
-        // Check if class name matches any of the multi-input types
-        if (multiInputTypes.some(type => className === type || className.includes(`${type}Module`))) {
-            return false;
-        }
-        
-        // Any module-type node has multiple inputs
-        if (className.includes('Module')) {
-            return false;
-        }
-        
-        // All other nodes have single inputs
-        return true;
-    }
-
-    /**
-     * Checks if the node can only have a single output
-     * @param node The graph node to check
-     * @returns true if the node can only have a single output
-     */
-    static singleOutput(node: GraphNode): boolean {
-        // Direct class name check for maximum clarity and reliability
-        const className = node.constructor.name;
-        
-        // Multi-output node types (explicit listing)
-        const multiOutputTypes = [
-            'BranchOp',
-            'Split',
-            'Copy'
-        ];
-        
-        // Check if class name matches any of the multi-output types
-        if (multiOutputTypes.some(type => className === type || className.endsWith(type))) {
-            return false;
-        }
-        
-        // Any module-type node has multiple outputs
-        if (className.includes('Module')) {
-            return false;
-        }
-        
-        // All other nodes have single outputs
-        return true;
     }
 
     /**

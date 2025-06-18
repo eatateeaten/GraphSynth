@@ -23,16 +23,31 @@ export const Linear: ModuleDef = {
         bias: {
             label: 'Bias',
             description: 'Whether to add a learnable bias to the output',
-            type: 'option',
-            options: ['true', 'false'],
-            default: 'true',
+            type: 'boolean',
+            default: true,
             required: false
         }
     },
     toPytorchModule: (params) => `nn.Linear(${params.input_features}, ${params.output_features}, bias=${params.bias ?? true})`,
-    validateInputShape: (_inShape) => [],
+    validateInputShape: (inShape, params) => {
+        const errors: string[] = [];
+        
+        // Linear requires at least 1D input
+        if (inShape.length < 1) {
+            errors.push("Linear requires at least 1D input");
+        }
+        
+        // Last dimension must be equal to input features
+        if (inShape.length >= 1 && inShape[inShape.length - 1] !== params.input_features) {
+            errors.push(`Last dimension must be equal to input features: expected ${params.input_features}, got ${inShape[inShape.length - 1]}`);
+        }
+        
+        return errors;
+    },
     inferOutputShape: (inShape, params) => {
-        // TODO: Copy shape inference logic from torch file
+        /* From torch documentation:
+         * Input: (∗,Hin) where ∗ means any number of dimensions including none and Hin = in_features
+         * Output: (∗,Hout) where all but the last dimension are the same shape as the input and Hout = out_features */
         return [...inShape.slice(0, -1), params.output_features];
     }
 };

@@ -1,24 +1,15 @@
 import { GraphNode } from './graph_node';
-import { forwardShapeInference, getTorchCode } from './torch_nn_module_op';
-import { g_GraphConfig } from './config';
-import { ShapeInferenceError, TargetError, ParamError } from './errors';
+import { ShapeInferenceError, ParamError } from './errors';
+import { ModuleDB, ModuleDef } from '../moduledb';
 
 /**
  * Op represents operations with exactly one input and one output.
  * 
  * This class handles standard neural network operations like ReLU, Conv2d, 
  * Linear, etc. that take a single tensor input and produce a single tensor output.
- * For operations requiring multiple inputs or outputs, use MergeOp or BranchOp instead.
- * 
- * @example
- * // Create a ReLU operation
- * const relu = new Op("relu-1", "ReLU", {});
- * 
- * // Create a Conv2d operation  
- * const conv = new Op("conv-1", "Conv2d", { in_channels: 3, out_channels: 64, kernel_size: 3 });
- */
+ * For operations requiring multiple inputs or outputs, use MergeOp or BranchOp instead. */
 export class Op extends GraphNode {
-    protected readonly _opType: string;
+    protected readonly _module: ModuleDef;
 
     constructor(
         id: string,
@@ -30,61 +21,31 @@ export class Op extends GraphNode {
         this._outShapes = [null];
         this._prevs = [null];
         this._nexts = [null];
-        this._opType = opType;
+        this._module = ModuleDB.get(opType);
     }
 
     /** Validate params and construct if OK */
     static fromParams(id: string, params: Record<string, any>): Op {
         if (!params.opType)
             throw new ParamError("No operation type provided");
+        
+        // Validate that the operation exists in ModuleDB
+        const moduleDef = ModuleDB.get(params.opType);
+        if (!moduleDef) {
+            throw new ParamError(`Unknown operation type: ${params.opType}`);
+        }
+        
         return new Op(id, params.opType, params);
     }
 
     protected computeOutShape(): number[] {
-        if (this._inShapes[0] === null) {
-            throw new ShapeInferenceError(`Cannot compute output shape without input shape for operation ${this._opType}`);
-        }
-
-        // Use forwardShapeInference for torch operations
-        if (g_GraphConfig.target === "Torch") {
-            try {
-                return forwardShapeInference(this._opType, this._inShapes[0], this._params);
-            } catch (err: any) {
-                throw new ShapeInferenceError(`Shape inference error for ${this._opType}: ${err.message}. Consider using a different set of parameters.`);
-            }
-        }
-
-        // For non-torch operations, throw an error
-        throw new TargetError(`No shape inference implementation available for target '${ g_GraphConfig.target }' and operation '${this._opType}'`);
+        // Op is guaranteed to have shape inference function
+        const outputShapes = this._module.inferOutputShape!(this._inShapes[0]!, this._params);
+        return outputShapes;
     }
 
-    emitTorchFunctional(inputs: string[], outputs: string[]): string {
-        if (g_GraphConfig.target !== "Torch") {
-            throw new TargetError("Operation is not a PyTorch operation");
-        }
-
-        if (this._inShapes[0] === null || this._outShapes[0] === null) {
-            throw new Error("Cannot generate torch code: operation has undefined input or output shape");
-        }
-
-        // No fallback - either get the module code or error out
-        const moduleCode = getTorchCode(this._opType, this._params);
-        return `${outputs[0]} = ${moduleCode}(${inputs[0]})`;
-    }
-
-    /**
-     * Generates PyTorch code for this operation without requiring input variable names.
-     * 
-     * @returns A string containing the PyTorch code for this operation
-     * @throws Error if the operation is not a PyTorch operation
-     */
-    emitTorch(): string {
-        if (g_GraphConfig.target !== "Torch") {
-            throw new Error("Operation is not a PyTorch operation");
-        }
-
-        // No fallback - either get the module code or error out
-        return getTorchCode(this._opType, this._params);
+    emitTorchModule(inputs: string[], outputs: string[]): string {
+        return this._module.toPytorchModule(this._params);
     }
 
     /**
@@ -94,7 +55,7 @@ export class Op extends GraphNode {
      */
     emitIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `${this._opType}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+        return `${this._module.label}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 
     // Getters and setters
@@ -102,7 +63,7 @@ export class Op extends GraphNode {
         // inShape can only be set during connection
         throw new Error("Cannot directly set inShape for Op. Connect a source node instead.");
     }
-    get opType(): string { return this._opType; }
+    get opType(): string { return this._module.label; }
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // We need to make a deep copy to avoid modifying the original object
@@ -128,8 +89,14 @@ export class Op extends GraphNode {
             throw new Error(`Previous node ${prev.id} has no output shape defined`);
         }
 
-        // Set inShape and compute outShape
+        // Set inShape and validate - Op is guaranteed to have validation function
         this._inShapes = [[...prevOutShape]];
+
+        const errors = this._module.validateInputShape!(prevOutShape, this._params);
+        if (errors.length > 0) {
+            this._inShapes = [null];
+            throw new ShapeInferenceError(`Shape validation failed: ${errors.join(', ')}`);
+        }
 
         try {
             this._outShapes = [this.computeOutShape()];

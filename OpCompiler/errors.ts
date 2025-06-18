@@ -9,8 +9,7 @@ const createError = (name: string) => class extends Error {
 export const ShapeMatchError = createError("ShapeMatchError");
 export const ShapeInferenceError = createError("ShapeInferenceError"); 
 export const ParamError = createError("ParamError"); 
-export const TargetError = createError("TargetError");
 export const CycleError = createError("CycleError");
 export const SourceNotTensorError = createError("SourceNotTensorError");
 export const SinkNotTensorError = createError("SinkNotTensorError");
-export const UnreachableNodeError = createError("UnreachableNodeError"); 
+export const UnreachableNodeError = createError("UnreachableNodeError");

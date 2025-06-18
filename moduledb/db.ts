@@ -3,7 +3,8 @@ import { ModuleDef } from './types';
 class ModuleDatabase {
     private modules = new Map<string, ModuleDef>();
     
-    register(name: string, spec: ModuleDef): void {
+    register(spec: ModuleDef): void {
+        const name = spec.label;
         if (this.modules.has(name)) {
             throw new Error(`Module ${name} already registered`);
         }
@@ -74,7 +75,7 @@ class ModuleDatabase {
     
     inferShape(moduleName: string, inShape: number[], params: Record<string, any>): number[] {
         const spec = this.get(moduleName);
-        return spec.inferOutputShape(inShape, params);
+        return spec.inferOutputShape!(inShape, params);
     }
 }
 

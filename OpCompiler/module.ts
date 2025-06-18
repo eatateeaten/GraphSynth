@@ -14,7 +14,6 @@ export abstract class Module extends GraphNode {
     protected _params: Record<string, any>;
     private _inputs: Tensor[] = [];
     private _outputs: Tensor[] = [];
-    protected readonly _target: string;
 
     constructor(
         id: string,
@@ -27,7 +26,6 @@ export abstract class Module extends GraphNode {
         this._outShape = [];
         this._opType = opType;
         this._params = params;
-        this._target = target;
     }
 
     // Shape getters
@@ -53,17 +51,14 @@ export abstract class Module extends GraphNode {
     /**
      * Abstract method to generate framework-specific code
      */
-    abstract emitTorchFunctional(inputs: string[], outputs?: string[]): string;
+    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
     abstract emitIR(): string;
 
     /**
      * Generates framework-specific code
      */
     emitTorch(inputs: string[], outputs?: string[]): string {
-        if (this._target !== "Torch") {
-            throw new Error(`Code generation not implemented for target framework: ${this._target}`);
-        }
-        return this.emitTorchFunctional(inputs, outputs);
+        return this.emitTorchModule(inputs, outputs);
     }
 
     /**
@@ -202,4 +197,4 @@ export abstract class Module extends GraphNode {
     loadStateDict(stateDict: Record<string, any>): void {
         this._params = { ...stateDict.params };
     }
-} 
+}
