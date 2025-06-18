@@ -7,7 +7,7 @@ There is a visual interface and a general DAG compiler with live shape-checking 
 
 The system is a Typescript-based Electron App that emits codes to a Jupyter Runtime 
 
-If you are looking to contribute, email me at SolarisSoar@gmail.com, I always need help with testing and beautifying the ReactJS frontend
+If you are looking to contribute, email me at Sadgebab@gmail.com, I always need help with testing and beautifying the ReactJS frontend
 
 If you are an ML Compiler or an AI Infra person, you can get in touch with me on how to arrange this repo to be more applicable for all levels of Ops 
 Will try to fuse it with StableHLO to give you the most stable experience  
