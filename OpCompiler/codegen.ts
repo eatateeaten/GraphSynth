@@ -95,19 +95,38 @@ export class CodeGenerator {
         // Generate forward method
         const forwardCode = this._generateForwardMethod(topoOrder, nodeToModuleName);
         
-        // Combine into complete module
-        return `import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-class GeneratedModule(nn.Module):
-    def __init__(self):
-        super(GeneratedModule, self).__init__()
-${initCode}
-    
-    def forward(self, ${this._getForwardInputs()}):
-${forwardCode}
-`;
+        // Generate imports
+        const imports = [
+            'import torch',
+            'import torch.nn as nn',
+            'import torch.nn.functional as F'
+        ].join('\n');
+        
+        // Generate class definition
+        const classHeader = 'class GeneratedModule(nn.Module):';
+        
+        // Generate __init__ method
+        const initMethod = [
+            '    def __init__(self):',
+            '        super(GeneratedModule, self).__init__()',
+            initCode
+        ].join('\n');
+        
+        // Generate forward method
+        const forwardMethod = [
+            `    def forward(self, ${this._getForwardInputs()}):`,
+            forwardCode
+        ].join('\n');
+        
+        // Combine all parts
+        return [
+            imports,
+            '',
+            classHeader,
+            initMethod,
+            '',
+            forwardMethod
+        ].join('\n');
     }
 
     private _generateInitMethod(topoOrder: GraphNode[], nodeToModuleName: Map<string, string>): string {
