@@ -21,16 +21,17 @@
  */
 
 import { create } from 'zustand';
-import type { FlowNode, FlowEdge, NodeType  } from './types';
+import type { FlowNode, FlowEdge } from './types';
+import { NodeType } from '../OpCompiler/types';
 import { GRID_SIZE } from './config';
 
-import { Graph as CheckerGraph } from '../OpCompiler/graph';
+import { Graph as CompilerGraph } from '../OpCompiler/graph';
 import { JupyterService, type JupyterConfig, type JupyterStatus, type CodeExecutionResult } from './services/jupyter';
 
 interface NodeConfig {
     id: string;
     type: NodeType;
-    opType?: string; // For operations, e.g., "Conv2d", "ReLU"
+    moduleName?: string; // Store the module name for editing
     params: Record<string, any>;
 }
 
@@ -38,7 +39,7 @@ interface GraphState {
     nodes: FlowNode[];
     edges: FlowEdge[];
     selectedId: string | null;
-    checkerGraph: CheckerGraph;
+    compilerGraph: CompilerGraph;
     jupyter: {
         service: JupyterService | null;
         status: JupyterStatus | null;
@@ -85,7 +86,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         nodes: [],
         edges: [],
         selectedId: null,
-        checkerGraph: new CheckerGraph(),
+        compilerGraph: new CompilerGraph(),
         jupyter: {
             service: null,
             status: null,
@@ -99,7 +100,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         /* TODO: Pan to include all nodes when a node is added */
         addNode: (config) => {
             // Create a node in CheckerGraph
-            get().checkerGraph.addNode(
+            get().compilerGraph.addNode(
                 config.id,
                 config.type,
                 config.params
@@ -111,7 +112,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 type: 'default',
                 data: {
                     type: config.type,
-                    opType: config.params.opType,
+                    moduleName: config.moduleName,
                     params: config.params 
                 },
                 position: { x: get().nodes.length * GRID_SIZE * 15, y: 0 },
@@ -131,7 +132,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                 selectedId: state.selectedId === id ? null : state.selectedId
             }));
 
-            get().checkerGraph.removeNode(id);
+            get().compilerGraph.removeNode(id);
         },
 
         setSelectedId: (id) => set({ selectedId: id }),
@@ -147,7 +148,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
 
             /* now try to connect in the checker graph */
             try {
-                get().checkerGraph.connect(
+                get().compilerGraph.connect(
                     edge.source,
                     edge.target,
                     sourceHandleIndex,
@@ -166,7 +167,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
         updateNodeParams: (id, params) => {
             try {
                 // Get node from graph
-                const node = get().checkerGraph.getNode(id);
+                const node = get().compilerGraph.getNode(id);
 
                 // Store connection info for reconnection
                 let connections = {
@@ -204,18 +205,18 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                     [...connections.sources, ...connections.targets].forEach(conn => {
                         try {
                             if (conn.id) {
-                                const connectedNode = get().checkerGraph.getNode(conn.id);
+                                const connectedNode = get().compilerGraph.getNode(conn.id);
                                 if (connectedNode) {
                                     if (connections.sources.some(s => s.id === conn.id)) {
                                         // Convert handle IDs to integers
                                         const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
                                         const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
-                                        get().checkerGraph.disconnect(conn.id, id, sourcePortIndex, targetPortIndex);
+                                        get().compilerGraph.disconnect(conn.id, id, sourcePortIndex, targetPortIndex);
                                     } else {
                                         // Convert handle IDs to integers
                                         const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
                                         const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
-                                        get().checkerGraph.disconnect(id, conn.id, sourcePortIndex, targetPortIndex);
+                                        get().compilerGraph.disconnect(id, conn.id, sourcePortIndex, targetPortIndex);
                                     }
                                 }
                             }
@@ -225,14 +226,14 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                     });
                     
                     // Remove from ZophGraph
-                    get().checkerGraph.removeNode(id);
+                    get().compilerGraph.removeNode(id);
                 }
                 
                 // Find node info from React Flow
                 const flowNode = get().nodes.find(n => n.id === id);
                 if (!flowNode) throw new Error("Node not found in React Flow");
 
-                get().checkerGraph.addNode(
+                get().compilerGraph.addNode(
                     id,
                     flowNode.data.type,
                     params
@@ -254,7 +255,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                         const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
                         const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
                         
-                        get().checkerGraph.connect(conn.id, id, sourcePortIndex, targetPortIndex);
+                        get().compilerGraph.connect(conn.id, id, sourcePortIndex, targetPortIndex);
                     } catch (e) {
                         console.warn('Error reconnecting source:', e);
                     }
@@ -266,7 +267,7 @@ export const useStore = create<GraphState & GraphActions>((set, get) => {
                         const sourcePortIndex = conn.sourcePortIndex !== undefined ? parseInt(String(conn.sourcePortIndex), 10) : 0;
                         const targetPortIndex = conn.targetPortIndex !== undefined ? parseInt(String(conn.targetPortIndex), 10) : 0;
                         
-                        get().checkerGraph.connect(id, conn.id, sourcePortIndex, targetPortIndex);
+                        get().compilerGraph.connect(id, conn.id, sourcePortIndex, targetPortIndex);
                     } catch (e) {
                         console.warn('Error reconnecting target:', e);
                     }

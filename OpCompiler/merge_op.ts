@@ -24,8 +24,8 @@ export abstract class MergeOp extends GraphNode {
     /* this is probably required for all nodes??? why is it defined here. */
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
-    abstract emitIR(): string;
+    abstract toTorchModule(): string;
+    abstract toIR(): string;
 
     // Getters and setters
     get opType(): string { return this._opType; }
@@ -134,19 +134,11 @@ export class PointwiseOp extends MergeOp {
         return shape;
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        if (inputs.length !== 2) {
-            throw new Error("PointwiseOp requires exactly 2 inputs");
-        }
-        const moduleDef = ModuleDB.get('PointwiseOp');
-        if (!moduleDef) {
-            throw new Error("PointwiseOp not found in ModuleDB");
-        }
-        const torchOp = moduleDef.toPytorchModule(this._params);
-        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
+    toTorchModule(): string {
+        return "toTorchModule for PointwiseOp not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `${this._opType}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
@@ -204,19 +196,11 @@ export class DotOp extends MergeOp {
         return [...shape1.slice(0, -1), shape2[shape2.length - 1]];
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        if (inputs.length !== 2) {
-            throw new Error("DotOp requires exactly 2 inputs");
-        }
-        const moduleDef = ModuleDB.get('DotOp');
-        if (!moduleDef) {
-            throw new Error("DotOp not found in ModuleDB");
-        }
-        const torchOp = moduleDef.toPytorchModule(this._params);
-        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
+    toTorchModule(): string {
+        return "toTorchModule for DotOp not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `Dot(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
@@ -281,19 +265,11 @@ export class CrossOp extends MergeOp {
         return shape;
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        if (inputs.length !== 2) {
-            throw new Error("CrossOp requires exactly 2 inputs");
-        }
-        const moduleDef = ModuleDB.get('CrossOp');
-        if (!moduleDef) {
-            throw new Error("CrossOp not found in ModuleDB");
-        }
-        const torchOp = moduleDef.toPytorchModule(this._params);
-        return `${inputs[0]} = ${torchOp}(${inputs[0]}, ${inputs[1]})`;
+    toTorchModule(): string {
+        return "toTorchModule for CrossOp not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `Cross(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }

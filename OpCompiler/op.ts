@@ -28,7 +28,7 @@ export class Op extends GraphNode {
     static fromParams(id: string, params: Record<string, any>): Op {
         if (!params.opType)
             throw new ParamError("No operation type provided");
-        
+
         // Validate that the operation exists in ModuleDB
         const moduleDef = ModuleDB.get(params.opType);
         if (!moduleDef) {
@@ -44,7 +44,7 @@ export class Op extends GraphNode {
         return outputShapes;
     }
 
-    emitTorchModule(inputs: string[], outputs: string[]): string {
+    toTorchModule(): string {
         return this._module.toPytorchModule(this._params);
     }
 
@@ -53,7 +53,7 @@ export class Op extends GraphNode {
      * 
      * @returns A string containing the IR representation of this operation
      */
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `${this._module.label}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }

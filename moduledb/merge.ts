@@ -58,19 +58,8 @@ export const PointwiseOp: ModuleDef = {
             return getNonDifferentiablePointWiseOpCode(opType);
         }
     },
-    validateInputShape: (inShape, params) => {
-        const errors: string[] = [];
-        if (!inShape || inShape.length === 0) {
-            errors.push('Input shape is required');
-        }
-        if (!params.opType) {
-            errors.push('Operation type is required');
-        }
-        return errors;
-    },
-    inferOutputShape: (inShape, params) => {
-        return [...inShape]; // Pointwise operations preserve input shape
-    }
+    validateInputShape: null,
+    inferOutputShape: null,
 };
 
 export const DotOp: ModuleDef = {
@@ -82,18 +71,8 @@ export const DotOp: ModuleDef = {
     toPytorchModule: (params) => {
         return 'torch.matmul';
     },
-    validateInputShape: (inShape, params) => {
-        const errors: string[] = [];
-        if (!inShape || inShape.length === 0) {
-            errors.push('Input shape is required');
-        }
-        return errors;
-    },
-    inferOutputShape: (inShape, params) => {
-        // For dot product, this is complex as it depends on both input shapes
-        // This is a simplified version - real implementation would need both shapes
-        return inShape; // Placeholder - actual implementation needs both tensor shapes
-    }
+    validateInputShape: null,
+    inferOutputShape: null
 };
 
 export const CrossOp: ModuleDef = {
@@ -105,16 +84,6 @@ export const CrossOp: ModuleDef = {
     toPytorchModule: (params) => {
         return 'torch.cross';
     },
-    validateInputShape: (inShape, params) => {
-        const errors: string[] = [];
-        if (!inShape || inShape.length === 0) {
-            errors.push('Input shape is required');
-        } else if (inShape[inShape.length - 1] !== 3) {
-            errors.push('Cross product requires 3D vectors (last dimension must be 3)');
-        }
-        return errors;
-    },
-    inferOutputShape: (inShape, params) => {
-        return [...inShape]; // Cross product preserves input shape
-    }
+    validateInputShape: null,
+    inferOutputShape: null
 };

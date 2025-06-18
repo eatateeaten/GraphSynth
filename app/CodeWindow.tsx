@@ -6,7 +6,7 @@ export function CodeWindow() {
     // Subscribe to nodes and edges instead of checkerGraph directly
     const nodes = useStore(state => state.nodes);
     const edges = useStore(state => state.edges);
-    const checkerGraph = useStore(state => state.checkerGraph);
+    const checkerGraph = useStore(state => state.compilerGraph);
     const executeCodeInJupyter = useStore(state => state.executeCodeInJupyter);
     const isConnected = useStore(state => state.jupyter.status?.connected || false);
     const isExecuting = useStore(state => state.jupyter.isExecuting);

@@ -71,13 +71,9 @@ export class Tensor extends GraphNode {
         this._nexts = [null];
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        if (inputs.length === 0) {
-            // This is a source tensor - use variableName if available, otherwise ID
-            return this._variableName || this.id;
-        }
-        const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
-        return `${outVar} = ${inputs[0]}`;
+    toTorchModule(): string {
+        // TODO: what to generate here for Tensor?
+        return "toTorchModule for Tensor not implemented";
     }
 
     /**
@@ -85,7 +81,7 @@ export class Tensor extends GraphNode {
      * 
      * @returns A string containing the IR representation of this tensor
      */
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `Tensor(${this._variableName}) -> ${shapeStr}`;
     }

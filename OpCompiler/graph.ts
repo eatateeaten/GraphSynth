@@ -191,12 +191,12 @@ export class Graph {
     getTopologicalOrder(): GraphNode[] {
         const result: GraphNode[] = [];
         const visited = new Set<string>();
-        
+
         this.traverseBFS(node => {
             result.push(node);
             visited.add(node.id);
         });
-        
+
         if (visited.size !== this._nodes.size) {
             const unprocessed = Array.from(this._nodes.keys())
                 .filter(id => !visited.has(id));

@@ -1,65 +1,31 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
 import { useStore } from './store';
-import { NodeType, ParamFieldMetadata, Shape } from '../registry/types';
-import { allModules, getMeta, validateParams } from '../registry/index';
+import { Shape } from '../OpCompiler/types';
+import { ParamDef } from '../moduledb/types';
+import { ModuleDB } from '../moduledb';
 
 /* Build layer type options from available modules */
 const LAYER_TYPE_OPTIONS = (() => {
-    // Create lists of all operation types
-    const opTypes = Object.keys(allModules)
-        .filter(key => key.startsWith('Op:'))
-        .map(key => ({ key, label: allModules[key].label }));
+    const modules = ModuleDB.getAll();
+    const categories = new Map<string, Array<{ value: string; label: string }>>();
     
-    // Get direct node types
-    const directTypes = ['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce', 'DotOp', 'CrossOp']
-        .filter(key => allModules[key])
-        .map(key => ({ key, label: allModules[key].label }));
-
-    let out = [{ 
-        group: 'Tensor', 
-        items: [{ value: 'Tensor', label: 'Tensor' }] 
-    }];
-
-    // Add Op types
-    out.push(...opTypes.reduce((groups, { key, label }) => {
-        const metadata = getMeta(key);
-        const category = metadata.category;
-        const item = { value: key, label };
-        
-        const existingGroup = groups.find(g => g.group === category);
-        if (existingGroup) {
-            existingGroup.items.push(item);
-        } else {
-            groups.push({ group: category, items: [item] });
+    for (const [name, module] of modules) {
+        const category = module.category;
+        if (!categories.has(category)) {
+            categories.set(category, []);
         }
-
-        return groups;
-    }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
-
-    // Add direct node types (excluding Tensor which is already added)
-    out.push(...directTypes
-        .filter(({ key }) => key !== 'Tensor')
-        .reduce((groups, { key, label }) => {
-            const metadata = getMeta(key);
-            const category = metadata.category;
-            const item = { value: key, label };
-            
-            const existingGroup = groups.find(g => g.group === category);
-            if (existingGroup) {
-                existingGroup.items.push(item);
-            } else {
-                groups.push({ group: category, items: [item] });
-            }
-
-            return groups;
-        }, [] as Array<{ group: string; items: Array<{ value: string; label: string }>}>));
-
-    return out;
+        categories.get(category)!.push({ value: name, label: module.label });
+    }
+    
+    return Array.from(categories.entries()).map(([category, items]) => ({
+        group: category,
+        items
+    }));
 })();
 
 export function NodeEditor() {
-    const [moduleKey, setModuleKey] = useState<string | null>(null);
+    const [moduleName, setModuleName] = useState<string | null>(null);
     const [params, setParams] = useState<Record<string, any>>({});
     const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
     const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
@@ -72,11 +38,11 @@ export function NodeEditor() {
     const selectedNodeData = selectedId ? nodes.find(n => n.id === selectedId) : null;
 
     // Get default params for a module
-    const getDefaultParams = useCallback((moduleKey: string) => {
-        const metadata = getMeta(moduleKey);
+    const getDefaultParams = useCallback((moduleName: string) => {
+        const module = ModuleDB.get(moduleName);
         const defaults: Record<string, any> = {};
         
-        Object.entries(metadata.paramFields).forEach(([name, field]) => {
+        Object.entries(module.params).forEach(([name, field]) => {
             if (field.default !== undefined) {
                 defaults[name] = field.default;
             }
@@ -98,7 +64,7 @@ export function NodeEditor() {
 
     // Reset raw inputs when type changes
     const handleTypeChange = (v: string | null) => {
-        setModuleKey(v);
+        setModuleName(v);
         if (v) {
             const defaults = getDefaultParams(v);
             setParams(defaults);
@@ -111,15 +77,8 @@ export function NodeEditor() {
         setError(null);
     };
 
-    const validateModuleParams = useCallback((params: Record<string, any>, moduleKey: string): string | null => {
-        // If it's not an Op, no validation needed
-        if (!moduleKey.startsWith('Op:')) {
-            return null;
-        }
-        
-        // For ops, validate using the op type
-        const opType = moduleKey.slice(3);
-        return validateParams(opType, params);
+    const validateModuleParams = useCallback((params: Record<string, any>, moduleName: string): string | null => {
+        return ModuleDB.validateParams(moduleName, params);
     }, []);
 
     const handleParamChange = useCallback((name: string, newValue: any) => {
@@ -147,11 +106,11 @@ export function NodeEditor() {
         }
     }, []);
 
-    const renderParamField = (name: string, field: ParamFieldMetadata) => {
+    const renderParamField = (name: string, field: ParamDef) => {
         const value = params[name];
         const rawValue = rawInputs[name] ?? '';
         const showError = touchedFields.has(name);
-        const validationError = showError && moduleKey ? validateModuleParams(params, moduleKey) : undefined;
+        const validationError = showError && moduleName ? validateModuleParams(params, moduleName) : undefined;
 
         switch (field.type) {
         case 'boolean':
@@ -230,82 +189,52 @@ export function NodeEditor() {
     };
 
     const handleAdd = useCallback(() => {
-        if (!moduleKey) return;
+        if (!moduleName) return;
         
         try {
             const id = crypto.randomUUID();
+            const module = ModuleDB.get(moduleName);
             
-            // Handle different node types based on the module key
-            if (moduleKey === 'Tensor') {
-                const shape = params.shape;
-                if (!shape || !Array.isArray(shape)) {
-                    setError('A valid shape is required for tensor nodes');
-                    return;
-                }
-                
-                addNode({
-                    id,
-                    type: 'Tensor',
-                    params
-                });
-            } else if (moduleKey.startsWith('Op:')) {
-                // For Op types
-                const opType = moduleKey.slice(3);
-                
-                // Validate parameters
-                const validationError = validateModuleParams(params, moduleKey);
-                if (validationError) {
-                    setError(validationError);
-                    return;
-                }
-
-                addNode({
-                    id,
-                    type: 'Op',
-                    params: {...params, opType}
-                });
-            } else {
-                // For direct node types (Split, Copy, Concat, PointwiseReduce)
-                addNode({
-                    id,
-                    type: moduleKey as NodeType,
-                    params
-                });
+            // Validate parameters
+            const validationError = validateModuleParams(params, moduleName);
+            if (validationError) {
+                setError(validationError);
+                return;
             }
+
+            if (["Op", "PointwiseOp"].includes(module.moduleType)) {
+                params.opType = moduleName;
+            }
+
+            // Use the module's moduleType to determine what kind of node to create
+            addNode({
+                id,
+                type: module.moduleType,
+                moduleName,  // Store the module name for editing later
+                params
+            });
             
-            setModuleKey(null);
+            setModuleName(null);
             setParams({});
             setRawInputs({});
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to create node');
         }
-    }, [moduleKey, params, addNode, validateModuleParams]);
+    }, [moduleName, params, addNode, validateModuleParams]);
 
     // Get metadata for the selected module key
-    const metadata = moduleKey ? getMeta(moduleKey) : null;
+    const metadata = moduleName ? ModuleDB.get(moduleName) : null;
 
     useEffect(() => {
         if (selectedId && selectedNodeData) {
-            // Get data from the store's nodes array
-            const type = selectedNodeData.data.type;
-            const opType = selectedNodeData.data.opType;
-            
-            let newModuleKey: string | null = null;
-            
-            // Convert node type + opType into the corresponding module key
-            if (type === 'Op' && opType) {
-                newModuleKey = `Op:${opType}`;
-            } else if (['Tensor', 'Split', 'Copy', 'Concat', 'PointwiseReduce', 'DotOp', 'CrossOp'].includes(type)) {
-                newModuleKey = type;
-            }
-            
-            setModuleKey(newModuleKey);
+            // Use the stored module name from node data
+            setModuleName(selectedNodeData.data.moduleName || null);
             setParams(selectedNodeData.data.params || {});
             setRawInputs(paramsToRawInputs(selectedNodeData.data.params || {}));
             setError(null);
         } else if (!selectedId) {
-            setModuleKey(null);
+            setModuleName(null);
             setParams({});
             setRawInputs({});
             setError(null);
@@ -318,7 +247,7 @@ export function NodeEditor() {
                 label="Layer Type"
                 placeholder="Choose Layer..."
                 data={LAYER_TYPE_OPTIONS}
-                value={moduleKey}
+                value={moduleName}
                 onChange={handleTypeChange}
                 searchable
                 clearable
@@ -330,7 +259,7 @@ export function NodeEditor() {
                     <Text size="sm" color="dimmed">
                         {metadata.description}
                     </Text>
-                    {Object.entries(metadata.paramFields).map(([name, field]) => 
+                    {Object.entries(metadata.params).map(([name, field]) => 
                         renderParamField(name, field)
                     )}
                 </Box>
@@ -345,7 +274,7 @@ export function NodeEditor() {
             {!selectedId && (
                 <Button 
                     onClick={handleAdd} 
-                    disabled={!moduleKey || !metadata || validateModuleParams(params, moduleKey) !== null}
+                    disabled={!moduleName || !metadata || validateModuleParams(params, moduleName) !== null}
                     variant="filled"
                 >
                     Add Layer

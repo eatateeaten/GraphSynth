@@ -23,8 +23,8 @@ export abstract class BranchOp extends GraphNode {
     }
 
     protected abstract computeOutShape(): number[][];
-    abstract emitTorchModule(inputs: string[], outputs: string[]): string;
-    abstract emitIR(): string;
+    abstract toTorchModule(): string;
+    abstract toIR(): string;
 
     // Getters and setters 
     get opType(): string { return this._opType; }
@@ -156,21 +156,11 @@ export class Split extends BranchOp {
         return outShapes;
     }
 
-    emitTorchModule(inputs: string[], outputs: string[]): string {
-        const dim = this._dim;
-        const sections = this._sections;
-
-        if (sections.length === 1) {
-            // Only one section means just a simple copy
-            return `${outputs[0]} = ${inputs[0]}`;
-        }
-
-        // For multi-output splits with unpacking
-        // torch.split returns a tuple that needs to be assigned to the output variables
-        return `${outputs.join(', ')} = torch.split(${inputs[0]}, sections=${JSON.stringify(sections).replace('[', '(').replace(']', ')')}, dim=${dim})`;
+    toTorchModule(): string {
+        return "toTorchModule for Split not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const outShapesStr = this._outShapes.map(shape => 
             shape ? `[${shape.join(',')}]` : 'unknown'
         ).join(', ');
@@ -213,18 +203,11 @@ export class Copy extends BranchOp {
         return outShapes;
     }
 
-    emitTorchModule(inputs: string[], outputs: string[]): string {
-        // Handle multiple outputs separately to make each assignment clear in the output
-        if (outputs.length <= 1) {
-            return `${outputs[0]} = ${inputs[0]}`;
-        }
-        
-        // Generate separate assignment statements for each output
-        // This ensures each output gets its own line and is treated as a separate variable
-        return outputs.map(output => `${output} = ${inputs[0]}`).join('\n');
+    toTorchModule(): string {
+        return "toTorchModule for Copy not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const outShapesStr = this._outShapes.map(shape => 
             shape ? `[${shape.join(',')}]` : 'unknown'
         ).join(', ');

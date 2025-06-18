@@ -1,28 +1,4 @@
-/**
- * Class Diagram:
- * 
- * GraphNode (base)
- *    ↑
- * MergeOp (abstract)
- *    ↑
- * ReduceOp (base)
- *    ↑
- * ├── PointwiseReduce
- * └── Concat
- * 
- * Key relationships:
- * - ReduceOp extends MergeOp
- * - PointwiseReduce and Concat extend ReduceOp
- * - All classes inherit from GraphNode
- * 
- * Key methods:
- * - computeOutShape(): abstract in MergeOp, implemented in ReduceOp and its subclasses
- * - emitTorchFunctional(): abstract in MergeOp, implemented in ReduceOp and its subclasses
- * - addPrev(): overridden in ReduceOp to handle dynamic input shapes
- */
-
 import { MergeOp } from './merge_op';
-import { getPointWiseReduceOpCode } from './torch_pointwise_reduce_op';
 import { ParamError } from './types';
 
 /* huh. it's interesting. reduceop doesn't do anything different than mergeop. keeping it for semantic reasons */
@@ -38,8 +14,8 @@ export abstract class ReduceOp extends MergeOp {
 
     protected abstract computeOutShape(): number[] | null;
     protected abstract checkIncomingShapeMatch(shape: number[]): void; 
-    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
-    abstract emitIR(): string;
+    abstract toTorchModule(): string;
+    abstract toIR(): string;
 }
 
 export class PointwiseReduce extends ReduceOp {
@@ -94,20 +70,12 @@ export class PointwiseReduce extends ReduceOp {
         return [...this._inShapes[referenceShapeIndex]!];
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        if (inputs.length < 2) {
-            throw new Error("PointwiseReduce requires at least 2 inputs");
-        }
-        const opCode = getPointWiseReduceOpCode(this._opType);
-        
-        const result = inputs.reduce((acc, curr) => 
-            acc ? `${opCode}(${acc}, ${curr})` : curr
-        );
-        
-        return `${inputs[0]} = ${result}`;
+    toTorchModule(): string {
+        // TODO: fix this
+        return "toTorchModule for PointwiseReduce not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `${this._opType}Reduce(inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }
@@ -213,12 +181,11 @@ export class Concat extends ReduceOp {
         return outShape;
     }
 
-    emitTorchModule(inputs: string[], outputs?: string[]): string {
-        const outVar = outputs && outputs.length > 0 ? outputs[0] : inputs[0];
-        return `${outVar} = torch.cat([${inputs.join(', ')}], dim=${this._params.dim})`;
+    toTorchModule(): string {
+        return "toTorchModule for Concat not implemented";
     }
 
-    emitIR(): string {
+    toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
         return `Concat(dim=${this._dim}, inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }

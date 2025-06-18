@@ -30,6 +30,8 @@ const moduleFiles = [
 // Auto-register all modules from all files
 moduleFiles.forEach(moduleFile => {
     Object.values(moduleFile).forEach(module => {
+        if(!module.label)  // Probably not a module, just a random import
+            return;
         ModuleDB.register(module as ModuleDef);
     });
 });

@@ -51,14 +51,14 @@ export abstract class Module extends GraphNode {
     /**
      * Abstract method to generate framework-specific code
      */
-    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
-    abstract emitIR(): string;
+    abstract toTorchModule(inputs: string[], outputs?: string[]): string;
+    abstract toIR(): string;
 
     /**
      * Generates framework-specific code
      */
     emitTorch(inputs: string[], outputs?: string[]): string {
-        return this.emitTorchModule(inputs, outputs);
+        return this.toTorchModule(inputs, outputs);
     }
 
     /**

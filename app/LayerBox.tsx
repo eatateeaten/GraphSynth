@@ -7,15 +7,15 @@ import { assert } from './utils';
 interface LayerBoxProps extends NodeProps {
     data: {
         type: string;
-        opType?: string;
+        moduleName?: string;
         inputError?: string;
         outputError?: string;
     };
 }
 
 export function LayerBox({ data, id }: LayerBoxProps) {
-    const { type, opType, inputError, outputError } = data;
-    const node = useStore(state => state.checkerGraph?.getNode(id));
+    const { type, moduleName, inputError, outputError } = data;
+    const node = useStore(state => state.compilerGraph?.getNode(id));
     assert(node, `No node in the graph with ID ${id}?? Something is very wrong`);
 
     const inShapes = node!.inShapes;
@@ -24,7 +24,7 @@ export function LayerBox({ data, id }: LayerBoxProps) {
     const card = (
         <Card shadow="sm" radius="sm" withBorder style={{ padding: "8px 16px 8px" }}>
             <Group>
-                <Text fw={500}>{opType || type}</Text>
+                <Text fw={500}>{moduleName}</Text>
             </Group>
         </Card>
     );

@@ -37,8 +37,8 @@ export abstract class GraphNode {
     abstract addNext(next: GraphNode, indexSelf?: number, indexNext?: number): void;
     abstract deletePrev(indexSelf?: number): void;
     abstract deleteNext(indexSelf?: number): void;
-    abstract emitTorchModule(inputs: string[], outputs?: string[]): string;
-    abstract emitIR(): string;
+    abstract toTorchModule(): string;
+    abstract toIR(): string;
 
     static shapeMatch(shape1: number[], shape2: number[]): boolean {
         if (shape1.length !== shape2.length) {

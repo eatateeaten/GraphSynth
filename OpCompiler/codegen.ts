@@ -65,7 +65,7 @@ export class CodeGenerator {
         let ir = "=== GRAPH IR ===\n";
         
         for (const node of topoOrder) {
-            const nodeIR = node.emitIR();
+            const nodeIR = node.toIR();
             ir += `${node.id}: ${nodeIR}\n`;
         }
         
@@ -80,152 +80,145 @@ export class CodeGenerator {
     }
 
     /**
-     * Generates complete SSA (Static Single Assignment) style PyTorch code from the graph DAG.
-     * Each variable is assigned exactly once with automatic variable name generation.
-     * Uses a depth-first traversal strategy to respect computation order.
+     * Generates a complete PyTorch nn.Module class from the graph.
+     * Creates both __init__ and forward methods with proper module instantiation.
      */
-    public emitTorchFunctional(): string {
+    public emitTorchModule(): string {
         this.validateGraph();
         
-        let varCounter = 0;
-        const newVar = () => `v${varCounter++}`;
-        const nodeVars = new Map<string, string>();
         const topoOrder = this.graph.getTopologicalOrder();
+        const nodeToModuleName = new Map<string, string>();
         
-        let code = "";
+        // Generate __init__ method
+        const initCode = this._generateInitMethod(topoOrder, nodeToModuleName);
+        
+        // Generate forward method
+        const forwardCode = this._generateForwardMethod(topoOrder, nodeToModuleName);
+        
+        // Combine into complete module
+        return `import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class GeneratedModule(nn.Module):
+    def __init__(self):
+        super(GeneratedModule, self).__init__()
+${initCode}
+    
+    def forward(self, ${this._getForwardInputs()}):
+${forwardCode}
+`;
+    }
+
+    private _generateInitMethod(topoOrder: GraphNode[], nodeToModuleName: Map<string, string>): string {
+        let initCode = "";
+        let moduleCounter = 0;
         
         for (const node of topoOrder) {
-            const nodeCode = this._generateNodeCode(node, nodeVars, newVar);
-            code += nodeCode;
+            // Skip source nodes (Tensors) - they don't need modules
+            if (this.graph.getSources().has(node)) {
+                continue;
+            }
+            
+            // Generate module name
+            const moduleName = `layer_${moduleCounter++}`;
+            nodeToModuleName.set(node.id, moduleName);
+            
+            // Get the PyTorch module definition for this node
+            // For init, we just need the module instantiation, not the forward call
+            const moduleDefinition = node.toTorchModule();
+            
+            initCode += `        self.${moduleName} = ${moduleDefinition}  # ${node.id}\n`;
+        }
+
+        return initCode;
+    }
+
+    private _generateForwardMethod(topoOrder: GraphNode[], nodeToModuleName: Map<string, string>): string {
+        let forwardCode = "";
+        let varCounter = 0;
+        const nodeToVar = new Map<string, string>();
+        
+        // Handle source nodes first
+        const sources = Array.from(this.graph.getSources());
+        for (let i = 0; i < sources.length; i++) {
+            const inputVar = sources.length === 1 ? "x" : `x${i}`;
+            nodeToVar.set(sources[i].id, inputVar);
+        }
+        
+        for (const node of topoOrder) {
+            // Skip source nodes - they're already handled as inputs
+            if (this.graph.getSources().has(node)) {
+                continue;
+            }
+            
+            // Get input variables for this node
+            const inputs = this._getNodeInputVars(node, nodeToVar);
+            
+            // Generate output variable
+            const outputVar = `v${varCounter++}`;
+            nodeToVar.set(node.id, outputVar);
+            
+            // Get module name
+            const moduleName = nodeToModuleName.get(node.id);
+            if (!moduleName) {
+                throw new Error(`No module name found for node ${node.id}`);
+            }
+            
+            // Generate forward pass code
+            const inputStr = inputs.join(', ');
+            forwardCode += `        ${outputVar} = self.${moduleName}(${inputStr})  # ${node.id}\n`;
         }
         
         // Generate return statement
-        const sinks = this.graph.getSinks();
-        const sinkVars = sinks.size > 0 
-            ? Array.from(sinks).map(sink => this._getSinkVar(sink, nodeVars))
-            : [];
-            
-        if (sinkVars.length > 0) {
-            code += `return ${sinkVars.join(', ')}\n`;
+        const sinks = Array.from(this.graph.getSinks());
+        const returnVars = sinks.map(sink => {
+            // Find the variable that feeds into this sink
+            const feedingNode = this._findNodeFeedingIntoSink(sink);
+            return nodeToVar.get(feedingNode.id) || "unknown";
+        });
+        
+        if (returnVars.length === 1) {
+            forwardCode += `        return ${returnVars[0]}\n`;
+        } else {
+            forwardCode += `        return ${returnVars.join(', ')}\n`;
         }
         
-        return code;
+        return forwardCode;
     }
 
-    private _generateNodeCode(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string {
-        const sources = this.graph.getSources();
-        if (sources.has(node)) {
-            return this._generateSourceCode(node, nodeVars, newVar);
+    private _getForwardInputs(): string {
+        const sources = Array.from(this.graph.getSources());
+        if (sources.length === 1) {
+            return "x";
         }
-        
-        const inputs = this._getNodeInputs(node, nodeVars);
-        const outputs = this._createNodeOutputs(node, nodeVars, newVar);
-        const operation = this._getNodeOperation(node);
-        
-        return this._formatNodeCode(node, inputs, outputs, operation);
+        return sources.map((_, i) => `x${i}`).join(', ');
     }
 
-    private _generateSourceCode(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string {
-        const outputVar = newVar();
-        nodeVars.set(node.id, outputVar);
-        
-        const tensor = node as Tensor;
-        const inputName = tensor.variableName || `input_${node.id}`;
-        
-        return `${outputVar} = ${inputName}  # Source: ${node.id}\n`;
-    }
-
-    private _getNodeInputs(node: GraphNode, nodeVars: Map<string, string>): string[] {
-        const prevNodes = this._getPrevNodes(node);
+    private _getNodeInputVars(node: GraphNode, nodeToVar: Map<string, string>): string[] {
         const inputs: string[] = [];
         
-        for (let i = 0; i < prevNodes.length; i++) {
-            const prev = prevNodes[i];
-            if (!prev) continue;
-            
-            const inputVar = prev instanceof BranchOp 
-                ? nodeVars.get(`${prev.id}_${i}`)
-                : nodeVars.get(prev.id);
-                
-            if (!inputVar) {
-                throw new Error(`No input variable found for ${prev.id}`);
+        for (const prev of node.prevs) {
+            if (prev) {
+                const inputVar = nodeToVar.get(prev.id);
+                if (inputVar) {
+                    inputs.push(inputVar);
+                }
             }
-            inputs.push(inputVar);
         }
         
         return inputs;
     }
 
-    private _createNodeOutputs(node: GraphNode, nodeVars: Map<string, string>, newVar: () => string): string[] {
-        if (GraphNode.singleOutput(node)) {
-            const outputVar = newVar();
-            nodeVars.set(node.id, outputVar);
-            return [outputVar];
-        } else {
-            // Multi-output (branch) node
-            const branchOp = node as BranchOp;
-            const outputs: string[] = [];
-            
-            for (let i = 0; i < branchOp.outShapes.length; i++) {
-                const outputVar = newVar();
-                outputs.push(outputVar);
-                nodeVars.set(`${node.id}_${i}`, outputVar);
-            }
-            
-            return outputs;
-        }
-    }
-
-    private _getNodeOperation(node: GraphNode): string {
-        if (node instanceof Op) {
-            return node.emitTorch();
-        } else if (node instanceof MergeOp) {
-            const tempCode = node.emitTorchModule(['temp1', 'temp2'], ['tempOut']);
-            const match = tempCode.match(/= (.+)$/);
-            return match ? match[1] : tempCode;
-        } else if (node instanceof BranchOp) {
-            const tempCode = node.emitTorchModule(['tempIn'], ['tempOut1', 'tempOut2']);
-            const match = tempCode.match(/= (.+)$/);
-            return match ? match[1] : tempCode;
-        }
-        
-        throw new Error(`Unsupported node type: ${node.constructor.name}`);
-    }
-
-    private _formatNodeCode(node: GraphNode, inputs: string[], outputs: string[], operation: string): string {
-        const inputStr = inputs.join(', ');
-        const outputStr = outputs.join(', ');
-        const nodeType = node.constructor.name;
-        
-        return `${outputStr} = ${operation}(${inputStr})  # ${nodeType}: ${node.id}\n`;
-    }
-
-    private _getSinkVar(sink: GraphNode, nodeVars: Map<string, string>): string {
-        // Find the node that connects to this sink
+    private _findNodeFeedingIntoSink(sink: GraphNode): GraphNode {
+        // Find the node that has this sink as a next node
         const nodes = this.graph.getAllNodes();
-        for (const [nodeId, node] of nodes.entries()) {
-            if (node instanceof BranchOp) {
-                for (let i = 0; i < node.nexts.length; i++) {
-                    if (node.nexts[i] === sink) {
-                        const key = `${nodeId}_${i}`;
-                        const sinkVar = nodeVars.get(key);
-                        if (sinkVar) return sinkVar;
-                    }
-                }
-            } else if ((node instanceof Op || node instanceof MergeOp) && node.nexts[0] === sink) {
-                const sinkVar = nodeVars.get(nodeId);
-                if (sinkVar) return sinkVar;
+        for (const [_, node] of nodes) {
+            if (node.nexts.includes(sink)) {
+                return node;
             }
         }
         
-        if (sink instanceof Tensor && sink.variableName) {
-            return sink.variableName;
-        }
-        
-        throw new Error(`No input variable found for sink ${sink.id}`);
-    }
-      
-    private _getPrevNodes(node: GraphNode): GraphNode[] {
-        return node.prevs.filter(p => p !== null);
+        throw new Error(`No node found feeding into sink ${sink.id}`);
     }
 }
