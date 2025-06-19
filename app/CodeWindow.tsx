@@ -1,153 +1,46 @@
 import { Box, Code, Text, Button, Group } from '@mantine/core';
 import { useStore } from './store';
 import { useEffect, useState, useCallback } from 'react';
+import { CodeGenerator } from '../OpCompiler/codegen';
 
 export function CodeWindow() {
-    // Subscribe to nodes and edges instead of checkerGraph directly
+    // Subscribe to nodes and edges instead of compilerGraph directly
     const nodes = useStore(state => state.nodes);
     const edges = useStore(state => state.edges);
-    const checkerGraph = useStore(state => state.compilerGraph);
+    const compilerGraph = useStore(state => state.compilerGraph);
     const executeCodeInJupyter = useStore(state => state.executeCodeInJupyter);
     const isConnected = useStore(state => state.jupyter.status?.connected || false);
     const isExecuting = useStore(state => state.jupyter.isExecuting);
 
     // Use local state to store the generated code
     const [code, setCode] = useState("// No valid graph to generate code");
-    const [showOutput, setShowOutput] = useState(false);
 
-    // Estimate input tensor shapes based on the graph
-    const getInputShapes = useCallback(() => {
-        try {
-            const sources = Array.from(checkerGraph.getSources());
-            const shapes = sources.map(source => {
-                // Try to get shape information from the graph node
-                try {
-                    const node = checkerGraph.getNode(source.id);
-                    if (node && node.outShapes && node.outShapes.length > 0 && node.outShapes[0]) {
-                        return node.outShapes[0];
-                    }
-                } catch (e) {
-                    console.warn("Couldn't get shape for node:", source.id);
-                }
-                
-                // Default shape if we can't determine it
-                return [1, 3, 224, 224]; // Typical image input shape (batch, channels, height, width)
-            });
-            
-            return shapes;
-        } catch (e) {
-            console.warn("Error getting input shapes:", e);
-            return [];
-        }
-    }, [checkerGraph]);
-
-    // Function to format raw code into a PyTorch module
+    // Generate PyTorch module code using the new CodeGenerator
     const getFormattedCode = useCallback(() => {
         try {
             // Only generate code if there's a valid graph
-            if (checkerGraph.getSources().size === 0 || checkerGraph.getSinks().size === 0) {
+            if (compilerGraph.getSources().size === 0 || compilerGraph.getSinks().size === 0) {
                 return "// No valid graph to generate code";
             }
 
-            // Get raw code
-            const rawCode = checkerGraph.emitTorchFunctional();
-
-            // Get source and sink variables
-            const sources = Array.from(checkerGraph.getSources());
-            const sinks = Array.from(checkerGraph.getSinks());
-
-            // Extract variable names from the raw code - this assumes the raw code uses specific patterns
-            // Look for input variables (usually the first assignments or placeholders)
-            let sourceVars: string[] = [];
-            let lines = rawCode.split('\n');
-
-            // Find lines with source variable references
-            // Usually, these are the first variables being assigned
-            let isFirstAssignment = true;
-            for (const line of lines) {
-                if (line.includes('return')) continue;
-                if (line.trim() === '') continue;
-
-                // Look for assignments where a variable appears on the right side without being defined first
-                if (isFirstAssignment && line.includes('=')) {
-                    // This is likely an input assignment (e.g., var1 = input_tensor)
-                    const match = line.match(/(\w+)\s*=/);
-                    if (match && match[1]) {
-                        sourceVars.push(match[1]);
-                        isFirstAssignment = false;
-                    }
-                }
-            }
-
-            // If we couldn't find source vars in code, use placeholders based on the number of sources
-            if (sourceVars.length === 0) {
-                sourceVars = Array(sources.length).fill(0).map((_, i) => `input_${i}`);
-            }
-
-            // Find return statements to extract sink variables
-            const returnLine = lines.find(line => line.includes('return'));
-            let sinkVars: string[] = [];
-
-            if (returnLine) {
-                // Extract variables from return statement
-                const returnVars = returnLine.replace('return', '').trim();
-                if (returnVars.includes(',')) {
-                    // Multiple return values
-                    sinkVars = returnVars.split(',').map(v => v.trim().replace(/[()]/g, ''));
-                } else {
-                    // Single return value
-                    sinkVars = [returnVars];
-                }
-            } else {
-                // If no return statement found, use the last variable assignment
-                for (let i = lines.length - 1; i >= 0; i--) {
-                    const line = lines[i];
-                    if (line.includes('=') && !line.includes('return')) {
-                        const match = line.match(/(\w+)\s+=\s+/);
-                        if (match && match[1]) {
-                            sinkVars = [match[1]];
-                            break;
-                        }
-                    }
-                }
-            }
+            // Use the new CodeGenerator to generate a complete PyTorch module
+            const codeGen = new CodeGenerator(compilerGraph);
+            const moduleCode = codeGen.emitTorchModule();
             
-            // If we still couldn't find sink vars, use placeholders
-            if (sinkVars.length === 0) {
-                sinkVars = sinks.map((_, i) => `output_${i}`);
-            }
-            
-            // Try to get input shapes for test data
-            const inputShapes = getInputShapes();
-            
-            // Generate shape strings for input tensors
-            const shapeStrings = inputShapes.map(shape => 
-                shape && shape.length > 0 ? `[${shape.join(', ')}]` : '[1, 3, 224, 224]'
-            );
-            
-            // Format code as a PyTorch module with test code
-            const formattedCode = `import torch
-import torch.nn as nn
-import numpy as np
-
-class MyModule(nn.Module):
-    def __init__(self):
-        super(MyModule, self).__init__()
-        
-    def forward(self, ${sourceVars.join(', ')}):
-${lines.filter(line => !line.includes('return')).map(line => '        ' + line).join('\n')}
-        return ${sinkVars.join(', ')}
+            // Add test code to create and run the model
+            const testCode = `
 
 # Create an instance of the model
-model = MyModule()
+model = GeneratedModule()
 
-# Generate random input tensors
-${sourceVars.map((v, i) => `${v} = torch.randn(${shapeStrings[i] || '[1, 3, 224, 224]'})`).join('\n')}
+# Generate random input tensors based on source nodes
+import torch
+${generateTestInputs()}
 
 # Run the model
 print("Testing model with random inputs...")
 with torch.no_grad():
-    outputs = model(${sourceVars.join(', ')})
+    outputs = model(${getInputVariableNames()})
 
 if isinstance(outputs, tuple):
     for i, output in enumerate(outputs):
@@ -156,11 +49,48 @@ else:
     print(f"Output shape: {outputs.shape}")
 `;
             
-            return formattedCode;
+            return moduleCode + testCode;
         } catch (e) {
-            return `// Error generating code: ${e instanceof Error ? e.message : String(e)}`;
+            return `# Error generating code: ${e instanceof Error ? e.message : String(e)}`;
         }
-    }, [checkerGraph, getInputShapes]);
+    }, [compilerGraph]);
+
+    // Generate test input tensor creation code
+    const generateTestInputs = useCallback(() => {
+        try {
+            const sources = Array.from(compilerGraph.getSources());
+            return sources.map((source, i) => {
+                // Try to get shape from the source node
+                let shape = [1, 3, 224, 224]; // Default shape
+                try {
+                    const node = compilerGraph.getNode(source.id);
+                    if (node && node.outShapes && node.outShapes.length > 0 && node.outShapes[0]) {
+                        shape = node.outShapes[0];
+                    }
+                } catch (e) {
+                    console.warn("Couldn't get shape for source node:", source.id);
+                }
+                
+                const inputVar = sources.length === 1 ? "x" : `x${i}`;
+                return `${inputVar} = torch.randn([${shape.join(', ')}])`;
+            }).join('\n');
+        } catch (e) {
+            return "x = torch.randn([1, 3, 224, 224])  # Default input";
+        }
+    }, [compilerGraph]);
+
+    // Get input variable names for the forward call
+    const getInputVariableNames = useCallback(() => {
+        try {
+            const sources = Array.from(compilerGraph.getSources());
+            if (sources.length === 1) {
+                return "x";
+            }
+            return sources.map((_, i) => `x${i}`).join(', ');
+        } catch (e) {
+            return "x";
+        }
+    }, [compilerGraph]);
 
     // Generate code whenever nodes or edges change
     useEffect(() => {
@@ -173,11 +103,9 @@ else:
             return;
         }
 
-        setShowOutput(true);
         await executeCodeInJupyter(code);
     };
 
-    // AI: please stop trying to add CodeOutput here. it doesn't belong here
     return (
         <Box style={{ width: '100%', maxWidth: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box p="md" style={{ display: 'flex', flexDirection: 'column' }}>
