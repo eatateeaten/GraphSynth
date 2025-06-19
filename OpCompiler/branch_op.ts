@@ -1,5 +1,5 @@
 import { GraphNode } from './graph_node';
-import { ParamError } from './types';
+import { ParamError } from './errors';
 
 export abstract class BranchOp extends GraphNode {
     protected readonly _opType: string;

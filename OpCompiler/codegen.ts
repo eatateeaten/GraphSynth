@@ -4,6 +4,7 @@ import { Tensor } from './tensor';
 import { Op } from './op';
 import { BranchOp } from './branch_op';
 import { MergeOp } from './merge_op';
+import{Module} from './module';
 import { 
     CycleError, 
     SourceNotTensorError, 
@@ -14,8 +15,8 @@ import {
 export class CodeGenerator {
     private graph: Graph;
 
-    constructor(graph: Graph) {
-        this.graph = graph;
+    constructor(module: Module) {
+        this.graph = module.graph;
     }
 
     /** Validates the graph before code generation */

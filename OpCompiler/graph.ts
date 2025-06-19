@@ -9,9 +9,6 @@ import {
     ShapeMatchError, 
     ParamError, 
     CycleError, 
-    SourceNotTensorError, 
-    SinkNotTensorError, 
-    UnreachableNodeError 
 } from './errors';
 export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
 
