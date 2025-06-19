@@ -118,7 +118,7 @@ main {
 /* Handle styles */
 .layer-handle {
   min-width: 20px;
-  min-height: 40px;
+  min-height: 20px;
   width: auto;
   height: auto;
   border: 1px solid var(--mantine-color-gray-3);

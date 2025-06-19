@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Select, Button, TextInput, Box, Text, Checkbox } from '@mantine/core';
+import { v4 as uuidv4 } from "uuid";
+
 import { useStore } from './store';
 import { Shape } from '../OpCompiler/types';
 import { ParamDef } from '../moduledb/types';
@@ -192,7 +194,6 @@ export function NodeEditor() {
         if (!moduleName) return;
         
         try {
-            const id = crypto.randomUUID();
             const module = ModuleDB.get(moduleName);
             
             // Validate parameters
@@ -208,7 +209,7 @@ export function NodeEditor() {
 
             // Use the module's moduleType to determine what kind of node to create
             addNode({
-                id,
+                id: uuidv4(),
                 type: module.moduleType,
                 moduleName,  // Store the module name for editing later
                 params

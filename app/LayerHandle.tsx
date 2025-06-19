@@ -1,5 +1,5 @@
 import { Handle, Position, type HandleProps } from 'reactflow';
-import { Text, Stack, Popover } from '@mantine/core';
+import { Text, Stack, Popover, Box } from '@mantine/core';
 
 // Define Shape type directly here
 type Shape = number[];
@@ -17,22 +17,31 @@ export function LayerHandle({ dimensions, position, error, type, offset = 0, tot
     const content = (
         <div className="layer-handle-content">
             {dimensions ? (
-                <Stack gap={2} align="center" style={{ width: '100%' }}>
+                <Stack gap={4} align="center" style={{ width: '100%' }}>
                     {dimensions.map((dim: number, i: number) => (
-                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <Text size="xs" style={{ width: '100%', textAlign: 'center' }}>
+                        <Box key={i} style={{
+                            width: "100%",
+                            minHeight: "20px",
+                            border: "1px solid var(--mantine-color-dark-4)",
+                            backgroundColor: 'var(--mantine-color-dark-6)'
+                        }}>
+                            <Text size="xs" color="cyan.2" style={{ width: '100%', textAlign: 'center' }}>
                                 {dim}
                             </Text>
-                            {i < dimensions.length - 1 && (
-                                <Text size="xs" c="dimmed">×</Text>
-                            )}
-                        </div>
+                        </Box>
                     ))}
                 </Stack>
             ) : (
-                <Text size="xs" c="red" style={{ width: '100%', textAlign: 'center' }}>
-                    Any
-                </Text>
+                <Box style={{
+                    width: "100%",
+                    minHeight: "20px",
+                    border: "1px solid var(--mantine-color-dark-4)",
+                    backgroundColor: 'var(--mantine-color-dark-6)'
+                }}>
+                    <Text size="xs" color="red.6" style={{ width: '100%', textAlign: 'center' }}>
+                        ?
+                    </Text>
+                </Box>
             )}
         </div>
     );
@@ -49,8 +58,9 @@ export function LayerHandle({ dimensions, position, error, type, offset = 0, tot
             position={position}
             {...handleProps}
             style={{
-                background: dimensions ? 'var(--mantine-color-blue-0)' : 'var(--mantine-color-red-0)',
-                borderColor: dimensions ? 'var(--mantine-color-blue-3)' : 'var(--mantine-color-red-3)',
+                background: "none",
+                borderColor: "none",
+                border: "none",
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -68,13 +78,9 @@ export function LayerHandle({ dimensions, position, error, type, offset = 0, tot
                     styles={{
                         dropdown: {
                             padding: '8px 12px',
-                            backgroundColor: 'var(--mantine-color-red-0)',
-                            border: '1px solid var(--mantine-color-red-3)',
                             maxWidth: '250px'
                         },
                         arrow: {
-                            backgroundColor: 'var(--mantine-color-red-0)',
-                            border: '1px solid var(--mantine-color-red-3)',
                         }
                     }}
                 >
