@@ -1,4 +1,5 @@
 import { NodeType } from "../OpCompiler/types";
+import type { GraphNode } from "../OpCompiler/graph_node";
 
 export interface ParamDef {
     // UI metadata
@@ -19,13 +20,20 @@ export interface ModuleDef {
     label: string;
     description: string;
     category: string;
-    moduleType: NodeType;
+    
+    // Dynamic node system
+    nodeClass?: new (id: string, params: Record<string, any>) => GraphNode;
+    hierarchy?: string[];
+    tags?: string[];
+    
+    // Legacy support - will be deprecated
+    moduleType?: NodeType;
 
     // Parameter definitions
     params: Record<string, ParamDef>;
 
     // Computational logic
-    emitPytorchModule: (params: Record<string, any>) => string;
+    emitPytorchModule?: (params: Record<string, any>) => string;
     // Required for Op nodes (SISO), optional for multi-input operations handled by OpCompiler
     validateInputShape?: ((inShapes: number[], params: Record<string, any>) => string[]) | null;
     inferOutputShape?: ((inShapes: number[], params: Record<string, any>) => number[]) | null;

@@ -13,7 +13,7 @@ export class Op extends GraphNode {
 
     constructor(
         id: string,
-        opType: string,
+        moduleName: string,
         params: Record<string, any>
     ) {
         super(id, params);
@@ -21,22 +21,10 @@ export class Op extends GraphNode {
         this._outShapes = [null];
         this._prevs = [null];
         this._nexts = [null];
-        this._module = ModuleDB.get(opType);
+        this._module = ModuleDB.get(moduleName);
+        this._shapeInferred = true;
     }
 
-    /** Validate params and construct if OK */
-    static fromParams(id: string, params: Record<string, any>): Op {
-        if (!params.opType)
-            throw new ParamError("No operation type provided");
-
-        // Validate that the operation exists in ModuleDB
-        const moduleDef = ModuleDB.get(params.opType);
-        if (!moduleDef) {
-            throw new ParamError(`Unknown operation type: ${params.opType}`);
-        }
-        
-        return new Op(id, params.opType, params);
-    }
 
     protected computeOutShape(): number[] {
         // Op is guaranteed to have shape inference function

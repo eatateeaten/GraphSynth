@@ -1,29 +1,29 @@
 import { GraphNode } from './graph_node';
 import { Tensor } from './tensor';
 import { Op } from './op';
-import { BranchOp, Split, Copy } from './branch_op';
-import { MergeOp, PointwiseOp, DotOp, CrossOp } from './merge_op';
+import { Split, Copy } from './branch_op';
+import { PointwiseOp, DotOp, CrossOp } from './merge_op';
 import { Concat, PointwiseReduce } from './reduce_op';
-import { isNodeType, NodeType } from "./types";
+import { NodeType } from "./types";
+import { ModuleDB } from '../moduledb';
 import { 
     ShapeMatchError, 
     ParamError, 
     CycleError, 
 } from './errors';
-export { Tensor, Op, Concat, Split, BranchOp, MergeOp, Copy, PointwiseReduce, PointwiseOp, DotOp, CrossOp };
 
-/// Node name to node builder lookup
-const moduleFromParams: Record<string, (id: NodeType, params: Record<string, any>) => GraphNode> = {
-    "Tensor": Tensor.fromParams,
-    "Op": Op.fromParams,
-    "Split": Split.fromParams,
-    "Concat": Concat.fromParams,
-    "Copy": Copy.fromParams,
-    "PointwiseReduce": PointwiseReduce.fromParams,
-    "PointwiseOp": PointwiseOp.fromParams,
-    "DotOp": DotOp.fromParams,
-    "CrossOp": CrossOp.fromParams,
-};
+/// Node factory lookup by NodeType
+const nodeFactories: Record<NodeType, (id: string, moduleName: string, params: Record<string, any>) => GraphNode> = {
+    [NodeType.TENSOR]: (id, _, params) => new Tensor(id, params.shape, params.variableName),
+    [NodeType.OP]: (id, moduleName, params) => new Op(id, moduleName, params),
+    [NodeType.SPLIT]: (id, _, params) => new Split(id, params.dim, params.sections, params),
+    [NodeType.COPY]: (id, _, params) => new Copy(id, params.copies, params),
+    [NodeType.CONCAT]: (id, _, params) => new Concat(id, params.dim, params.numberOfMerges, params),
+    [NodeType.POINTWISE_REDUCE]: (id, moduleName, params) => new PointwiseReduce(id, moduleName, params.numberOfMerges, params),
+    [NodeType.POINTWISE_OP]: (id, moduleName, params) => new PointwiseOp(id, moduleName, params),
+    [NodeType.DOT_OP]: (id, _, params) => new DotOp(id, params),
+    [NodeType.CROSS_OP]: (id, _, params) => new CrossOp(id, params),
+}; //TODO Figure out a way to catch errors 
 
 /**
  * Interface defining a connection edge between two nodes in the graph
@@ -77,14 +77,27 @@ export class Graph {
         return this._edges;
     }
 
-    /** Adds a node to the graph */
-    addNode(id: string, nodeType: string, params: Record<string, any>): void {
-        if(!isNodeType(nodeType))
-            throw new ParamError(`Unknown GraphNode type: ${nodeType}`);
+        /** Adds a node to the graph */
+    addNode(id: string, moduleName: string, params: Record<string, any>): void {
+        // Get module definition from ModuleDB
+        const module = ModuleDB.get(moduleName);
+        if (!module) {
+            throw new ParamError(`Unknown module: ${moduleName}`);
+        }
 
-        const factory = moduleFromParams[nodeType];
+        // Get the node type from the module
+        const nodeType = module.moduleType;
+        if (!nodeType) {
+            throw new ParamError(`Module ${moduleName} has no nodeType defined`);
+        }
 
-        const node = factory(id as NodeType, params);
+        // Create node using factory
+        const factory = nodeFactories[nodeType];
+        if (!factory) {
+            throw new ParamError(`Unsupported node type: ${nodeType}`);
+        }
+
+        const node = factory(id, moduleName, params);
         this._nodes.set(id, node);
     }
 
@@ -92,6 +105,22 @@ export class Graph {
     removeNode(nodeId: string): void {
         throw new Error("removeNode is not implemented");
     }
+
+    // /** Adds a node to the graph */
+    // addNode(id: string, nodeType: string, params: Record<string, any>): void {
+    //     if(!isNodeType(nodeType))
+    //         throw new ParamError(`Unknown GraphNode type: ${nodeType}`);
+
+    //     const factory = moduleFromParams[nodeType];
+
+    //     const node = factory(id as NodeType, params);
+    //     this._nodes.set(id, node);
+    // }
+
+    // /** Removes a node from the graph */
+    // removeNode(nodeId: string): void {
+    //     throw new Error("removeNode is not implemented");
+    // }
 
     /** Connects two nodes and updates their I/O shapes.
      * Throws if shapes don't get matched or validated. */

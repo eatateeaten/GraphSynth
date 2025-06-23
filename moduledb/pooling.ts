@@ -1,4 +1,5 @@
 import { ModuleDef, ParamDef } from './types';
+import { NodeType } from '../OpCompiler/types';
 
 // Shared parameter definitions
 const commonPoolingParams: Record<string, ParamDef> = {
@@ -122,7 +123,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Max Pool 1D',
         description: 'Applies 1D max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: maxPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.MaxPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
@@ -144,7 +145,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Max Pool 2D',
         description: 'Applies 2D max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: maxPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.MaxPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
@@ -169,7 +170,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Max Pool 3D',
         description: 'Applies 3D max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: maxPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.MaxPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
@@ -196,7 +197,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Average Pool 1D',
         description: 'Applies 1D average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: avgPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.AvgPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad})`;
@@ -218,7 +219,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Average Pool 2D',
         description: 'Applies 2D average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: avgPooling2D3DParams,
         emitPytorchModule: (params) => {
             let code = `nn.AvgPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
@@ -248,7 +249,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Average Pool 3D',
         description: 'Applies 3D average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: avgPooling2D3DParams,
         emitPytorchModule: (params) => {
             let code = `nn.AvgPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
@@ -280,7 +281,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'LP Pool 1D',
         description: 'Applies 1D power-average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: lpPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.LPPool1d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
@@ -302,7 +303,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'LP Pool 2D',
         description: 'Applies 2D power-average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: lpPoolingParams,
         emitPytorchModule: (params) => {
             return `nn.LPPool2d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
@@ -328,7 +329,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Average Pool 1D',
         description: 'Applies 1D adaptive average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: adaptivePoolingParams,
         emitPytorchModule: (params) => {
             return `nn.AdaptiveAvgPool1d(output_size=${params.output_size})`;
@@ -349,7 +350,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Average Pool 2D',
         description: 'Applies 2D adaptive average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: adaptivePooling2D3DParams,
         emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
@@ -375,7 +376,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Average Pool 3D',
         description: 'Applies 3D adaptive average pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: adaptivePooling2D3DParams,
         emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
@@ -401,7 +402,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Max Pool 1D',
         description: 'Applies 1D adaptive max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: { ...adaptivePoolingParams, ...adaptiveMaxPoolingParams },
         emitPytorchModule: (params) => {
             return `nn.AdaptiveMaxPool1d(output_size=${params.output_size}, return_indices=${params.return_indices})`;
@@ -422,7 +423,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Max Pool 2D',
         description: 'Applies 2D adaptive max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
         emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
@@ -448,7 +449,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         label: 'Adaptive Max Pool 3D',
         description: 'Applies 3D adaptive max pooling over an input signal',
         category: 'Pooling',
-        moduleType: 'Op',
+        moduleType: NodeType.OP,
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
         emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;

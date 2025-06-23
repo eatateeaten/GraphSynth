@@ -1,14 +1,14 @@
 import { GraphNode } from './graph_node';
 import { ParamError, ShapeMatchError } from './errors';
-import { ModuleDB } from '../moduledb';
+import { ModuleDB, ModuleDef } from '../moduledb';
 
 export abstract class MergeOp extends GraphNode {
-    protected readonly _opType: string;
+    protected readonly _module: ModuleDef;
     protected _numberOfMerges: number; 
 
     constructor(
         id: string,
-        opType: string,
+        moduleName: string,
         numberOfMerges: number,
         params: Record<string, any> = {}, 
     ) {
@@ -17,8 +17,9 @@ export abstract class MergeOp extends GraphNode {
         this._outShapes = [null];
         this._prevs = Array(numberOfMerges).fill(null); 
         this._nexts = [null];
-        this._opType = opType;
+        this._module = ModuleDB.get(moduleName);
         this._numberOfMerges = numberOfMerges; 
+        this._shapeInferred = true;
     }
 
     /* this is probably required for all nodes??? why is it defined here. */
@@ -28,7 +29,6 @@ export abstract class MergeOp extends GraphNode {
     abstract toIR(): string;
 
     // Getters and setters
-    get opType(): string { return this._opType; }
     get params(): Record<string, any> { return { ...this._params }; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
@@ -89,10 +89,10 @@ export abstract class MergeOp extends GraphNode {
 export class PointwiseOp extends MergeOp {
     constructor(
         id: string,
-        opType: string,
+        moduleName: string,
         params: Record<string, any> = {}
     ) {
-        super(id, opType, 2, params); // Always 2 inputs for pointwise ops
+        super(id, moduleName, 2, params); // Always 2 inputs for pointwise ops
     }
 
     static fromParams(id: string, params: Record<string, any>): PointwiseOp {
@@ -140,7 +140,7 @@ export class PointwiseOp extends MergeOp {
 
     toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `${this._opType}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+        return `${this._module.label}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 }
 
@@ -202,7 +202,7 @@ export class DotOp extends MergeOp {
 
     toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `Dot(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+        return `${this._module.label}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 }
 
@@ -271,6 +271,6 @@ export class CrossOp extends MergeOp {
 
     toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `Cross(${JSON.stringify(this._params)}) -> ${shapeStr}`;
+        return `${this._module.label}(${JSON.stringify(this._params)}) -> ${shapeStr}`;
     }
 }

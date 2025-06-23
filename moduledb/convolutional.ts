@@ -1,4 +1,5 @@
 import { ModuleDef } from './types';
+import { NodeType } from '../OpCompiler/types';
 
 // Helper functions for shape inference (copied from torch_nn_module_op.ts)
 function convOutputSize(
@@ -108,7 +109,7 @@ export const Conv1D: ModuleDef = {
     label: 'Conv1D',
     description: 'Applies a 1D convolution over an input signal',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         padding: {
@@ -150,7 +151,7 @@ export const Conv2D: ModuleDef = {
     label: 'Conv2D',
     description: 'Applies a 2D convolution over an input image',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         in_channels: {
@@ -199,7 +200,7 @@ export const Conv3D: ModuleDef = {
     label: 'Conv3D', 
     description: 'Applies a 3D convolution over an input volume',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         in_channels: {
@@ -250,7 +251,7 @@ export const ConvTranspose1D: ModuleDef = {
     label: 'ConvTranspose1D',
     description: 'Applies a 1D transposed convolution operator over an input signal',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         ...transposeConvParams,
@@ -293,7 +294,7 @@ export const ConvTranspose2D: ModuleDef = {
     label: 'ConvTranspose2D',
     description: 'Applies a 2D transposed convolution operator over an input image',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         ...transposeConvParams,
@@ -343,7 +344,7 @@ export const ConvTranspose3D: ModuleDef = {
     label: 'ConvTranspose3D',
     description: 'Applies a 3D transposed convolution operator over an input volume',
     category: 'Convolutional',
-    moduleType: 'Op',
+    moduleType: NodeType.OP,
     params: {
         ...commonConvParams,
         ...transposeConvParams,

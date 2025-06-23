@@ -1,11 +1,12 @@
 import { ModuleDef } from './types';
 import { shapeEqual } from './utils';
+import { NodeType } from '../OpCompiler/types';
 
 export const Tensor: ModuleDef = {
     label: 'Tensor',
     description: 'Represents input data or intermediate results',
     category: 'Basic',
-    moduleType: "Tensor",
+    moduleType: NodeType.TENSOR,
     params: {
         shape: {
             label: 'Shape',
@@ -23,7 +24,7 @@ export const Tensor: ModuleDef = {
             required: true
         }
     },
-    emitPytorchModule: () => '', // Tensors don't generate code
+    emitPytorchModule: undefined, 
     validateInputShape: (inShape, params) => {
         if(shapeEqual(inShape, params.shape))
             return [];

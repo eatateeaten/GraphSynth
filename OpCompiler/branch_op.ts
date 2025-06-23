@@ -1,13 +1,14 @@
 import { GraphNode } from './graph_node';
 import { ParamError } from './errors';
+import { ModuleDB, ModuleDef } from '../moduledb';
 
 export abstract class BranchOp extends GraphNode {
-    protected readonly _opType: string;
+    protected readonly _module: ModuleDef;
     protected readonly _numberOfBranches: number;
 
     constructor(
         id: string,
-        opType: string,
+        moduleName: string,
         numberOfBranches: number,
         params: Record<string, any>,
     ) {
@@ -17,9 +18,9 @@ export abstract class BranchOp extends GraphNode {
         this._outShapes = Array(numberOfBranches).fill(null); 
         this._prevs = [null];
         this._nexts = Array(numberOfBranches).fill(null);
-
-        this._opType = opType;
+        this._module = ModuleDB.get(moduleName);
         this._numberOfBranches = numberOfBranches;
+        this._shapeInferred = true;
     }
 
     protected abstract computeOutShape(): number[][];
@@ -27,7 +28,7 @@ export abstract class BranchOp extends GraphNode {
     abstract toIR(): string;
 
     // Getters and setters 
-    get opType(): string { return this._opType; }
+    get opType(): string { return this._module.label; }
     set params(params: Record<string, any>) {
         // Make a deep copy to avoid modifying the original object
         (this._params) = { ...params };
@@ -164,7 +165,7 @@ export class Split extends BranchOp {
         const outShapesStr = this._outShapes.map(shape => 
             shape ? `[${shape.join(',')}]` : 'unknown'
         ).join(', ');
-        return `Split(dim=${this._dim}, sections=${JSON.stringify(this._sections)}) -> [${outShapesStr}]`;
+        return `${this._module.label}(dim=${this._dim}, sections=${JSON.stringify(this._sections)}) -> [${outShapesStr}]`;
     }
 } 
 
@@ -212,6 +213,6 @@ export class Copy extends BranchOp {
             shape ? `[${shape.join(',')}]` : 'unknown'
         ).join(', ');
         const copies = this._params.copies || this._outShapes.length;
-        return `Copy(copies=${copies}) -> [${outShapesStr}]`;
+        return `${this._module.label}(copies=${copies}) -> [${outShapesStr}]`;
     }
 } 

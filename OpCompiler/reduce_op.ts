@@ -1,5 +1,5 @@
 import { MergeOp } from './merge_op';
-import { ParamError } from './types';
+import { ParamError } from './errors';
 
 /* huh. it's interesting. reduceop doesn't do anything different than mergeop. keeping it for semantic reasons */
 export abstract class ReduceOp extends MergeOp {
@@ -9,7 +9,7 @@ export abstract class ReduceOp extends MergeOp {
         numberOfMerges: number,
         params: Record<string, any> = {}, 
     ) {
-        super(id, opType, numberOfMerges, params);
+        super(id, opType, numberOfMerges, params); 
     }
 
     protected abstract computeOutShape(): number[] | null;
@@ -77,7 +77,7 @@ export class PointwiseReduce extends ReduceOp {
 
     toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `${this._opType}Reduce(inputs=${this._numberOfMerges}) -> ${shapeStr}`;
+        return `${this._module.label}Reduce(inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }
 }
 
@@ -187,6 +187,6 @@ export class Concat extends ReduceOp {
 
     toIR(): string {
         const shapeStr = this._outShapes[0] ? `[${this._outShapes[0].join(',')}]` : 'unknown';
-        return `Concat(dim=${this._dim}, inputs=${this._numberOfMerges}) -> ${shapeStr}`;
+        return `${this._module.label}(dim=${this._dim}, inputs=${this._numberOfMerges}) -> ${shapeStr}`;
     }
 }

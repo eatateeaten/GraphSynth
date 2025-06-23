@@ -7,29 +7,23 @@ import { Graph } from './graph';
  * It inherits from GraphNode and provides basic module functionality.
  */
 export abstract class Module extends GraphNode {
-    protected readonly _opType: string;
     protected _moduleName: string;
     private _graph: Graph;
     private _isFrozen: boolean = false;
     private _cachedTorchModule: string | null = null;
     private _cachedIR: string | null = null;
+    
 
     constructor(
         id: string,
-        opType: string,
         moduleName: string,
         params: Record<string, any> = {},
         graph?: Graph
     ) {
         super(id, params);
-        this._opType = opType;
         this._moduleName = moduleName;
         this._graph = graph || new Graph();
-    }
-
-    // Operation getter
-    get opType(): string { 
-        return this._opType; 
+        this._shapeInferred = false;
     }
 
     // Module name getter

@@ -1,10 +1,11 @@
 import { ModuleDef } from './types';
+import { NodeType } from '../OpCompiler/types';
 
 export const ReLU: ModuleDef = {
     label: 'ReLU',
     description: 'Applies the rectified linear unit function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.ReLU()`,
     inferOutputShape: (inShape) => inShape,
@@ -15,7 +16,7 @@ export const LeakyReLU: ModuleDef = {
     label: 'Leaky ReLU',
     description: 'Applies leaky rectified linear unit function with small slope for negative inputs',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         negative_slope: {
             label: 'Negative Slope',
@@ -34,7 +35,7 @@ export const Sigmoid: ModuleDef = {
     label: 'Sigmoid',
     description: 'Applies the sigmoid function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Sigmoid()`,
     inferOutputShape: (inShape) => inShape,
@@ -45,7 +46,7 @@ export const Tanh: ModuleDef = {
     label: 'Tanh',
     description: 'Applies the hyperbolic tangent function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Tanh()`,
     inferOutputShape: (inShape) => inShape,
@@ -56,7 +57,7 @@ export const ELU: ModuleDef = {
     label: 'ELU',
     description: 'Applies the exponential linear unit function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         alpha: {
             label: 'Alpha',
@@ -75,7 +76,7 @@ export const SELU: ModuleDef = {
     label: 'SELU',
     description: 'Applies the scaled exponential linear unit function',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.SELU()`,
     inferOutputShape: (inShape) => inShape,
@@ -86,7 +87,7 @@ export const CELU: ModuleDef = {
     label: 'CELU',
     description: 'Applies the continuously differentiable exponential linear unit',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         alpha: {
             label: 'Alpha',
@@ -105,7 +106,7 @@ export const GELU: ModuleDef = {
     label: 'GELU',
     description: 'Applies the Gaussian error linear unit function',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         approximate: {
             label: 'Approximate',
@@ -125,7 +126,7 @@ export const Softplus: ModuleDef = {
     label: 'Softplus',
     description: 'Applies the softplus function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         beta: {
             label: 'Beta',
@@ -151,7 +152,7 @@ export const Softsign: ModuleDef = {
     label: 'Softsign',
     description: 'Applies the softsign function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Softsign()`,
     inferOutputShape: (inShape) => inShape,
@@ -162,7 +163,7 @@ export const Softmax: ModuleDef = {
     label: 'Softmax',
     description: 'Applies the softmax function to normalize inputs into a probability distribution',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         dim: {
             label: 'Dimension',
@@ -196,7 +197,7 @@ export const LogSoftmax: ModuleDef = {
     label: 'Log Softmax',
     description: 'Applies the log softmax function to normalize inputs',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         dim: {
             label: 'Dimension',
@@ -230,7 +231,7 @@ export const PReLU: ModuleDef = {
     label: 'PReLU',
     description: 'Applies the parametric rectified linear unit function',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         num_parameters: {
             label: 'Number of Parameters',
@@ -256,7 +257,7 @@ export const Hardtanh: ModuleDef = {
     label: 'Hardtanh',
     description: 'Applies the HardTanh function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         min_val: {
             label: 'Minimum Value',
@@ -282,7 +283,7 @@ export const Hardshrink: ModuleDef = {
     label: 'Hardshrink',
     description: 'Applies the hard shrinkage function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         lambda: {
             label: 'Lambda',
@@ -301,7 +302,7 @@ export const Hardsigmoid: ModuleDef = {
     label: 'Hardsigmoid',
     description: 'Applies the hardsigmoid function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Hardsigmoid()`,
     inferOutputShape: (inShape) => inShape,
@@ -312,7 +313,7 @@ export const Hardswish: ModuleDef = {
     label: 'Hardswish',
     description: 'Applies the hardswish function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Hardswish()`,
     inferOutputShape: (inShape) => inShape,
@@ -323,7 +324,7 @@ export const RReLU: ModuleDef = {
     label: 'RReLU',
     description: 'Applies the randomized rectified linear unit function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         lower: {
             label: 'Lower Bound',
@@ -349,7 +350,7 @@ export const Softshrink: ModuleDef = {
     label: 'Softshrink',
     description: 'Applies the soft shrinkage function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         lambda: {
             label: 'Lambda',
@@ -368,7 +369,7 @@ export const Tanhshrink: ModuleDef = {
     label: 'Tanhshrink',
     description: 'Applies the tanhshrink function element-wise',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Tanhshrink()`,
     inferOutputShape: (inShape) => inShape,
@@ -379,7 +380,7 @@ export const Threshold: ModuleDef = {
     label: 'Threshold',
     description: 'Thresholds each element of the input tensor',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {
         threshold: {
             label: 'Threshold',
@@ -403,7 +404,7 @@ export const ReLU6: ModuleDef = {
     label: 'ReLU6',
     description: 'Applies the ReLU6 function element-wise (min(max(0,x), 6))',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.ReLU6()`,
     inferOutputShape: (inShape) => inShape,
@@ -414,7 +415,7 @@ export const SiLU: ModuleDef = {
     label: 'SiLU',
     description: 'Applies the Sigmoid Linear Unit (SiLU/Swish) function',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.SiLU()`,
     inferOutputShape: (inShape) => inShape,
@@ -425,7 +426,7 @@ export const Mish: ModuleDef = {
     label: 'Mish',
     description: 'Applies the Mish function, a self-regularized non-monotonic activation',
     category: 'Activation',
-    moduleType: "Op",
+    moduleType: NodeType.OP,
     params: {},
     emitPytorchModule: (_params) => `nn.Mish()`,
     inferOutputShape: (inShape) => inShape,

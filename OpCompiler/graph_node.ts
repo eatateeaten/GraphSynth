@@ -11,6 +11,7 @@ export abstract class GraphNode {
 
     protected _prevs: (GraphNode | null)[] = [];
     protected _nexts: (GraphNode | null)[] = [];
+    protected _shapeInferred: boolean = false; 
 
     constructor(id: string, params: Record<string, any>) {
         // Validate UUID format
@@ -58,25 +59,7 @@ export abstract class GraphNode {
      * @returns true if node is MergeOp, BranchOp, or Op; false if node is Tensor or Module
      */
     static inShapeInferred(node: GraphNode): boolean {
-        const className = node.constructor.name;
-        
-        // List all node types that infer their input shape
-        const shapeInferredTypes = [
-            'MergeOp',
-            'BranchOp',
-            'Op',
-            'Concat',
-            'PointwiseReduce',
-            'PointwiseOp',
-            'DotOp',
-            'CrossOp',
-            'Split',
-            'Copy'
-        ];
-        
-        // Check if node is a type that infers shape
-        return shapeInferredTypes.includes(className) || 
-               (!className.includes('Tensor') && !className.includes('Module'));
+        return node._shapeInferred; 
     }
 
     /**

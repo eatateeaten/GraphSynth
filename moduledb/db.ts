@@ -47,36 +47,15 @@ class ModuleDatabase {
         return Array.from(categories);
     }
     
-    validateParams(moduleName: string, params: Record<string, any>): string | null {
-        try {
-            const spec = this.get(moduleName);
-            const missing: string[] = [];
-            
-            for (const [paramName, paramSpec] of Object.entries(spec.params)) {
-                if (paramSpec.required && !(paramName in params)) {
-                    missing.push(paramName);
-                }
-            }
-            
-            if (missing.length > 0) {
-                return `Missing required parameters: ${missing.join(', ')}`;
-            }
-            
-            return null;
-        } catch (e: any) {
-            return e.message;
-        }
-    }
+   
+     //TODO invoke the generateCode from GraphNode class specific behaviors 
+
+    //TODO Query for the helper function using the moduleName, and pass that to the function in the specific class inheriting GraphNode 
+    // invoke the generateCode from GraphNode class specific behaviors 
     
-    generateCode(moduleName: string, params: Record<string, any>): string {
-        const spec = this.get(moduleName);
-        return spec.emitPytorchModule(params);
-    }
     
-    inferShape(moduleName: string, inShape: number[], params: Record<string, any>): number[] {
-        const spec = this.get(moduleName);
-        return spec.inferOutputShape!(inShape, params);
-    }
+    //TODO invoke the generateCode from GraphNode class specific behaviors 
+
 }
 
 export const ModuleDB = new ModuleDatabase();
