@@ -6,7 +6,7 @@ export const ReLU: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.ReLU()`,
+    emitPytorchModule: (_params) => `nn.ReLU()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -25,7 +25,7 @@ export const LeakyReLU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.LeakyReLU(negative_slope=${params.negative_slope ?? 0.01})`,
+    emitPytorchModule: (params) => `nn.LeakyReLU(negative_slope=${params.negative_slope ?? 0.01})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -36,7 +36,7 @@ export const Sigmoid: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Sigmoid()`,
+    emitPytorchModule: (_params) => `nn.Sigmoid()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -47,7 +47,7 @@ export const Tanh: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Tanh()`,
+    emitPytorchModule: (_params) => `nn.Tanh()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -66,7 +66,7 @@ export const ELU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.ELU(alpha=${params.alpha ?? 1.0})`,
+    emitPytorchModule: (params) => `nn.ELU(alpha=${params.alpha ?? 1.0})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -77,7 +77,7 @@ export const SELU: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.SELU()`,
+    emitPytorchModule: (_params) => `nn.SELU()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -96,7 +96,7 @@ export const CELU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.CELU(alpha=${params.alpha ?? 1.0})`,
+    emitPytorchModule: (params) => `nn.CELU(alpha=${params.alpha ?? 1.0})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -116,7 +116,7 @@ export const GELU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.GELU(approximate='${params.approximate ?? 'none'}')`,
+    emitPytorchModule: (params) => `nn.GELU(approximate='${params.approximate ?? 'none'}')`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -142,7 +142,7 @@ export const Softplus: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Softplus(beta=${params.beta ?? 1}, threshold=${params.threshold ?? 20})`,
+    emitPytorchModule: (params) => `nn.Softplus(beta=${params.beta ?? 1}, threshold=${params.threshold ?? 20})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -153,7 +153,7 @@ export const Softsign: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Softsign()`,
+    emitPytorchModule: (_params) => `nn.Softsign()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -172,7 +172,7 @@ export const Softmax: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Softmax(dim=${params.dim ?? -1})`,
+    emitPytorchModule: (params) => `nn.Softmax(dim=${params.dim ?? -1})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (inShape, params) => {
         const errors: string[] = [];
@@ -206,7 +206,7 @@ export const LogSoftmax: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.LogSoftmax(dim=${params.dim ?? -1})`,
+    emitPytorchModule: (params) => `nn.LogSoftmax(dim=${params.dim ?? -1})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (inShape, params) => {
         const errors: string[] = [];
@@ -247,7 +247,7 @@ export const PReLU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.PReLU(num_parameters=${params.num_parameters ?? 1}, init=${params.init ?? 0.25})`,
+    emitPytorchModule: (params) => `nn.PReLU(num_parameters=${params.num_parameters ?? 1}, init=${params.init ?? 0.25})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -273,7 +273,7 @@ export const Hardtanh: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Hardtanh(min_val=${params.min_val ?? -1.0}, max_val=${params.max_val ?? 1.0})`,
+    emitPytorchModule: (params) => `nn.Hardtanh(min_val=${params.min_val ?? -1.0}, max_val=${params.max_val ?? 1.0})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -292,7 +292,7 @@ export const Hardshrink: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Hardshrink(lambd=${params.lambda ?? 0.5})`,
+    emitPytorchModule: (params) => `nn.Hardshrink(lambd=${params.lambda ?? 0.5})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -303,7 +303,7 @@ export const Hardsigmoid: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Hardsigmoid()`,
+    emitPytorchModule: (_params) => `nn.Hardsigmoid()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -314,7 +314,7 @@ export const Hardswish: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Hardswish()`,
+    emitPytorchModule: (_params) => `nn.Hardswish()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -340,7 +340,7 @@ export const RReLU: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.RReLU(lower=${params.lower ?? 1/8}, upper=${params.upper ?? 1/3})`,
+    emitPytorchModule: (params) => `nn.RReLU(lower=${params.lower ?? 1/8}, upper=${params.upper ?? 1/3})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -359,7 +359,7 @@ export const Softshrink: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Softshrink(lambd=${params.lambda ?? 0.5})`,
+    emitPytorchModule: (params) => `nn.Softshrink(lambd=${params.lambda ?? 0.5})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -370,7 +370,7 @@ export const Tanhshrink: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Tanhshrink()`,
+    emitPytorchModule: (_params) => `nn.Tanhshrink()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -394,7 +394,7 @@ export const Threshold: ModuleDef = {
             required: true
         }
     },
-    toPytorchModule: (params) => `nn.Threshold(threshold=${params.threshold}, value=${params.value})`,
+    emitPytorchModule: (params) => `nn.Threshold(threshold=${params.threshold}, value=${params.value})`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -405,7 +405,7 @@ export const ReLU6: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.ReLU6()`,
+    emitPytorchModule: (_params) => `nn.ReLU6()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -416,7 +416,7 @@ export const SiLU: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.SiLU()`,
+    emitPytorchModule: (_params) => `nn.SiLU()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };
@@ -427,7 +427,7 @@ export const Mish: ModuleDef = {
     category: 'Activation',
     moduleType: "Op",
     params: {},
-    toPytorchModule: (_params) => `nn.Mish()`,
+    emitPytorchModule: (_params) => `nn.Mish()`,
     inferOutputShape: (inShape) => inShape,
     validateInputShape: (_inShape) => []
 };

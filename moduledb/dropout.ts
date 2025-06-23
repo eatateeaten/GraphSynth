@@ -21,7 +21,7 @@ export const dropoutModules: Record<string, ModuleDef> = {
                 required: false
             }
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             if (params.dim !== undefined) {
                 return `nn.functional.dropout(input, p=${params.p ?? 0.5}, training=self.training, inplace=False, dim=${params.dim})`;
             }
@@ -64,7 +64,7 @@ export const dropoutModules: Record<string, ModuleDef> = {
                 required: false
             }
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             if (params.dim !== undefined) {
                 return `nn.functional.dropout2d(input, p=${params.p ?? 0.5}, training=self.training, inplace=False, dim=${params.dim})`;
             }
@@ -107,7 +107,7 @@ export const dropoutModules: Record<string, ModuleDef> = {
                 required: false
             }
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             if (params.dim !== undefined) {
                 return `nn.functional.dropout3d(input, p=${params.p ?? 0.5}, training=self.training, inplace=False, dim=${params.dim})`;
             }
@@ -150,7 +150,7 @@ export const dropoutModules: Record<string, ModuleDef> = {
                 required: false
             }
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             if (params.dim !== undefined) {
                 return `nn.functional.alpha_dropout(input, p=${params.p ?? 0.5}, training=self.training, inplace=False, dim=${params.dim})`;
             }

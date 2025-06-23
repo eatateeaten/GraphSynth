@@ -124,7 +124,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.MaxPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
         validateInputShape: (inShape, params) => {
@@ -146,7 +146,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.MaxPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
         validateInputShape: (inShape, params) => {
@@ -171,7 +171,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: maxPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.MaxPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, dilation=${params.dilation}, return_indices=${params.return_indices}, ceil_mode=${params.ceil_mode})`;
         },
         validateInputShape: (inShape, params) => {
@@ -198,7 +198,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.AvgPool1d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad})`;
         },
         validateInputShape: (inShape, params) => {
@@ -220,7 +220,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPooling2D3DParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             let code = `nn.AvgPool2d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
             if (params.divisor_override !== undefined) {
                 code += `, divisor_override=${params.divisor_override}`;
@@ -250,7 +250,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: avgPooling2D3DParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             let code = `nn.AvgPool3d(kernel_size=${params.kernel_size}, stride=${params.stride}, padding=${params.padding}, ceil_mode=${params.ceil_mode}, count_include_pad=${params.count_include_pad}`;
             if (params.divisor_override !== undefined) {
                 code += `, divisor_override=${params.divisor_override}`;
@@ -282,7 +282,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: lpPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.LPPool1d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
         },
         validateInputShape: (inShape, params) => {
@@ -304,7 +304,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: lpPoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.LPPool2d(norm_type=${params.norm_type}, kernel_size=${params.kernel_size}, stride=${params.stride}, ceil_mode=${params.ceil_mode})`;
         },
         validateInputShape: (inShape, params) => {
@@ -330,7 +330,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePoolingParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.AdaptiveAvgPool1d(output_size=${params.output_size})`;
         },
         validateInputShape: (inShape, params) => {
@@ -351,7 +351,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePooling2D3DParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
             return `nn.AdaptiveAvgPool2d(output_size=${sizeStr})`;
         },
@@ -377,7 +377,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: adaptivePooling2D3DParams,
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
             return `nn.AdaptiveAvgPool3d(output_size=${sizeStr})`;
         },
@@ -403,7 +403,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePoolingParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.AdaptiveMaxPool1d(output_size=${params.output_size}, return_indices=${params.return_indices})`;
         },
         validateInputShape: (inShape, params) => {
@@ -424,7 +424,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
             return `nn.AdaptiveMaxPool2d(output_size=${sizeStr}, return_indices=${params.return_indices})`;
         },
@@ -450,7 +450,7 @@ export const poolingModules: Record<string, ModuleDef> = {
         category: 'Pooling',
         moduleType: 'Op',
         params: { ...adaptivePooling2D3DParams, ...adaptiveMaxPoolingParams },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             const sizeStr = Array.isArray(params.output_size) ? `(${params.output_size.join(', ')})` : params.output_size;
             return `nn.AdaptiveMaxPool3d(output_size=${sizeStr}, return_indices=${params.return_indices})`;
         },

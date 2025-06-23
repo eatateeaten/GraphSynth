@@ -25,7 +25,7 @@ export interface ModuleDef {
     params: Record<string, ParamDef>;
 
     // Computational logic
-    toPytorchModule: (params: Record<string, any>) => string;
+    emitPytorchModule: (params: Record<string, any>) => string;
     // Required for Op nodes (SISO), optional for multi-input operations handled by OpCompiler
     validateInputShape?: ((inShapes: number[], params: Record<string, any>) => string[]) | null;
     inferOutputShape?: ((inShapes: number[], params: Record<string, any>) => number[]) | null;

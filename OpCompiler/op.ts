@@ -45,7 +45,7 @@ export class Op extends GraphNode {
     }
 
     toTorchModule(): string {
-        return this._module.toPytorchModule(this._params);
+        return this._module.emitPytorchModule(this._params);
     }
 
     /**

@@ -41,7 +41,7 @@ export function CodeOutput() {
                 style={{
                     overflow: 'auto',
                     whiteSpace: 'pre-wrap',
-                    backgroundColor: '#f8f9fa'
+                    backgroundColor: '#000000'
                 }}
             >
                 <div dangerouslySetInnerHTML={{ __html: ansiToHtml(textOutput) || 'No output' }} />

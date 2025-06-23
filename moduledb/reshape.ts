@@ -15,7 +15,7 @@ export const reshapeModules: Record<string, ModuleDef> = {
                 required: true
             }
         },
-        toPytorchModule: (params) => `torch.reshape(${params['shape'].join(', ')})`,
+        emitPytorchModule: (params) => `torch.reshape(${params['shape'].join(', ')})`,
         validateInputShape: (inShape, params) => {
             const targetShape = params['shape'];
             if (!Array.isArray(targetShape)) {
@@ -74,7 +74,7 @@ export const reshapeModules: Record<string, ModuleDef> = {
                 required: true
             }
         },
-        toPytorchModule: (params) => `torch.permute(${params['dims'].join(', ')})`,
+        emitPytorchModule: (params) => `torch.permute(${params['dims'].join(', ')})`,
         validateInputShape: (inShape, params) => {
             const dims = params['dims'];
             if (!Array.isArray(dims)) {
@@ -120,7 +120,7 @@ export const reshapeModules: Record<string, ModuleDef> = {
                 required: false
             }
         },
-        toPytorchModule: (params) => `nn.Flatten(start_dim=${params['start_dim'] ?? 1}, end_dim=${params['end_dim'] ?? -1})`,
+        emitPytorchModule: (params) => `nn.Flatten(start_dim=${params['start_dim'] ?? 1}, end_dim=${params['end_dim'] ?? -1})`,
         validateInputShape: (inShape, params) => {
             const start_dim = params['start_dim'] ?? 1;
             let end_dim = params['end_dim'] ?? -1;
@@ -183,7 +183,7 @@ export const reshapeModules: Record<string, ModuleDef> = {
                 required: true
             }
         },
-        toPytorchModule: (params) => `nn.Unflatten(dim=${params['dim']}, unflattened_size=${params['unflattened_size']})`,
+        emitPytorchModule: (params) => `nn.Unflatten(dim=${params['dim']}, unflattened_size=${params['unflattened_size']})`,
         validateInputShape: (inShape, params) => {
             const dim = params['dim'];
             const unflattened_size = params['unflattened_size'];

@@ -28,7 +28,7 @@ export const Linear: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params) => `nn.Linear(${params.input_features}, ${params.output_features}, bias=${params.bias ?? true})`,
+    emitPytorchModule: (params) => `nn.Linear(${params.input_features}, ${params.output_features}, bias=${params.bias ?? true})`,
     validateInputShape: (inShape, params) => {
         const errors: string[] = [];
         
@@ -58,7 +58,7 @@ export const Identity: ModuleDef = {
     category: 'Linear',
     moduleType: "Op",
     params: {},
-    toPytorchModule: () => 'nn.Identity()',
+    emitPytorchModule: () => 'nn.Identity()',
     validateInputShape: (_inShape) => [],
     inferOutputShape: (inShape) => inShape
 };

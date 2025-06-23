@@ -23,7 +23,7 @@ export const Tensor: ModuleDef = {
             required: true
         }
     },
-    toPytorchModule: () => '', // Tensors don't generate code
+    emitPytorchModule: () => '', // Tensors don't generate code
     validateInputShape: (inShape, params) => {
         if(shapeEqual(inShape, params.shape))
             return [];

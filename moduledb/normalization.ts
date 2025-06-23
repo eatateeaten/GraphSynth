@@ -135,7 +135,7 @@ function createBatchNormModule(dimension: '1D' | '2D' | '3D'): ModuleDef {
             affine: commonParams.affine,
             track_running_stats: commonParams.track_running_stats
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.${info.funcName}(num_features=${params['num_features']}, ` +
                 `eps=${params['eps'] ?? 1e-5}, momentum=${params['momentum'] ?? 0.1}, ` +
                 `affine=${params['affine'] ?? true}, track_running_stats=${params['track_running_stats'] ?? true})`;
@@ -179,7 +179,7 @@ function createInstanceNormModule(dimension: '1D' | '2D' | '3D'): ModuleDef {
             affine: { ...commonParams.affine, default: false },
             track_running_stats: { ...commonParams.track_running_stats, default: false }
         },
-        toPytorchModule: (params) => {
+        emitPytorchModule: (params) => {
             return `nn.${info.funcName}(num_features=${params['num_features']}, ` +
                 `eps=${params['eps'] ?? 1e-5}, momentum=${params['momentum'] ?? 0.1}, ` +
                 `affine=${params['affine'] ?? false}, track_running_stats=${params['track_running_stats'] ?? false})`;
@@ -208,7 +208,7 @@ export const LayerNorm: ModuleDef = {
         eps: commonParams.eps,
         elementwise_affine: commonParams.elementwise_affine
     },
-    toPytorchModule: (params) => {
+    emitPytorchModule: (params) => {
         return `nn.LayerNorm(normalized_shape=${params['normalized_shape']}, ` +
             `eps=${params['eps'] ?? 1e-5}, elementwise_affine=${params['elementwise_affine'] ?? true})`;
     },
@@ -227,7 +227,7 @@ export const GroupNorm: ModuleDef = {
         eps: commonParams.eps,
         affine: commonParams.affine
     },
-    toPytorchModule: (params) => {
+    emitPytorchModule: (params) => {
         return `nn.GroupNorm(num_groups=${params['num_groups']}, num_channels=${params['num_channels']}, ` +
             `eps=${params['eps'] ?? 1e-5}, affine=${params['affine'] ?? true})`;
     },

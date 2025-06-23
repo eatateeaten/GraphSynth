@@ -22,7 +22,7 @@ export const Split: ModuleDef = {
             required: false
         }
     },
-    toPytorchModule: (params: Record<string, any>) => {
+    emitPytorchModule: (params: Record<string, any>) => {
         const dim = params.dim ?? 0;
         const sections = params.sections ?? [1, 1];
         return `torch.split(x, ${JSON.stringify(sections)}, dim=${dim})`;
@@ -46,7 +46,7 @@ export const Copy: ModuleDef = {
         }
     },
     /* TODO: probably doesn't work */
-    toPytorchModule: (params: Record<string, any>) => {
+    emitPytorchModule: (params: Record<string, any>) => {
         const copies = params.copies ?? 2;
         return `tuple(x for _ in range(${copies}))`;
     },

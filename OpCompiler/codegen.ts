@@ -15,8 +15,12 @@ import {
 export class CodeGenerator {
     private graph: Graph;
 
-    constructor(module: Module) {
-        this.graph = module.graph;
+    constructor(moduleOrGraph: Module | Graph) {
+        if (moduleOrGraph instanceof Graph) {
+            this.graph = moduleOrGraph;
+        } else {
+            this.graph = moduleOrGraph.graph;
+        }
     }
 
     /** Validates the graph before code generation */

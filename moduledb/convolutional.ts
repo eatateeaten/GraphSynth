@@ -116,7 +116,7 @@ export const Conv1D: ModuleDef = {
             description: 'Padding added to both sides of the input'
         }
     },
-    toPytorchModule: (params) => 
+    emitPytorchModule: (params) => 
         `nn.Conv1d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
@@ -162,11 +162,11 @@ export const Conv2D: ModuleDef = {
             description: 'Padding added to all four sides of the input'
         }
     },
-    toPytorchModule: (params) =>
+    emitPytorchModule: (params) =>
         `nn.Conv2d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
-        `bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+        `bias=${params['bias'] ?? 'True'}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
     validateInputShape: (inShape, params) => {
         if (inShape.length !== 3 && inShape.length !== 4) {
             throw new Error(`Conv2D requires 3D or 4D input tensor, got shape ${inShape}`);
@@ -211,7 +211,7 @@ export const Conv3D: ModuleDef = {
             description: 'Padding added to all sides of the input'
         }
     },
-    toPytorchModule: (params) =>
+    emitPytorchModule: (params) =>
         `nn.Conv3d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `dilation=${params['dilation'] ?? 1}, groups=${params['groups'] ?? 1}, ` +
@@ -259,11 +259,11 @@ export const ConvTranspose1D: ModuleDef = {
             description: 'Padding added to both sides of the input'
         }
     },
-    toPytorchModule: (params) =>
+    emitPytorchModule: (params) =>
         `nn.ConvTranspose1d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
-        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? 'True'}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
     validateInputShape: (inShape, params) => {
         if (inShape.length !== 2 && inShape.length !== 3) {
             throw new Error(`ConvTranspose1D requires 2D or 3D input tensor, got shape ${inShape}`);
@@ -306,11 +306,11 @@ export const ConvTranspose2D: ModuleDef = {
             description: 'Padding added to all four sides of the input'
         }
     },
-    toPytorchModule: (params) =>
+    emitPytorchModule: (params) =>
         `nn.ConvTranspose2d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
-        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? 'True'}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
     validateInputShape: (inShape, params) => {
         if (inShape.length !== 3 && inShape.length !== 4) {
             throw new Error(`ConvTranspose2D requires 3D or 4D input tensor, got shape ${inShape}`);
@@ -356,11 +356,11 @@ export const ConvTranspose3D: ModuleDef = {
             description: 'Padding added to all sides of the input'
         }
     },
-    toPytorchModule: (params) =>
+    emitPytorchModule: (params) =>
         `nn.ConvTranspose3d(${params['in_channels']}, ${params['out_channels']}, ${params['kernel_size']}, ` +
         `stride=${params['stride'] ?? 1}, padding=${params['padding'] ?? 0}, ` +
         `output_padding=${params['output_padding'] ?? 0}, dilation=${params['dilation'] ?? 1}, ` +
-        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? true}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
+        `groups=${params['groups'] ?? 1}, bias=${params['bias'] ?? 'True'}, padding_mode='${params['padding_mode'] ?? 'zeros'}')`,
     validateInputShape: (inShape, params) => {
         if (inShape.length !== 4 && inShape.length !== 5) {
             throw new Error(`ConvTranspose3D requires 4D or 5D input tensor, got shape ${inShape}`);

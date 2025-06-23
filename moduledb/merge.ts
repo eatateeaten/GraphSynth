@@ -50,7 +50,7 @@ export const PointwiseOp: ModuleDef = {
             required: true
         }
     },
-    toPytorchModule: (params) => {
+    emitPytorchModule: (params) => {
         const opType = params.opType || 'add';
         try {
             return getDifferentiablePointWiseOpCode(opType);
@@ -68,7 +68,7 @@ export const DotOp: ModuleDef = {
     category: 'Math',
     moduleType: 'DotOp',
     params: {},
-    toPytorchModule: (params) => {
+    emitPytorchModule: (params) => {
         return 'torch.matmul';
     },
     validateInputShape: null,
@@ -81,7 +81,7 @@ export const CrossOp: ModuleDef = {
     category: 'Math',
     moduleType: 'CrossOp',
     params: {},
-    toPytorchModule: (params) => {
+    emitPytorchModule: (params) => {
         return 'torch.cross';
     },
     validateInputShape: null,

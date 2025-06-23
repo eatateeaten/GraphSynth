@@ -70,7 +70,7 @@ class ModuleDatabase {
     
     generateCode(moduleName: string, params: Record<string, any>): string {
         const spec = this.get(moduleName);
-        return spec.toPytorchModule(params);
+        return spec.emitPytorchModule(params);
     }
     
     inferShape(moduleName: string, inShape: number[], params: Record<string, any>): number[] {
