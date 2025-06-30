@@ -33,6 +33,7 @@ Start the Electron app:
 npm run dev
 You can paste the Jupyter link into the connection prompt to be able to execute generated code.
 ```
+```
 
 ┌────────────────────┐
 │  1. Front‑End UI   │ – React + React‑Flow canvas
@@ -111,5 +112,6 @@ You can paste the Jupyter link into the connection prompt to be able to execute 
 │  • loops → vmap; torch.cond & random‑noise → opaque block (auto‑converted to ModuleOp with static shapes)
 │  • feeds IR to Compiler (for editing) & ModuleDB (for registering)
 └────────────────────┘
+```
 ```
 
