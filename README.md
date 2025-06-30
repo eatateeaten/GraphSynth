@@ -31,7 +31,8 @@ Start the Electron app:
 
 ```
 npm run dev
-
+You can paste the Jupyter link into the connection prompt to be able to execute generated code.
+```
 
 ┌────────────────────┐
 │  1. Front‑End UI   │ – React + React‑Flow canvas
@@ -112,4 +113,3 @@ npm run dev
 └────────────────────┘
 ```
 
-You can paste the Jupyter link into the connection prompt to be able to execute generated code.
