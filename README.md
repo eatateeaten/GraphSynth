@@ -1,4 +1,5 @@
 This project covers a low-to-no-code visual compiler for tracing, visualizing and editing DNNs
+'''
 ┌────────────────────┐
 │  1. Front‑End UI   │ – React + React‑Flow canvas
 └────────┬───────────┘
@@ -76,3 +77,4 @@ This project covers a low-to-no-code visual compiler for tracing, visualizing an
 │  • loops → vmap; torch.cond & random‑noise → opaque block (auto‑converted to ModuleOp with static shapes)
 │  • feeds IR to Compiler (for editing) & ModuleDB (for registering)
 └────────────────────┘
+'''
