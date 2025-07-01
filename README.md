@@ -1,6 +1,7 @@
-This project is going to cover a no-code user-friendly Visual/graph-compiler for all existing neuralnet architectures.
-As well as graph representations that translate to PyTorch, JAX, Tensorflow model and training routine code. 
-I will also develop a distributed training/inferencing framework based on this project. 
+Developed a WYSIWYG interface for intuitive, modular deep learning model editing with dynamic shape checking and visualization.
+Utilized torch.fx to standardize ML code into a GraphIR format, supporting PyTorch and StableHLO.
+Created moduleDB to map torch.nn.Module, torch.nn.functional, and torch.aten ops to a unified GraphIR, enhancing model development.
+Integrated KG-RAG for semantic LLM queries, improving model observability and interaction.
 
 # Installation
 
